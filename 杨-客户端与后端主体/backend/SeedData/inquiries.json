@@ -1,0 +1,4 @@
+[
+  { "id": "aaaaaaaa-aaaa-aaaa-aaaa-000000000001", "case_id": "88888888-8888-8888-8888-000000000001", "hotel_id": "44444444-4444-4444-4444-000000000001", "type": "defer", "status": "pending", "requested_offset_minutes": -50, "responded_offset_minutes": null, "reject_reason": null },
+  { "id": "aaaaaaaa-aaaa-aaaa-aaaa-000000000002", "case_id": "88888888-8888-8888-8888-000000000002", "hotel_id": "44444444-4444-4444-4444-000000000001", "type": "defer", "status": "accepted", "requested_offset_minutes": -118, "responded_offset_minutes": -61, "reject_reason": null }
+]

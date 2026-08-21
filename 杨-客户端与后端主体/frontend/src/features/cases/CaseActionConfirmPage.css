@@ -1,0 +1,99 @@
+.case-action-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f4f8fb;
+  padding: 1.5rem;
+}
+
+.case-action-card {
+  background: white;
+  border: 1px solid #e6edf3;
+  border-radius: 14px;
+  padding: 2rem 2.2rem;
+  max-width: 420px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 12px 30px rgba(16, 36, 60, 0.08);
+}
+
+.case-action-brand {
+  margin: 0 0 1.2rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #7d93a6;
+}
+
+.case-action-card h1 {
+  margin: 0 0 0.6rem;
+  font-size: 1.3rem;
+  color: #10243c;
+}
+
+.case-action-body {
+  margin: 0 0 0.5rem;
+  color: #4d6072;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.case-action-option {
+  margin: 0 0 0.3rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #2e6f96;
+}
+
+.case-action-dates {
+  margin: 0 0 1.4rem;
+  font-size: 0.82rem;
+  color: #7d93a6;
+}
+
+.case-action-loading {
+  color: #7d93a6;
+  font-size: 0.9rem;
+  margin: 1rem 0;
+}
+
+.case-action-confirm {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #1c4d73, #2e6f96);
+  color: white;
+  font-weight: 600;
+  font-size: 0.92rem;
+  cursor: pointer;
+  transition: box-shadow 0.12s ease, transform 0.1s ease, opacity 0.12s ease;
+}
+
+.case-action-confirm:hover:not(:disabled) {
+  box-shadow: 0 6px 16px rgba(46, 111, 150, 0.3);
+}
+
+.case-action-confirm:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.case-action-confirm:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.case-action-secondary {
+  display: inline-block;
+  margin-top: 0.6rem;
+  color: #2e6f96;
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.case-action-secondary:hover {
+  text-decoration: underline;
+}
