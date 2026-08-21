@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# 本地假实现的落盘目录
+.local/
+
+# 环境与密钥 —— 严禁提交
+.env
+.env.*
+*.pem
+*.key
+infra/连接信息.md
+infra/手建资源清单.md
+
+# SAM / 构建产物
+.aws-sam/
+dist/
+build/
+*.tar.gz
+
+# 前端
+node_modules/
+
+# 编辑器与系统
+.DS_Store
+.idea/
+.vscode/
