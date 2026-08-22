@@ -1,0 +1,4 @@
+[
+  { "id": "cccccccc-cccc-cccc-cccc-000000000001", "user_id": "11111111-1111-1111-1111-000000000001", "channel": "email", "type": "disruption_notice", "title": "Your booking may be affected", "body": "Due to heavy snow in the Queenstown region, your booking at Queenstown Lakeview Hotel may be affected. Click to view details.", "case_id": "88888888-8888-8888-8888-000000000001", "sent_offset_minutes": -50, "read_offset_minutes": -45, "success": true },
+  { "id": "cccccccc-cccc-cccc-cccc-000000000002", "user_id": "11111111-1111-1111-1111-000000000003", "channel": "email", "type": "disruption_notice", "title": "Your booking may be affected", "body": "Due to heavy snow in the Queenstown region, your booking at Queenstown Lakeview Hotel may be affected. Click to view details.", "case_id": "88888888-8888-8888-8888-000000000002", "sent_offset_minutes": -118, "read_offset_minutes": null, "success": false }
+]
