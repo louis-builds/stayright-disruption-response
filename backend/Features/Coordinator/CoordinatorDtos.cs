@@ -21,4 +21,6 @@ public record CloseCaseRequest(string CloseReason, string ResultSummary);
 
 public record AddNoteRequest(string Body);
 
+public record SetPriorityRequest(string Priority);
+
 public record CaseNotificationDto(Guid Id, string Channel, string Type, string Title, string Body, bool Success, DateTimeOffset SentAt);

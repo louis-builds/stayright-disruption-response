@@ -2,7 +2,6 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TravelDisruptionAgent.Api.Features.Cases;
-using TravelDisruptionAgent.Api.Features.Disruption;
 using TravelDisruptionAgent.Api.Infrastructure;
 
 namespace TravelDisruptionAgent.Api.Features.Coordinator;

@@ -29,6 +29,10 @@ build/
 # 前端
 node_modules/
 
+# .NET 构建产物
+bin/
+obj/
+
 # 编辑器与系统
 .DS_Store
 .idea/

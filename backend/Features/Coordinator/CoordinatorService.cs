@@ -1,5 +1,4 @@
 using TravelDisruptionAgent.Api.Features.Cases;
-using TravelDisruptionAgent.Api.Features.Disruption;
 using TravelDisruptionAgent.Api.Infrastructure.Data.Entities;
 using TravelDisruptionAgent.Api.Infrastructure.Email;
 

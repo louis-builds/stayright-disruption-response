@@ -271,12 +271,13 @@ export function HotelHomePage() {
     const rejectedCount = doneInquiries.filter((i) => i.status === "rejected").length;
     const availableCount = doneOptions.filter((o) => o.availability === "available").length;
     const unavailableCount = doneOptions.filter((o) => o.availability === "unavailable").length;
-    const byOutcome: [string, number][] = [
+    const outcomeEntries: [string, number][] = [
       ["H1 accepted", acceptedCount],
       ["H1 rejected", rejectedCount],
       ["H2 confirmed", availableCount],
       ["H2 declined", unavailableCount],
-    ].filter(([, count]) => count > 0);
+    ];
+    const byOutcome = outcomeEntries.filter(([, count]) => count > 0);
     const total = acceptedCount + rejectedCount + availableCount + unavailableCount;
     return { acceptedCount, rejectedCount, availableCount, unavailableCount, byOutcome, total };
   }, [doneInquiries, doneOptions]);
