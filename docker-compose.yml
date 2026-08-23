@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: kakapo
+      POSTGRES_USER: kakapo
+      POSTGRES_PASSWORD: kakapo
+    ports:
+      - "5432:5432"
+    volumes:
+      - kakapo_pg_data:/var/lib/postgresql/data
+
+volumes:
+  kakapo_pg_data:
