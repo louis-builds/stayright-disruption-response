@@ -1,0 +1,25 @@
+.app-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 1.5rem;
+  font-size: 0.75rem;
+  color: #7d93a6;
+  border-top: 1px solid #e6edf3;
+  background: #fbfdfe;
+}
+
+.app-footer-contact {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.app-footer-contact a {
+  color: #7d93a6;
+}
+
+.app-footer-contact a:hover {
+  color: #2e6f96;
+}

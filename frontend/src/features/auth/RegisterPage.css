@@ -1,0 +1,470 @@
+.register-page {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  padding: 2.5rem 1.5rem;
+  background: linear-gradient(180deg, #f0f6fb 0%, #f7fafc 100%);
+  background-image:
+    linear-gradient(180deg, #f0f6fb 0%, #f7fafc 100%),
+    radial-gradient(circle, rgba(46, 111, 150, 0.09) 1.4px, transparent 1.4px);
+  background-size: auto, 26px 26px;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: light;
+}
+
+/* 单卡片居中在大视口下两侧空白很容易超标——不是靠改背景色掩盖，
+   补两个大光斑 + 一条淡淡的改道路线，跟登录页视觉语言呼应，页面之间不各自为政。
+   光斑裁剪放在这个独立的装饰层（.register-layout 的兄弟节点，不是祖先）上，
+   不能直接把 overflow:hidden 加回 .register-page 本身——那样会把 .register-benefits
+   的 position:sticky 计算基准错误地锁死在一个不滚动的容器上，滚动整页时侧栏就废了。 */
+.register-bg-decor {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.register-bg-decor::before,
+.register-bg-decor::after {
+  content: "";
+  position: absolute;
+  width: 46vw;
+  height: 46vw;
+  max-width: 560px;
+  max-height: 560px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(46, 111, 150, 0.08) 0%, transparent 70%);
+}
+
+.register-bg-decor::before {
+  top: -14%;
+  left: -12%;
+}
+
+.register-bg-decor::after {
+  bottom: -18%;
+  right: -12%;
+  background: radial-gradient(circle, rgba(79, 209, 139, 0.07) 0%, transparent 70%);
+}
+
+.register-layout {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2.5rem;
+  width: 100%;
+  max-width: 980px;
+}
+
+.register-card {
+  width: 100%;
+  max-width: 640px;
+  background: white;
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(16, 36, 60, 0.08);
+  padding: 2rem 2.25rem;
+  animation: register-fade-up 0.35s ease;
+}
+
+.register-benefits {
+  list-style: none;
+  margin: 3.4rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.3rem;
+  width: 240px;
+  flex-shrink: 0;
+  /* 酒店角色展开后表单会变很长，侧栏固定高度早早"用完"，右侧留下一整块跟不上表单的空白——
+     钉住侧栏，滚动表单时它一直陪着，而不是滚两屏就把它甩在视口外头。 */
+  position: sticky;
+  top: 2.5rem;
+}
+
+.register-benefit-icon {
+  font-size: 1.15rem;
+  line-height: 1.4;
+}
+
+.register-benefits li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 0.6rem 0.7rem;
+  border-radius: 10px;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.register-benefits li:hover {
+  background: rgba(46, 111, 150, 0.07);
+  transform: translateX(2px);
+}
+
+.register-benefit-title {
+  margin: 0 0 0.15rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #1f2d3d;
+}
+
+.register-benefit-body {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #64798d;
+  line-height: 1.4;
+}
+
+@media (max-width: 940px) {
+  .register-benefits {
+    display: none;
+  }
+}
+
+@keyframes register-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.register-card h1 {
+  margin: 0 0 1.25rem;
+  color: #10243c;
+}
+
+.register-avatar-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.register-avatar-preview {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid #cbd8e4;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.register-avatar-preview:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 10px rgba(16, 36, 60, 0.12);
+}
+
+.register-avatar-preview.register-avatar-updated {
+  animation: register-avatar-pop 0.35s ease;
+}
+
+@keyframes register-avatar-pop {
+  0% { transform: scale(0.85); }
+  60% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+.register-avatar-upload {
+  padding: 0.5rem 1rem;
+  border: 1px solid #2e6f96;
+  border-radius: 6px;
+  color: #2e6f96;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.register-avatar-upload:hover {
+  background: rgba(46, 111, 150, 0.08);
+}
+
+.register-avatar-upload:active {
+  transform: scale(0.97);
+}
+
+.register-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.9rem 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.register-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  color: #2c3e50;
+}
+
+.register-field-wide {
+  grid-column: 1 / -1;
+}
+
+.register-field input,
+.register-field select {
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #cbd8e4;
+  border-radius: 7px;
+  font-size: 0.9rem;
+  background: #ffffff;
+  color: #1f2d3d;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.register-field input:focus,
+.register-field select:focus {
+  outline: none;
+  border-color: #2e6f96;
+  box-shadow: 0 0 0 3px rgba(46, 111, 150, 0.15);
+}
+
+.register-field-error {
+  color: #c0392b;
+  font-size: 0.78rem;
+  font-style: normal;
+  animation: register-fade-up 0.18s ease;
+}
+
+/* 密码强度实时反馈——前端一点小技术含量,也是"运行中有效果"的一种,
+   不是提交完才知道密码太弱被后端拒。 */
+.register-strength {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.15rem;
+}
+
+.register-strength-track {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: #e1e9f0;
+  overflow: hidden;
+}
+
+.register-strength-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.25s ease, background-color 0.25s ease;
+}
+
+.register-strength-fill-weak { background: #e0685a; }
+.register-strength-fill-fair { background: #d8a94b; }
+.register-strength-fill-strong { background: #4fd18b; }
+
+.register-strength-label {
+  font-size: 0.72rem;
+  color: #64798d;
+  white-space: nowrap;
+}
+
+.register-role,
+.register-hotel {
+  border: 1px solid #e1e9f0;
+  border-radius: 10px;
+  padding: 1rem;
+  margin: 0 0 1.25rem;
+}
+
+.register-role {
+  display: flex;
+  gap: 1.25rem;
+  align-items: center;
+}
+
+.register-role legend,
+.register-hotel legend {
+  padding: 0 0.4rem;
+  font-size: 0.8rem;
+  color: #5c7690;
+}
+
+.register-role-option {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  color: #2c3e50;
+}
+
+.register-hotel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  animation: register-fade-up 0.25s ease;
+}
+
+.register-roomtypes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.register-roomtypes-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+  color: #2c3e50;
+  font-weight: 600;
+}
+
+.register-roomtypes-header button {
+  border: 1px solid #2e6f96;
+  background: white;
+  color: #2e6f96;
+  border-radius: 6px;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.1s ease;
+}
+
+.register-roomtypes-header button:hover {
+  background: rgba(46, 111, 150, 0.08);
+}
+
+.register-roomtypes-header button:active {
+  transform: scale(0.96);
+}
+
+.register-roomtype-card {
+  border: 1px solid #e1e9f0;
+  border-radius: 8px;
+  padding: 0.85rem;
+  background: #fbfdfe;
+  animation: register-fade-up 0.2s ease;
+  transition: box-shadow 0.15s ease;
+}
+
+.register-roomtype-card:hover {
+  box-shadow: 0 2px 10px rgba(16, 36, 60, 0.06);
+}
+
+.register-roomtype-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.7rem;
+}
+
+.register-roomtype-remove {
+  margin-top: 0.6rem;
+  border: none;
+  background: none;
+  color: #c0392b;
+  font-size: 0.78rem;
+  cursor: pointer;
+  padding: 0;
+  transition: opacity 0.15s ease;
+}
+
+.register-roomtype-remove:hover {
+  text-decoration: underline;
+}
+
+.register-roomtype-remove:active {
+  opacity: 0.6;
+}
+
+.register-error {
+  color: #c0392b;
+  font-size: 0.85rem;
+  margin: 0 0 1rem;
+  animation: register-fade-up 0.18s ease;
+}
+
+.register-submit {
+  width: 100%;
+  padding: 0.75rem;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #1c4d73, #2e6f96);
+  color: white;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease;
+}
+
+.register-submit:hover:not(:disabled) {
+  box-shadow: 0 6px 16px rgba(46, 111, 150, 0.3);
+  transform: translateY(-1px);
+}
+
+.register-submit:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+.register-submit:disabled {
+  opacity: 0.75;
+  cursor: progress;
+}
+
+.register-submit-success {
+  background: linear-gradient(135deg, #2f9563, #4fd18b);
+  opacity: 1;
+  cursor: default;
+}
+
+.register-check {
+  display: inline-block;
+  animation: register-check-pop 0.32s ease;
+}
+
+@keyframes register-check-pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  60% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+.register-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: register-spin 0.7s linear infinite;
+}
+
+@keyframes register-spin {
+  to { transform: rotate(360deg); }
+}
+
+.register-footer {
+  text-align: center;
+  margin-top: 1rem;
+  font-size: 0.85rem;
+  color: #5c7690;
+}
+
+.register-footer a {
+  color: #2e6f96;
+  font-weight: 600;
+}
+
+@media (max-width: 620px) {
+  .register-grid,
+  .register-roomtype-grid {
+    grid-template-columns: 1fr;
+  }
+  .register-page::before,
+  .register-page::after {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .register-card,
+  .register-hotel,
+  .register-roomtype-card,
+  .register-field-error,
+  .register-error,
+  .register-avatar-updated,
+  .register-check {
+    animation: none;
+  }
+}
