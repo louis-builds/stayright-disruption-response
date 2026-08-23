@@ -76,13 +76,13 @@ class TestClassify:
         assert result.is_risky is False
 
     def test_high_wind_gusts_classified_as_storm(self):
-        result = classify({"current": {"wind_gusts_10m": 75, "precipitation": 0, "snowfall": 0}})
+        result = classify({"current": {"wind_gusts_10m": 100, "precipitation": 0, "snowfall": 0}})
         assert result.is_risky is True
         assert result.event_type == "storm"
         assert result.severity == Severity.MEDIUM
 
     def test_extreme_wind_gusts_are_high_severity(self):
-        result = classify({"current": {"wind_gusts_10m": 130, "precipitation": 0, "snowfall": 0}})
+        result = classify({"current": {"wind_gusts_10m": 150, "precipitation": 0, "snowfall": 0}})
         assert result.severity == Severity.HIGH
 
     def test_heavy_precipitation_classified_as_flood(self):

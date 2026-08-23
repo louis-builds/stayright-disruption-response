@@ -35,7 +35,7 @@ SEED_DATA_DIR = Path(__file__).resolve().parent.parent / "seed_data"
 
 # Comfortably past the storm thresholds in open_meteo.py so classify()
 # always calls this a high-severity storm.
-MOCK_STORM_PAYLOAD = {"current": {"wind_gusts_10m": 130, "precipitation": 0, "snowfall": 0}}
+MOCK_STORM_PAYLOAD = {"current": {"wind_gusts_10m": 150, "precipitation": 0, "snowfall": 0}}
 
 # Wide enough that the mock event overlaps the fixed 2026-08 dates in
 # seed_data/seed.sql regardless of exactly which day the demo runs on;

@@ -30,7 +30,7 @@ OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 # not a validated impact radius.
 DEFAULT_RADIUS_KM = 30.0
 
-WIND_GUST_STORM_KMH = 70.0
+WIND_GUST_STORM_KMH = 90.0
 PRECIPITATION_FLOOD_MM = 10.0
 SNOWFALL_HEAVY_SNOW_CM = 5.0
 
