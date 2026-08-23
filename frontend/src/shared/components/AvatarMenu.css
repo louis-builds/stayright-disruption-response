@@ -1,0 +1,67 @@
+.avatar-menu {
+  position: relative;
+}
+
+.avatar-trigger {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem 0.2rem 0.2rem;
+  border-radius: 999px;
+  transition: background 0.15s ease;
+}
+
+.avatar-trigger:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.avatar-img {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.avatar-nickname {
+  font-size: 0.85rem;
+}
+
+.avatar-dropdown {
+  position: absolute;
+  top: calc(100% + 0.6rem);
+  right: 0;
+  min-width: 140px;
+  background: white;
+  color: #1f2d3d;
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(16, 36, 60, 0.18);
+  overflow: hidden;
+  z-index: 20;
+  animation: avatar-drop-in 0.15s ease;
+}
+
+@keyframes avatar-drop-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.avatar-dropdown-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.6rem 1rem;
+  border: none;
+  background: none;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.avatar-dropdown-item:hover {
+  background: #f4f8fb;
+}

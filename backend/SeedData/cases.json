@@ -1,0 +1,6 @@
+[
+  { "id": "88888888-8888-8888-8888-000000000001", "booking_id": "66666666-6666-6666-6666-000000000001", "disruption_id": "77777777-7777-7777-7777-000000000001", "status": "pending", "assignee_coordinator_id": "22222222-2222-2222-2222-000000000001", "priority": "high", "close_reason": null, "escalation_reason": null },
+  { "id": "88888888-8888-8888-8888-000000000002", "booking_id": "66666666-6666-6666-6666-000000000003", "disruption_id": "77777777-7777-7777-7777-000000000001", "status": "in_progress", "assignee_coordinator_id": "22222222-2222-2222-2222-000000000002", "priority": "normal", "close_reason": null, "escalation_reason": "客人拒绝全部方案" },
+  { "id": "88888888-8888-8888-8888-000000000003", "booking_id": "66666666-6666-6666-6666-000000000009", "disruption_id": "77777777-7777-7777-7777-000000000001", "status": "closed", "assignee_coordinator_id": "22222222-2222-2222-2222-000000000003", "priority": "normal", "close_reason": "改订成功结案", "escalation_reason": null },
+  { "id": "88888888-8888-8888-8888-000000000004", "booking_id": "66666666-6666-6666-6666-000000000004", "disruption_id": "77777777-7777-7777-7777-000000000001", "status": "pending", "assignee_coordinator_id": null, "priority": "high", "close_reason": null, "escalation_reason": "AI没把握" }
+]

@@ -1,0 +1,62 @@
+/* .escalation-option-snapshot 的基础样式定义在 EscalationDeskPage.css(那是另一个独立页面任务)——
+   这里用 .kb-panel 限定作用域，只加悬浮反馈，不碰共享基础规则也不影响 Escalation Desk 自己的样式。 */
+.kb-panel .escalation-option-snapshot {
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.kb-panel .escalation-option-snapshot:hover {
+  box-shadow: 0 4px 12px rgba(16, 36, 60, 0.06);
+  transform: translateY(-2px);
+}
+
+.kb-sync-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: -0.4rem 0 1rem;
+  font-size: 0.72rem;
+  color: #9fb0bf;
+}
+
+.kb-quality-bars {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.kb-quality-bar-row {
+  display: grid;
+  grid-template-columns: 110px 1fr 42px;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.kb-quality-bar-label {
+  font-size: 0.78rem;
+  color: #5c7690;
+}
+
+.kb-quality-bar-track {
+  height: 8px;
+  border-radius: 999px;
+  background: #eef2f6;
+  overflow: hidden;
+}
+
+.kb-quality-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+.kb-quality-bar-fill-like { background: linear-gradient(90deg, #2e6f96, #4fd18b); }
+.kb-quality-bar-fill-dislike { background: linear-gradient(90deg, #d8a94b, #e0685a); }
+.kb-quality-bar-fill-escalation { background: linear-gradient(90deg, #6f9fc4, #8a6fd4); }
+
+.kb-quality-bar-value {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #10243c;
+  text-align: right;
+}

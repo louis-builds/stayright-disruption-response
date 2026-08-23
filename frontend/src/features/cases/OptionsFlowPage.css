@@ -1,0 +1,543 @@
+.options-flow {
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.flow-hint {
+  margin: 0 0 1rem;
+  font-size: 0.82rem;
+  color: #7d93a6;
+}
+
+/* 三步流程(比较/看政策/确认)之前完全没有进度指示，用户不知道自己在哪一步——
+   加个横向 stepper，也顺带用掉宽屏下顶部的空白。 */
+.flow-steps {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.1rem;
+}
+
+.flow-step-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.flow-step {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+  color: #9fb0bf;
+  transition: color 0.2s ease;
+}
+
+.flow-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid #cbd8e4;
+  font-size: 0.72rem;
+  font-weight: 700;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.flow-step-active {
+  color: #10243c;
+  font-weight: 600;
+}
+
+.flow-step-active .flow-step-num {
+  background: #2e6f96;
+  border-color: #2e6f96;
+  color: white;
+  transform: scale(1.1);
+}
+
+.flow-step-done .flow-step-num {
+  background: #eaf7ee;
+  border-color: #4fd18b;
+  color: #2f8a4f;
+}
+
+.flow-step-connector {
+  width: 28px;
+  height: 1px;
+  background: #dde6ee;
+}
+
+.flow-empty {
+  text-align: center;
+  color: #7d93a6;
+  font-size: 0.85rem;
+  padding: 2rem 0;
+}
+
+.flow-error {
+  color: #c0392b;
+  font-size: 0.85rem;
+  margin: 0.75rem 0 0;
+  animation: option-fade-in 0.18s ease;
+}
+
+.option-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.flow-next-steps {
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid #e6edf3;
+}
+
+.flow-next-steps h3 {
+  margin: 0 0 0.9rem;
+  font-size: 0.85rem;
+  color: #10243c;
+}
+
+.flow-next-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.flow-next-card {
+  display: flex;
+  gap: 0.6rem;
+  background: white;
+  border: 1px solid #e6edf3;
+  border-radius: 10px;
+  padding: 0.9rem 1rem;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.flow-next-card:hover {
+  box-shadow: 0 4px 12px rgba(16, 36, 60, 0.06);
+  transform: translateY(-2px);
+}
+
+.flow-next-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #eaf1fb;
+  color: #2e6f96;
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.flow-next-card p {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #4d6072;
+  line-height: 1.45;
+}
+
+.flow-next-card strong {
+  display: block;
+  font-size: 0.82rem;
+  color: #1f2d3d;
+  margin-bottom: 0.15rem;
+}
+
+.option-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  background: white;
+  border: 1px solid #e6edf3;
+  border-radius: 12px;
+  padding: 1.1rem;
+  animation: option-fade-in 0.2s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+@keyframes option-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.option-card h3 {
+  margin: 0 0 0.2rem;
+  font-size: 0.95rem;
+  color: #10243c;
+}
+
+.option-perks {
+  color: #2e6f96;
+  font-weight: 500;
+}
+
+.option-card:not(.option-card-disabled):not(.option-card-selected):hover {
+  border-color: #cfe0ec;
+  box-shadow: 0 4px 14px rgba(16, 36, 60, 0.06);
+}
+
+.option-card-selected {
+  border-color: #2e6f96;
+  box-shadow: 0 0 0 2px rgba(46, 111, 150, 0.18);
+  animation: option-fade-in 0.2s ease, option-select-pop 0.25s ease;
+}
+
+@keyframes option-select-pop {
+  0% { transform: scale(0.98); }
+  60% { transform: scale(1.01); }
+  100% { transform: scale(1); }
+}
+
+.option-card-disabled {
+  opacity: 0.55;
+}
+
+.option-card-readonly {
+  cursor: default;
+}
+
+.option-card-not-picked {
+  opacity: 0.6;
+}
+
+.tag-status-muted {
+  background: #f0f2f5;
+  color: #7d93a6;
+}
+
+.resolved-banner {
+  background: #eaf7ee;
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.5rem;
+  animation: option-fade-in 0.2s ease;
+}
+
+.resolved-banner h2 {
+  margin: 0 0 0.4rem;
+  font-size: 1.1rem;
+  color: #10243c;
+}
+
+.resolved-banner p {
+  margin: 0;
+  font-size: 0.87rem;
+  color: #4d6072;
+}
+
+.resolved-banner-pick {
+  margin-top: 0.5rem !important;
+  color: #1f2d3d !important;
+}
+
+.resolved-case-recap {
+  margin-top: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid rgba(46, 111, 150, 0.15);
+}
+
+.resolved-case-recap .fee-row {
+  border-bottom-color: rgba(46, 111, 150, 0.1);
+}
+
+.resolved-recap-title {
+  margin: 0 0 0.9rem;
+  font-size: 0.85rem;
+  color: #10243c;
+}
+
+.option-line {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #4d6072;
+}
+
+.option-reason {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #c0392b;
+}
+
+.option-actions {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-top: 0.6rem;
+}
+
+.option-link-btn {
+  background: none;
+  border: none;
+  color: #2e6f96;
+  font-size: 0.78rem;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.option-link-btn:hover {
+  text-decoration: underline;
+}
+
+.option-select-btn {
+  padding: 0.5rem;
+  border: 1px solid #2e6f96;
+  border-radius: 7px;
+  background: white;
+  color: #2e6f96;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+
+.option-select-btn:hover:not(:disabled) {
+  background: #2e6f96;
+  color: white;
+}
+
+.option-select-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.option-select-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 已选中的方案本身就是实心蓝底(呼应 .option-card-selected 卡片高亮)，鼠标悬停变成红色调，
+   提示"再点一下是取消选择"——不是又选了一遍。 */
+.option-select-btn-selected {
+  background: #2e6f96;
+  color: white;
+}
+
+.option-select-btn-selected:hover:not(:disabled) {
+  background: #c0392b;
+  border-color: #c0392b;
+  color: white;
+}
+
+.flow-continue-btn {
+  margin-top: 1.25rem;
+  padding: 0.7rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #1c4d73, #2e6f96);
+  color: white;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: opacity 0.12s ease, box-shadow 0.12s ease, transform 0.1s ease;
+}
+
+.flow-continue-btn:hover:not(:disabled) {
+  box-shadow: 0 6px 16px rgba(46, 111, 150, 0.3);
+  transform: translateY(-1px);
+}
+
+.flow-continue-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.flow-continue-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.flow-back-btn {
+  background: none;
+  border: none;
+  color: #2e6f96;
+  font-size: 0.82rem;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 1rem;
+}
+
+.policy-panel,
+.confirm-panel {
+  max-width: 640px;
+  margin: 0 auto;
+  background: white;
+  border: 1px solid #e6edf3;
+  border-radius: 12px;
+  padding: 1.5rem;
+  animation: option-fade-in 0.2s ease;
+}
+
+.policy-panel h2,
+.confirm-panel h2 {
+  margin: 0 0 1rem;
+  font-size: 1.05rem;
+  color: #10243c;
+}
+
+.policy-excerpt {
+  background: #f4f8fb;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.policy-excerpt summary {
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #2e6f96;
+}
+
+.policy-excerpt p {
+  margin: 0.6rem 0 0;
+  font-size: 0.85rem;
+  color: #4d6072;
+  white-space: pre-wrap;
+}
+
+.fee-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.fee-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: #1f2d3d;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid #f0f4f8;
+  text-transform: capitalize;
+}
+
+.confirm-summary {
+  font-size: 0.87rem;
+  color: #4d6072;
+  margin: 0 0 1.25rem;
+}
+
+.confirm-submit-btn {
+  padding: 0.7rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #1c4d73, #2e6f96);
+  color: white;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.confirm-submit-btn:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+.confirm-progress::after {
+  content: "";
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-left: 0.5rem;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: confirm-spin 0.7s linear infinite;
+  vertical-align: middle;
+}
+
+@keyframes confirm-spin {
+  to { transform: rotate(360deg); }
+}
+
+.confirm-result {
+  padding: 1rem;
+  border-radius: 8px;
+  animation: option-fade-in 0.2s ease;
+}
+
+.confirm-result-success {
+  background: #eaf7ee;
+}
+
+.confirm-result-processing {
+  background: #fdf3e6;
+}
+
+.confirm-result-failed {
+  background: #fdecea;
+}
+
+.confirm-result-message {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+  color: #1f2d3d;
+}
+
+.voucher {
+  background: white;
+  border-radius: 6px;
+  padding: 0.8rem 1rem;
+  font-size: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.voucher-copy-btn,
+.confirm-chat-link {
+  align-self: flex-start;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid #2e6f96;
+  border-radius: 6px;
+  background: white;
+  color: #2e6f96;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.1s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.voucher-copy-btn:hover,
+.confirm-chat-link:hover {
+  background: rgba(46, 111, 150, 0.08);
+}
+
+.voucher-copy-btn:active,
+.confirm-chat-link:active {
+  transform: scale(0.96);
+}
+
+.voucher-copy-btn-done {
+  border-color: #4fd18b;
+  color: #2f8a4f;
+  background: #eaf7ee;
+}
+
+@media (max-width: 780px) {
+  .option-grid {
+    grid-template-columns: 1fr;
+  }
+  .flow-next-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .option-card,
+  .option-card-selected,
+  .flow-error,
+  .confirm-result,
+  .flow-step-num {
+    animation: none;
+  }
+}

@@ -1,0 +1,33 @@
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-shell-content {
+  flex: 1;
+  max-width: 1120px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 1.75rem 1.5rem;
+}
+
+.app-shell-back-btn {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 1rem;
+  border: 1px solid #dde6ee;
+  background: white;
+  color: #2e6f96;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.app-shell-back-btn:hover {
+  background: #f1f6fa;
+  border-color: #2e6f96;
+}

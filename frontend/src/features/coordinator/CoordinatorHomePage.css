@@ -1,0 +1,864 @@
+.coord-home {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.coord-tabs {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.coord-tab {
+  border: none;
+  background: transparent;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  color: #5c7690;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.coord-tab:hover:not(.coord-tab-active) {
+  background: #f1f6fa;
+}
+
+.coord-tab-active {
+  background: #2e6f96;
+  color: white;
+  font-weight: 600;
+}
+
+.coord-panel {
+  background: white;
+  border: 1px solid #e6edf3;
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  animation: coord-fade-in 0.15s ease;
+}
+
+@keyframes coord-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.coord-empty {
+  color: #7d93a6;
+  text-align: center;
+  padding: 2rem 1rem;
+  margin: 0;
+}
+
+.hotel-caught-up {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  text-align: center;
+  padding: 3.5rem 1rem;
+  color: #7d93a6;
+}
+
+.hotel-caught-up-icon {
+  font-size: 2.2rem;
+}
+
+.hotel-caught-up-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #4d6072;
+}
+
+.hotel-caught-up-body {
+  margin: 0;
+  font-size: 0.85rem;
+  max-width: 46ch;
+}
+
+.coord-overview-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.coord-sync-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: -1rem 0 0.25rem;
+  font-size: 0.72rem;
+  color: #9fb0bf;
+}
+
+.coord-sync-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #4fd18b;
+  animation: coord-sync-pulse 2s ease-in-out infinite;
+}
+
+@keyframes coord-sync-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.coord-overview-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.coord-stat-card {
+  flex: 1 1 210px;
+  border: 1px solid #eef2f6;
+  border-radius: 10px;
+  padding: 1rem 1.1rem;
+  background: #fbfdfe;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  animation: coord-fade-in 0.2s ease;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.coord-stat-card:hover {
+  box-shadow: 0 4px 12px rgba(16, 36, 60, 0.06);
+  transform: translateY(-2px);
+}
+
+.coord-stat-card-warn {
+  border-color: #f3d9c8;
+  background: #fff8f2;
+}
+
+.coord-stat-card-wide {
+  flex-basis: 100%;
+}
+
+.coord-stat-label {
+  font-size: 0.75rem;
+  color: #7d93a6;
+}
+
+.coord-stat-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #10243c;
+}
+
+.coord-stat-value-sm {
+  font-size: 1.1rem;
+}
+
+.coord-stat-sub {
+  font-size: 0.75rem;
+  color: #9fb0bf;
+}
+
+.coord-toolbar {
+  display: flex;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.coord-toolbar select,
+.coord-search-input {
+  border: 1px solid #dde6ee;
+  border-radius: 8px;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.85rem;
+}
+
+.coord-search-input {
+  flex: 1;
+}
+
+.coord-table {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.coord-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  border: 1px solid #e6edf3;
+  border-radius: 10px;
+  padding: 0.8rem 1rem;
+  animation: coord-fade-in 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.coord-row:hover {
+  box-shadow: 0 3px 10px rgba(16, 36, 60, 0.05);
+}
+
+/* 鼠标移上去竖向展开显示详情；align-items 覆盖成 flex-start 让按钮固定贴在行顶部，
+   不会因为下面详情区展开、整行变高而跟着重新居中挪位置。 */
+.admin-user-row {
+  align-items: flex-start;
+}
+
+.admin-user-actions {
+  flex-shrink: 0;
+}
+
+/* grid-template-rows 0fr -> 1fr 展开，只动 grid track 尺寸和 opacity，不动 max-height/margin
+   这类会触发整页 layout 的属性——避免逐帧重排。 */
+.admin-user-details-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 0.2s ease, opacity 0.2s ease;
+}
+
+.admin-user-row:hover .admin-user-details-wrap {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.admin-user-details {
+  overflow: hidden;
+  min-height: 0;
+  padding-top: 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.coord-row-overdue {
+  border-color: #e0483e;
+  background: #fff5f4;
+}
+
+.coord-row-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.2rem;
+}
+
+.coord-row-conf {
+  font-weight: 600;
+  color: #1f2d3d;
+  font-size: 0.9rem;
+  /* 确认号是固定格式的短标识符，绝不该在连字符处断行——真实踩过的坑：
+     行内徽章一多，flexbox 会先压缩这段文字换行，而不是压缩徽章。 */
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.coord-row-sub {
+  margin: 0 0 0.2rem;
+  font-size: 0.82rem;
+  color: #4d6072;
+}
+
+.coord-row-meta {
+  margin: 0;
+  font-size: 0.72rem;
+  color: #9fb0bf;
+}
+
+.coord-row-actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.coord-btn-link {
+  border: none;
+  background: transparent;
+  color: #2e6f96;
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 0.2rem 0;
+  white-space: nowrap;
+  transition: opacity 0.1s ease;
+}
+
+.coord-btn-link:active {
+  opacity: 0.6;
+}
+
+.coord-btn-link:hover {
+  text-decoration: underline;
+}
+
+.coord-btn-danger {
+  color: #b8382c;
+}
+
+.tag {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+}
+
+.tag-status-warn {
+  background: #fdf0e3;
+  color: #a5610f;
+}
+
+.tag-status-normal {
+  background: #eaf1fb;
+  color: #2e6f96;
+}
+
+.tag-status-overdue {
+  background: #fbe3e1;
+  color: #b8382c;
+}
+
+.tag-status-vip {
+  background: #fdf3d8;
+  color: #9a7300;
+}
+
+.coord-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(16, 36, 60, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  animation: coord-fade-in 0.15s ease;
+}
+
+.coord-modal {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  width: min(420px, 90vw);
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.coord-modal h3 {
+  margin: 0;
+  color: #10243c;
+}
+
+.coord-modal-hint {
+  margin: -0.4rem 0 0;
+  font-size: 0.75rem;
+  color: #9fb0bf;
+}
+
+.coord-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.82rem;
+  color: #4d6072;
+}
+
+.coord-field input,
+.coord-field select,
+.coord-field textarea {
+  border: 1px solid #dde6ee;
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: #10243c;
+  background: #fff;
+  width: 100%;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.coord-field textarea {
+  resize: vertical;
+}
+
+.coord-field input:hover,
+.coord-field select:hover,
+.coord-field textarea:hover {
+  border-color: #b9cbda;
+}
+
+.coord-field input:focus,
+.coord-field select:focus,
+.coord-field textarea:focus {
+  outline: none;
+  border-color: #2e6f96;
+  box-shadow: 0 0 0 3px rgba(46, 111, 150, 0.14);
+}
+
+.coord-field input::placeholder,
+.coord-field textarea::placeholder {
+  color: #9fb0bf;
+}
+
+.coord-field input:disabled,
+.coord-field textarea:disabled {
+  background: #f4f7f9;
+  color: #9fb0bf;
+  cursor: not-allowed;
+}
+
+.coord-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 0.4rem;
+}
+
+.coord-btn-primary {
+  background: #2e6f96;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.5rem 1.1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.05s ease;
+}
+
+.coord-btn-primary:hover:not(:disabled) {
+  background: #285f82;
+}
+
+.coord-search-spinner {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: coord-search-spin 0.7s linear infinite;
+}
+
+@keyframes coord-search-spin {
+  to { transform: rotate(360deg); }
+}
+
+.coord-loading-spinner-dark {
+  border-color: rgba(46, 111, 150, 0.25);
+  border-top-color: #2e6f96;
+  margin-right: 0.3rem;
+  vertical-align: middle;
+}
+
+.coord-btn-primary:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.coord-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.coord-btn-secondary {
+  background: #f1f6fa;
+  color: #4d6072;
+  border: none;
+  border-radius: 8px;
+  padding: 0.5rem 1.1rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.05s ease;
+}
+
+.coord-btn-secondary:hover:not(:disabled) {
+  background: #e3ecf3;
+}
+
+.coord-btn-secondary:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.coord-btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.coord-notes-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.coord-notes-list li {
+  border: 1px solid #eef2f6;
+  border-radius: 8px;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.82rem;
+}
+
+.coord-note-author {
+  display: block;
+  font-weight: 600;
+  color: #1f2d3d;
+  font-size: 0.75rem;
+  margin-bottom: 0.15rem;
+}
+
+.coord-note-body {
+  color: #4d6072;
+}
+
+@media (max-width: 780px) {
+  .coord-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .coord-row-actions {
+    justify-content: flex-start;
+  }
+}
+
+.coord-queue-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1.1rem;
+  align-items: stretch;
+}
+
+.coord-queue-stats .coord-stat-card {
+  flex: 1 1 160px;
+}
+
+.coord-queue-reason-card {
+  flex: 2 1 320px;
+}
+
+.coord-queue-reason-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+
+.coord-queue-reason-row {
+  display: grid;
+  grid-template-columns: 150px 1fr 24px;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.coord-queue-reason-label {
+  font-size: 0.76rem;
+  color: #4d6072;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.coord-queue-reason-track {
+  height: 7px;
+  border-radius: 999px;
+  background: #eef2f6;
+  overflow: hidden;
+}
+
+.coord-queue-reason-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #2e6f96, #e0685a);
+  transition: width 0.4s ease;
+}
+
+.coord-queue-reason-count {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #10243c;
+  text-align: right;
+}
+
+.coord-queue-tip {
+  background: #f4f8fb;
+  border: 1px solid #e6edf3;
+  border-radius: 10px;
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 1.1rem;
+  animation: coord-fade-in 0.2s ease;
+}
+
+.coord-queue-tip h4 {
+  margin: 0 0 0.4rem;
+  font-size: 0.82rem;
+  color: #10243c;
+}
+
+.coord-queue-tip p {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #4d6072;
+  line-height: 1.55;
+}
+
+.coord-queue-sync {
+  margin: 0 0 0 auto;
+}
+
+.coord-queue-reason-guide {
+  margin: 0.8rem 0 0;
+  padding-top: 0.8rem;
+  border-top: 1px solid #e0eaf1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.7rem 1.2rem;
+}
+
+.coord-queue-reason-guide dt {
+  margin: 0;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #10243c;
+}
+
+.coord-queue-reason-guide dd {
+  margin: 0.15rem 0 0;
+  font-size: 0.76rem;
+  color: #7d93a6;
+  line-height: 1.4;
+}
+
+/* 待办/进行中/已结案这几个 tab 数据量本来就小(常见就 0～1 条)，纯文字说明堆到头
+   宽屏下还是填不满——不是拿假内容硬凑，按通用页面优化需求第5条给的思路，
+   右边配一块跟这个 tab 主题呼应、纵向撑满整栏真实内容高度的装饰栏；
+   窄屏直接不显示，不占移动端的宝贵纵向空间。 */
+.coord-task-tab-main {
+  min-width: 0;
+}
+
+/* 装饰栏只在超宽视口才需要(1440 宽度下正文本来就填得满，硬塞 200px 装饰栏
+   反而把确认号这类短文本挤到换行)——默认不分栏、装饰栏不显示，只在
+   1500px 以上才两栏展开，精确对应"宽屏空白率超标"这一个具体场景。 */
+.coord-task-tab-decor {
+  display: none;
+}
+
+@media (min-width: 1500px) {
+  .coord-task-tab-layout {
+    display: grid;
+    grid-template-columns: 1fr 200px;
+    gap: 1.25rem;
+    align-items: stretch;
+  }
+
+  .coord-task-tab-decor {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    border-radius: 12px;
+    padding: 1.5rem 1rem;
+    background: radial-gradient(circle at 30% 25%, rgba(46, 111, 150, 0.12), rgba(79, 209, 139, 0.07) 65%, transparent 100%);
+    border: 1px solid #e6edf3;
+  }
+}
+
+.coord-task-tab-decor-icon {
+  font-size: 3.6rem;
+  animation: coord-tip-decor-float 3.6s ease-in-out infinite;
+}
+
+.coord-task-tab-decor-caption {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #7d93a6;
+  text-align: center;
+}
+
+@keyframes coord-tip-decor-float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-8px) rotate(-4deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coord-task-tab-decor-icon {
+    animation: none;
+  }
+}
+
+.coord-queue-mechanics {
+  margin: 0.8rem 0 0;
+  padding-top: 0.8rem;
+  border-top: 1px solid #e0eaf1;
+  font-size: 0.78rem;
+  color: #4d6072;
+  line-height: 1.5;
+}
+
+.coord-disruptions-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.coord-disruptions-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
+
+.coord-disruptions-stats .coord-stat-card {
+  flex: 0 1 200px;
+}
+
+.coord-disruptions-sync {
+  margin: 0 0 0 auto;
+}
+
+.coord-disruptions {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.coord-disruption-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.coord-disruption-row {
+  text-align: left;
+  border: 1px solid #e6edf3;
+  border-radius: 10px;
+  padding: 0.7rem 0.9rem;
+  background: white;
+  cursor: pointer;
+  animation: coord-fade-in 0.2s ease;
+  transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.1s ease;
+}
+
+.coord-disruption-row:hover {
+  border-color: #2e6f96;
+}
+
+.coord-disruption-row:active {
+  transform: scale(0.98);
+}
+
+.coord-disruption-row-active {
+  border-color: #2e6f96;
+  background: #f4f9ff;
+}
+
+.coord-disruption-detail-wrap {
+  border: 1px solid #eef2f6;
+  border-radius: 10px;
+  padding: 1.1rem 1.3rem;
+  background: #fbfdfe;
+  min-height: 200px;
+}
+
+.coord-disruption-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.coord-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.coord-detail-header h3 {
+  margin: 0 0 0.2rem;
+  color: #10243c;
+}
+
+.coord-detail-section h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  color: #4d6072;
+}
+
+.coord-signal-text {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #4d6072;
+  background: white;
+  border: 1px solid #eef2f6;
+  border-radius: 8px;
+  padding: 0.7rem 0.9rem;
+  font-style: italic;
+}
+
+.coord-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  align-items: stretch;
+}
+
+.coord-detail-grid .coord-field {
+  margin-bottom: 0.5rem;
+}
+
+.coord-detail-grid input[type="datetime-local"] {
+  border: 1px solid #dde6ee;
+  border-radius: 8px;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.82rem;
+}
+
+.coord-candidate-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.8rem;
+}
+
+.coord-candidate-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.7rem;
+  border: 1px solid #eef2f6;
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  background: white;
+  cursor: pointer;
+  animation: coord-fade-in 0.2s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.coord-candidate-row:hover {
+  border-color: #cfe0ec;
+  box-shadow: 0 2px 8px rgba(16, 36, 60, 0.05);
+}
+
+@media (max-width: 900px) {
+  .coord-disruptions {
+    grid-template-columns: 1fr;
+  }
+
+  .coord-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .coord-candidate-row {
+    grid-template-columns: auto 1fr;
+  }
+}

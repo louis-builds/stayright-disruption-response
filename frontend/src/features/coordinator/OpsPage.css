@@ -1,0 +1,113 @@
+.ops-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* .escalation-section 的基础样式定义在 EscalationDeskPage.css(那是另一个独立页面任务)——
+   这里只加一条限定在 .ops-page 内部生效的选择器，不碰共享基础规则，也不影响 Escalation Desk 页面自己的样式。 */
+.ops-page .escalation-section {
+  animation: coord-fade-in 0.2s ease;
+  transition: box-shadow 0.15s ease;
+}
+
+.ops-page .escalation-section:hover {
+  box-shadow: 0 4px 14px rgba(16, 36, 60, 0.05);
+}
+
+.ops-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+  align-items: stretch;
+}
+
+.ops-two-col .escalation-section {
+  margin: 0;
+}
+
+@media (max-width: 1000px) {
+  .ops-two-col {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ops-signal-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+}
+
+.ops-signal-card {
+  flex: 1 1 200px;
+  border: 1px solid #eef2f6;
+  border-radius: 10px;
+  padding: 0.8rem 1rem;
+  background: #fbfdfe;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.ops-signal-card:hover {
+  box-shadow: 0 4px 12px rgba(16, 36, 60, 0.06);
+  transform: translateY(-2px);
+}
+
+.ops-signal-type {
+  font-weight: 600;
+  color: #1f2d3d;
+  text-transform: capitalize;
+  font-size: 0.85rem;
+}
+
+.ops-drilldown {
+  margin-top: 1rem;
+}
+
+.ops-drilldown h4 {
+  margin: 0 0 0.6rem;
+  font-size: 0.85rem;
+  color: #4d6072;
+}
+
+.ops-kpi-chart {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.ops-kpi-bar-row {
+  display: grid;
+  grid-template-columns: 140px 1fr 42px;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.ops-kpi-bar-label {
+  font-size: 0.78rem;
+  color: #5c7690;
+}
+
+.ops-kpi-bar-track {
+  height: 10px;
+  border-radius: 999px;
+  background: #eef2f6;
+  overflow: hidden;
+}
+
+.ops-kpi-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #2e6f96, #6fd3a8);
+  transition: width 0.4s ease;
+}
+
+.ops-kpi-bar-value {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #10243c;
+  text-align: right;
+}

@@ -1,0 +1,33 @@
+:root {
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: light;
+  background: #f7fafc;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #f7fafc;
+}
+
+#root {
+  min-height: 100svh;
+}
+
+/* 全站兜底"按下有效果":任何没有单独定义 :active 态的按钮都至少有一个轻微按下反馈，
+   不用给每个页面的按钮样式单独补一遍。已经自定义了 :active 效果的按钮（transform/opacity）
+   不受影响，这条规则只在没被覆盖时生效。 */
+button:not(:disabled) {
+  transition: transform 0.05s ease;
+}
+
+button:not(:disabled):active {
+  transform: scale(0.97);
+}

@@ -1,14 +1,21 @@
 services:
   postgres:
-    image: postgres:16
+    image: postgres:16-alpine
+    container_name: travel-disruption-postgres
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: kakapo
-      POSTGRES_USER: kakapo
-      POSTGRES_PASSWORD: kakapo
+      POSTGRES_DB: ${POSTGRES_DB:-travel_disruption}
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app_password}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - kakapo_pg_data:/var/lib/postgresql/data
+      - travel_disruption_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-app} -d ${POSTGRES_DB:-travel_disruption}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
 volumes:
-  kakapo_pg_data:
+  travel_disruption_pgdata:

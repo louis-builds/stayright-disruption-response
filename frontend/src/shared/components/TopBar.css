@@ -1,0 +1,140 @@
+.topbar {
+  position: relative;
+  background: linear-gradient(135deg, #0f2f4f 0%, #1c4d73 55%, #2e6f96 100%);
+  color: #f5faff;
+}
+
+.topbar-sky {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.topbar-plane {
+  position: absolute;
+  top: 50%;
+  left: -8%;
+  line-height: 1;
+  font-size: 1.9rem;
+  opacity: 0.55;
+  filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.4));
+  animation: topbar-fly 14s linear infinite;
+}
+
+/* translateY(-50%) 是元素自身精确的垂直居中(相对 top:50%)，用 margin 估算字体高度的一半不准；
+   这个 translateY 必须在每一帧都写一遍，动画的 transform 是整体覆盖的，不会跟基础样式叠加。 */
+@keyframes topbar-fly {
+  0% {
+    transform: translateX(0) translateY(-50%) rotate(4deg);
+    opacity: 0;
+  }
+  6% {
+    opacity: 0.55;
+  }
+  92% {
+    opacity: 0.55;
+  }
+  100% {
+    transform: translateX(118vw) translateY(-50%) rotate(4deg);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .topbar-plane {
+    animation: none;
+    transform: translateY(-50%);
+    opacity: 0.35;
+  }
+}
+
+.topbar-content {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0.85rem 1.5rem;
+  gap: 1rem;
+}
+
+.topbar-title-group {
+  grid-column: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  justify-self: start;
+  min-width: 0;
+}
+
+.topbar-title {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.topbar-nav {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  justify-self: center;
+  min-width: 0;
+}
+
+.topbar-nav-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  gap: 1.1rem;
+}
+
+/* 只有 JS 量出来真的溢出、能横向滚动时才加右边渐隐提示；塞得下的时候不裁不虚化，
+   不然最后一项(比如 "System admin")明明放得下也会被渐隐效果糊成看着像被切掉了。 */
+.topbar-nav-scroll.topbar-nav-overflowing {
+  mask-image: linear-gradient(to right, black calc(100% - 20px), transparent);
+}
+
+.topbar-nav-divider {
+  width: 1px;
+  align-self: stretch;
+  background: rgba(255, 255, 255, 0.25);
+  flex-shrink: 0;
+}
+
+.topbar-nav-link {
+  flex-shrink: 0;
+  white-space: nowrap;
+  border: none;
+  background: none;
+  font-family: inherit;
+  cursor: pointer;
+  color: rgba(245, 250, 255, 0.75);
+  font-size: 0.88rem;
+  text-decoration: none;
+  padding: 0.3rem 0;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.topbar-nav-link:hover {
+  color: #f5faff;
+}
+
+.topbar-nav-link-active {
+  color: #f5faff;
+  border-bottom-color: #6fd3a8;
+}
+
+.topbar-right {
+  grid-column: 3;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  justify-self: end;
+}

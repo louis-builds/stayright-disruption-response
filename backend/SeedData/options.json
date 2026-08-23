@@ -1,0 +1,5 @@
+[
+  { "id": "bbbbbbbb-bbbb-bbbb-bbbb-000000000001", "case_id": "88888888-8888-8888-8888-000000000001", "option_type": "defer", "availability": "pending", "selected": false, "payload": { "hotel": "Queenstown Lakeview Hotel", "room_type": "Standard Queen", "new_check_in_offset_days": 13, "new_check_out_offset_days": 16, "fee_diff": 0, "currency": "NZD" } },
+  { "id": "bbbbbbbb-bbbb-bbbb-bbbb-000000000002", "case_id": "88888888-8888-8888-8888-000000000001", "option_type": "alternate", "availability": "available", "selected": false, "payload": { "hotel": "Rotorua Thermal Hotel", "room_type": "Standard Twin", "distance_km": 250, "fee_diff": -30, "currency": "NZD" } },
+  { "id": "bbbbbbbb-bbbb-bbbb-bbbb-000000000003", "case_id": "88888888-8888-8888-8888-000000000001", "option_type": "cancel", "availability": "available", "selected": false, "payload": { "refund_amount": 540.00, "cancellation_fee": 54.00, "currency": "NZD", "eta_business_days": 5 } }
+]

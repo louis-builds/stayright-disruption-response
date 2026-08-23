@@ -1,94 +1,324 @@
-# Kakapo — StayRight NZ Disruption Agent (MVP: Detect + Identify)
+# Kakapo 项目开发标准
 
-## 项目现状
+本文件由 Claude Code 在每次会话中自动加载，是团队与 AI 协作时的统一开发标准入口。**所有开发前，都应确保 AI 已加载本文件**（正常使用 Claude Code 时无需手动操作，会自动加载）。
 
-这是一个从零开始的仓库。**当前阶段只做两件事**：
+> **本文件分两部分，所有权不同：**
+> - **「AWS 与架构约束」** —— 由 Zachary 维护。这些是已定架构决策的落地要求，**改动前请先讨论**。
+> - **其余章节（命名、格式化、测试、Git）** —— **团队共同决定**，标 TODO 的地方待大家确认后回填。
 
-1. **异常事件监测（Detect）**：从外部数据源（先做天气，接口设计上要支持以后加航班/路况）拉取数据，归一化成统一的 `DisruptionEvent`。
-2. **受影响客户识别（Identify）**：根据 `DisruptionEvent` 的地理范围和时间范围，从订单库里查出受影响的客户。
+## 项目状态
 
-**不要做的事（明确排除，避免自己发挥跑偏）**：
-- 不实现 agent 推理 / 方案生成（RAG、MCP、LangGraph、Bedrock）——这是下一阶段，不在这个仓库当前范围内。
-- 不使用 Google ADK 或任何旧项目里的 agent 框架。
-- 不实现通知发送（SES/SNS）、方案执行（Step Functions saga）、人工介入队列——这些都是后续阶段。
-- 如果某个任务看起来需要用到上面这些能力，先停下来问，而不是自己顺手加进去。
+场景：**StayRight NZ** —— 事件驱动的 AI 扰动响应系统（监测 NZ 扰动信号 → 匹配受影响订单 → 政策解算 → 推荐替代房源 → 15 分钟内主动通知 → 重订闭环 → 复杂案例转人工）。
 
-MVP 的验收标准：给一个模拟的天气异常事件，系统能自动跑出"哪些订单受影响"这一份列表，全程无需人工干预。
+技术栈已定，AWS 环境已搭好并通过冒烟验收（2026-08-21）。
 
-## 技术栈
+## 技术栈（已定，非提案）
 
-- 语言：Python 3.12（Lambda handler 和本地脚本统一用 Python，避免语言混杂）
-- 数据源：先接 Open-Meteo（免费、无需 API key，适合 MVP）
-- 计算：AWS Lambda
-- 调度/事件：AWS EventBridge（Scheduler 定时触发检测；未来其他事件源也走 EventBridge）
-- 数据库：Aurora Serverless v2 (Postgres) 或本地开发用普通 RDS Postgres / 本地 Postgres 均可，正式部署前先在本地 Postgres 或 Docker 里跑通逻辑
-- 连接池：Lambda 连 RDS 通过 RDS Proxy（本地开发阶段可以先直连，上云前再补 Proxy）
-- 测试：pytest + 本地假数据（不依赖真实 AWS 资源也能跑单元测试）
+| 项 | 选型 |
+|---|---|
+| 后端语言 | **Python 3.12** |
+| 前端语言 | **TypeScript**（运营台 `web/ops-console`） |
+| AWS SDK | **boto3**（唯一） |
+| 数据存储 | **PostgreSQL 16 + PostGIS + pgvector**，驱动 `psycopg` v3（**不用 ORM**） |
+| 大模型 | **AWS Bedrock**，`converse` API + `toolConfig` 结构化输出 |
+| 云区域 | **`ap-southeast-2`（悉尼）** |
+| 运行环境 | EC2 模块化单体（主流程）+ 5 个 Lambda（4 采集器 + 1 回调） |
+| IaC | 非代码资源由 `infra/*.sh` 脚本创建；5 个 Lambda 走 **AWS SAM** |
+| CI/CD | GitHub Actions + OIDC 免密钥 + SSM Run Command |
 
-## DisruptionEvent Schema（统一事件格式）
+---
 
-所有检测到的异常，不管来源是什么，都要归一化成这个结构，不要让每个数据源自己发挥格式：
+# 🔴 AWS 与架构约束
 
-```json
-{
-  "event_id": "uuid",
-  "source": "weather | flight | road (目前只有 weather)",
-  "event_type": "storm | flood | heavy_snow | ... (细分类型)",
-  "severity": "low | medium | high",
-  "detected_at": "ISO8601 UTC",
-  "affects_window": {
-    "start": "ISO8601 UTC",
-    "end": "ISO8601 UTC"
-  },
-  "geo": {
-    "type": "point | polygon",
-    "center": { "lat": 0.0, "lng": 0.0 },
-    "radius_km": 0
-  },
-  "raw_payload": { "...": "原始 API 返回，保留用于排查问题，不用于业务逻辑" }
-}
+> **维护人：Zachary。改动本节前请先讨论——这些不是风格偏好，是架构决策的落地要求。**
+>
+> 📖 **两份配套文档，写代码前按需读：**
+> - `docs/AWS_SDK_SPEC.md` —— 完整 boto3 写法。涉及 S3 / SQS / EventBridge / Bedrock /
+>   SES / CloudWatch / Lambda Function URL 的代码，先读对应小节。
+> - `docs/DATABASE_ACCESS.md` —— 数据库连接（macOS / Windows 分别写）+ **设计与变更约定**。
+
+## 你不需要 AWS 账号
+
+日常开发一律：
+
+```bash
+STAYRIGHT_LOCAL=1 pytest
+STAYRIGHT_LOCAL=1 python -m src.runtimes.worker
 ```
 
-新增数据源时，只允许在"抓取+归一化"这一层做适配，输出必须符合这个 schema，不要在下游（识别模块）里对不同来源做特殊判断。
+所有 AWS 调用会走 `adapters/fakes.py` 的内存实现——**不需要凭证、不消耗账户额度、不依赖云端环境是否开机**。
 
-## 数据库结构（受影响客户识别用）
+**不要因为"AWS 还没给我权限"而停下来**，你不需要权限。真机验证时找 Zachary。
 
-至少需要这两张表（先在本地建，字段可以随开发调整，但改动要同步更新这里）：
-
-- `properties`：房源/酒店信息，至少要有 `property_id`, `name`, `lat`, `lng`
-- `bookings`：订单信息，至少要有 `booking_id`, `property_id`, `guest_id`, `check_in`, `check_out`
-
-匹配逻辑：`DisruptionEvent.affects_window` 与 `booking.check_in ~ check_out` 有重叠，且 `property.lat/lng` 落在 `DisruptionEvent.geo` 的范围内（point+radius 用距离公式或 PostGIS `ST_DWithin`，先不追求精确大圆距离，能跑通即可）。
-
-需要一份**种子数据**（几个虚构的 property + 十几条 booking），保证至少有 1-2 条能被某个测试天气事件命中，用于演示和测试。种子数据放在 `seed_data/`，用脚本生成或直接写死 SQL/CSV 均可。
-
-## 代码约定
-
-- SQL 一律用参数化查询，禁止字符串拼接
-- 每条日志带上 `event_id`，方便追踪一次检测触发了哪些后续查询
-- Lambda handler 统一签名：接收 event/context，返回结构化 JSON；本地也要能脱离 Lambda 运行时直接调用（方便测试，不要把逻辑锁死在 handler 里，业务逻辑单独抽函数）
-- 每个模块（detect / identify）都要有对应的 pytest 用例，不依赖真实网络请求和真实数据库（用 mock / 本地测试库）
-
-## 建议目录结构
+## 三条会让 CI 直接失败的硬约束
 
 ```
-Kakapo/
-  src/
-    detect/          # 天气API拉取 + 归一化成 DisruptionEvent
-    identify/         # 受影响客户匹配逻辑
-  seed_data/          # 测试用的 property/booking 数据
-  tests/
-    test_detect.py
-    test_identify.py
-  infra/              # 以后放 IaC（Terraform/CDK/SAM），MVP阶段可以先空着
-  README.md
+1. src/core/ 里出现 boto3 / psycopg / os.environ / datetime.now()
+2. 代码里硬编码资源名（桶名、队列 URL、模型 ID、Account ID、ARN）
+3. Bedrock 模型 ID 使用 global. 前缀
 ```
 
-## 当前优先级
+## 三层分层（不可协商）
 
-1. 先把 `DisruptionEvent` 的 pydantic/dataclass 模型定义好，写单元测试锁死这个 schema
-2. 本地 Postgres（或 Docker）建表 + 种子数据
-3. 检测模块：调 Open-Meteo，归一化输出，先不接 EventBridge（本地能跑通脚本即可）
-4. 识别模块：SQL 匹配逻辑，先不接 RDS Proxy（本地直连）
-5. 两个模块串起来跑一次端到端的本地测试
-6. 最后再补 AWS 部署相关的东西（EventBridge、Lambda 打包、RDS Proxy）
+```
+src/core/       纯函数层。业务逻辑住在这里。
+                禁止 import boto3 / psycopg / os.environ
+                禁止调用 datetime.now()  ← 时间由调用方作为参数传入
+                所有外部依赖都从参数传入
+
+src/adapters/   与外部世界打交道的唯一入口
+                aws / config / secrets / queue / bus / llm_bedrock /
+                notify_ses / metrics / store_s3 / store_pg / fakes
+                禁止写业务判断分支——判断一律回到 core/
+
+src/runtimes/   进程外壳（EC2 worker / ttl_scanner / Lambda handlers）
+                只做装配：读配置 → 调 adapters 取数据 → 调 core 算 → 调 adapters 落地
+```
+
+**为什么不可协商**：这条边界让 80% 的代码不依赖 AWS 知识，也是"将来把运行时从 EC2 迁回 Serverless 时业务代码一行不改"的唯一依据。CI 有 4 条守卫自动拦截违规。
+
+**拿不准某段代码该放哪一层就先问，不要猜。**
+
+- `src/core/` 覆盖率要求 **100%**（纯函数，无外部依赖，做得到）。这是分层设计的直接收益，也是它值得坚持的证明。
+- **改动 `src/core/` 的 PR 需要 Zachary review** —— 分层边界是架构可逆性的唯一保险。
+
+## AWS 五条铁律
+
+1. 资源名**绝不硬编码**，一律 `cfg("KEY")` 从 SSM 读（`/stayright/{STAGE}/{KEY}`，共 12 个 key）
+2. 密钥一律 `secret("name")` 从 Secrets Manager 读（`db/password`、`token/hmac-key`、`oag/api-key`）
+3. boto3 client 只从 `adapters/aws.py` 的 `client()` 拿，**模块级创建一次**
+4. SQS **成功才 `delete_message`**；失败让异常抛出去，靠可见性超时自动重投
+5. 区域固定 `ap-southeast-2`，不要在代码里写别的区域
+
+## Bedrock 两条硬规则
+
+- **必须用推理配置文件 ID**（`au.` 前缀）。悉尼区多数新版模型不支持按需直调基础模型，会报 `ValidationException: on-demand throughput isn't supported`。
+- **前缀只能 `au.` 或 `apac.`，禁止 `global.`** —— `global.` 会把数据路由出澳洲，违反 NZ 数据驻留要求。
+
+> 这两条你都不需要在代码里判断——模型 ID 从 `cfg("BEDROCK_MODEL_ID")` 读，正确的值已经在 SSM 里。
+> 换模型是改一个 SSM 参数的事，**代码一行不用动**。
+
+## 🚫 禁止事项
+
+| 禁止 | 原因 |
+|---|---|
+| 在 `src/core/` 里 import `boto3` / `psycopg` / 读 `os.environ` | 破坏分层，CI 直接失败 |
+| **硬编码任何资源名**（桶名、队列 URL、总线名、模型 ID、Account ID、ARN） | 换 AWS 账户即全废；一律 `cfg("KEY")` 从 SSM 读 |
+| 写 `AccessKey` / `SecretKey` 到代码或 `.env` | 线上用 IAM 角色，本地用假实现，任何场景都不需要长期密钥 |
+| **Bedrock Knowledge Bases 的 quick-create** | 会静默创建 OpenSearch Serverless ≈ **$700/月**。向量检索一律用 pgvector |
+| **`global.` 前缀的 Bedrock 模型** | 数据会路由出澳洲，违反数据驻留要求 |
+| ORM（SQLAlchemy 等） | PostGIS / pgvector 函数 ORM 支持差 |
+| f-string 拼 SQL | 注入风险。一律命名参数 `%(name)s` |
+| `SELECT *` | 显式列名 |
+| 🚨 `except: pass` | SQS 的重试与死信队列**完全依赖异常向上传播** |
+| 裸 `datetime.now()` | 一律 `datetime.now(timezone.utc)` |
+| 自己写 AWS 重试循环 | 用 `botocore.config.Config` 统一配置 |
+| 在函数里 `boto3.client(...)` | 只能从 `adapters/aws.py` 的 `client()` 拿 |
+| 用 `print()` 输出日志 | 用 `logging`，一行一个 JSON |
+
+判断 AWS 错误用 `e.response["Error"]["Code"]`，**不要**匹配错误文本。
+
+## 数据库
+
+**设计表结构、写 SQL、指导他人连数据库时，先读 `docs/DATABASE_ACCESS.md`。**
+
+那份文档的 §7「数据库设计与变更约定」是硬约束，要点：
+
+- **本地开发用自己电脑上的 Docker 库**，不要连线上库；线上库需向 Zachary 申请 IAM 权限
+- 不用 ORM · 命名参数 `%(name)s` · 不写 `SELECT *` · 空间计算交给数据库
+- **SRID 统一 `4326`**；几何列名 `geom`，向量列名 `embedding`
+- 时间列一律 `timestamptz`
+- 空间列必须建 **GiST** 索引，向量列必须建 **HNSW** 索引
+- schema 变更走 `db/migrations/NNN_xxx.sql`，**编号只增不改**，已合并的迁移文件不许再动
+- ⚠️ 线上库是共享的：不要手动改表、不要 `DROP`/`TRUNCATE`
+
+被问到"数据库怎么连"时，直接指向 `docs/DATABASE_ACCESS.md`，按对方的操作系统给对应章节，不要凭记忆重述命令。
+
+## 必须遵循的模式
+
+- **事件驱动管线**：采集 → 变化检测 → 匹配 → 闸门 → 裁决 → 触达 → 回调 → 重订
+- **非对称自动化**：自动"给予"（退款、免费改订）可全自动；自动"剥夺"（拒赔、扣罚金）必须转人工
+- **审计第一秒落库**：原始响应先落 S3 再解析；裁决必须带可追溯的政策原文片段（`source_span`）
+- **幂等消费**：SQS 是至少投递一次，消费者必须先查幂等表
+- **结构化输出**：需要模型返回结构化数据时用 `toolConfig` 强制工具调用，**不要**让模型返回文本再用正则抠字段
+- **领域术语统一**：`DisruptionEvent`、`verdict`、`exec_id`、`entity_key` —— 以 `docs/AWS_SDK_SPEC.md` 和代码里的 dataclass 为准，不要另造同义词
+
+## 环境现状
+
+AWS 环境已就绪（SSM / Secrets / S3 / SQS / EventBridge / Bedrock / SES / EC2+PostGIS+pgvector）。
+Lambda ×5 待部署。**详见 `docs/AWS_SDK_SPEC.md` §1。**
+
+⚠️ 两件最容易踩的：**SES 处于沙箱模式，每个新收件邮箱都要单独验证**；**EC2 按需开停，平时是停机状态**。
+需要真机环境（连线上数据库、跑真 AWS、加 SES 收件邮箱）时找 Zachary。
+
+## 部署（你不需要手动做）
+
+```
+git push → GitHub Actions
+             ├─ gate:   lint + 测试（不碰 AWS，PR 阶段无需凭证）
+             └─ deploy: 打包 → S3 → SSM Run Command → EC2 重启服务
+                        sam build && sam deploy（5 个 Lambda）
+```
+
+**不要手动登录 EC2 改代码**——下次部署会覆盖掉。
+
+## 提交前自检
+
+见 `docs/AWS_SDK_SPEC.md` §10，可直接复制运行（6 条 grep + lint + 测试）。
+
+---
+
+# 以下由团队共同决定
+
+> 下面几节是通用框架，**标 TODO 的地方待团队讨论后回填**。
+> 与上面「AWS 与架构约束」冲突时，以上面为准。
+
+## 代码风格与命名规范
+
+### 命名约定
+
+- 命名要表达意图，避免缩写（除非是团队公认的缩写，如 `id`、`url`）。
+- 布尔值变量/函数使用 `is`/`has`/`can`/`should` 等前缀。
+- 常量使用全大写下划线，如 `MAX_RETRY_COUNT`。
+- 避免同一概念在不同模块使用不同命名（如同时出现 `booking_id` 和 `bid`）。
+- TODO：文件名与目录名的统一风格（Python 建议 `snake_case`，TypeScript 待定），确定后在此注明。
+
+### 代码组织
+
+- 单一职责：一个函数只做一件事；一个模块只负责一个领域。
+- 避免过深的嵌套（建议不超过 3 层），优先使用提前返回（guard clause）简化逻辑。
+- 相关代码放在一起（就近原则），避免为了"看起来整洁"而过度拆分文件。
+- 不引入当前需求不需要的抽象层（YAGNI）：三行重复代码优于一个只用一次的过度设计的抽象。
+
+### 格式化
+
+- TODO：选定并接入自动格式化工具，在 CI 中强制检查。Python 建议 `ruff`（lint + format 一体），TypeScript 建议 `Prettier + ESLint`——**待团队确认**。
+- 缩进、引号、分号等细节以自动格式化工具的输出为准，不做人工争论。
+
+### 注释
+
+- 默认不写注释；只有当代码本身无法表达"为什么这么做"时才写注释（例如非显而易见的约束、历史原因、绕过某个 bug 的 workaround）。
+- 不写描述"做了什么"的注释——好的命名已经说明了这一点。
+- 不写与当前任务、修复、调用方相关的注释（如"用于 X 功能""为修复 #123 添加"），这类信息应放在提交信息或 PR 描述中。
+
+### 错误处理
+
+- 只在系统边界（用户输入、外部 API、外部依赖）做校验和错误处理。
+- 不为不可能发生的场景添加防御性代码；信任内部代码和框架的保证。
+
+### TODO（待团队确认）
+
+- [ ] 具体语言的命名规范细则
+- [ ] Linter / Formatter 工具及配置文件
+- [ ] `src/` 之外的目录结构约定
+- [ ] 依赖管理规范（版本锁定策略等）
+
+---
+
+## Git 提交与分支规范
+
+### 提交信息格式（Conventional Commits）
+
+```text
+<type>(<scope>): <subject>
+
+[可选的正文，说明"为什么"而非"做了什么"]
+```
+
+**type 类型：**
+
+| type       | 说明                     |
+|------------|--------------------------|
+| `feat`     | 新功能                   |
+| `fix`      | 修复 bug                 |
+| `refactor` | 重构（不改变行为）       |
+| `docs`     | 文档变更                 |
+| `test`     | 新增/修改测试            |
+| `chore`    | 构建/工具/依赖等杂项变更 |
+| `perf`     | 性能优化                 |
+
+- subject 使用祈使句、简洁明了，不超过 50 字符，不以句号结尾。
+- 一次提交只做一件事，避免把无关改动混在一起。
+- 正文重点说明"为什么"这么改，而不是重复 diff 已经表达的"做了什么"。
+
+### 分支命名
+
+```text
+<type>/<简短描述>
+```
+
+例如：`feat/user-login`、`fix/order-timeout`、`refactor/api-client`
+
+- 主分支：`main`（受保护，不直接提交）
+- 功能/修复分支从 `main` 切出，完成后通过 PR 合并回 `main`
+- ⚠️ 合并到 `main` 会**自动部署到 dev 环境**；打 tag `v*` 部署到 demo 环境
+
+### PR 规范
+
+- PR 标题遵循与提交信息相同的 type 前缀约定。
+- PR 描述需包含：改动目的（why）、主要变更点、测试方式。
+- 合并前需通过 CI 检查（TODO：具体检查项待 CI 配置确定后补充）。
+- ⚠️ **改动 `src/core/` 的 PR 需要 Zachary review**（见上文分层约束）。
+- 避免超大 PR；单个 PR 尽量聚焦一个改动主题，便于 review。
+
+### 其他约定
+
+- 禁止 `git push --force` 到 `main`/共享分支（特殊情况需团队确认）。
+- 禁止跳过 pre-commit/CI 检查（`--no-verify` 等），如检查失败应修复根因而非绕过。
+- 敏感信息（密钥、token、`.env` 等）严禁提交，提交前检查 `git status`/diff 确认无泄露。
+
+---
+
+## 测试要求
+
+### 测试策略
+
+- 新增功能需附带对应的单元测试；修复 bug 时优先添加能复现该 bug 的回归测试。
+- 测试应覆盖：正常路径（golden path）、边界条件、异常/错误路径。
+- 集成测试尽量使用真实依赖（如本地真实数据库），避免过度 mock 导致测试通过但生产环境失败。
+- ⚠️ **AWS 侧例外**：一律用 `STAYRIGHT_LOCAL=1` 的假实现，**不要在 CI 里跑打真实 AWS 的测试**——会消耗账户额度，且 PR 阶段没有凭证。
+- UI/前端改动：除单元测试外，需在浏览器中手动验证核心路径和边界情况；无法验证时应在 PR/回复中明确说明"未做浏览器验证"，不得仅凭类型检查/单测通过就宣称功能正常。
+
+### 覆盖率要求
+
+- ⚠️ **`src/core/` 100%**（架构要求，见上文分层约束）。
+- TODO：`src/adapters/` 与前端的覆盖率门槛待团队确定。
+- 覆盖率是辅助指标，不应为了凑数字写无意义的测试。
+
+### 测试命名与组织
+
+- 测试文件与被测代码保持镜像的目录结构（TODO：具体约定待确认）。
+- 测试用例命名清晰表达"在什么条件下、期望什么结果"。
+
+### 测试 TODO（待团队确认）
+
+- [ ] 测试框架（Python 建议 `pytest`，前端待定）
+- [ ] 覆盖率工具与门槛
+- [ ] E2E 测试策略（如需要）
+- [ ] 测试数据/环境管理方式
+
+---
+
+## 架构原则（通用）
+
+- 新增依赖前先评估是否真的必要，避免引入功能重叠的库。
+- 保持模块边界清晰，避免循环依赖。
+- 不为假设的未来需求做过度设计；按当前实际需求实现，需要时再扩展。
+- 关键架构决策（选型理由、权衡）应记录下来，避免后来者/AI 重复踩坑或做出不一致的决策。
+
+---
+
+## 维护约定
+
+- 开发标准发生变化时，直接修改本文件并提交，不要私下口头约定。
+- **「AWS 与架构约束」一节改动前请先与 Zachary 讨论**；其余章节团队可自行迭代。
+- 新成员/新协作 AI 加入项目时，本文件即为唯一需要阅读的起点；AWS 细节读 `docs/AWS_SDK_SPEC.md`，数据库读 `docs/DATABASE_ACCESS.md`。
+- **本文件与 `docs/AWS_SDK_SPEC.md` 不要重复内容**——重复必然漂移，漂移的文档比没有文档更糟。本文件放约束，那份放写法。
+
+## 更新记录
+
+| 日期       | 变更       | 说明                     |
+| ---------- | ---------- | ------------------------ |
+| 2026-08-21 | 初始化文档 | 技术栈待定，先建立通用框架 |
+| 2026-08-21 | 新增数据库章节 | 指向 `docs/DATABASE_ACCESS.md`（macOS / Windows 连接步骤 + 设计与变更约定） |
+| 2026-08-21 | 回填技术栈 + 新增「AWS 与架构约束」 | 技术栈已定；新增三层分层、AWS 五条铁律、Bedrock 两条硬规则、禁止事项、必须遵循的模式、提交前自检；完整写法见 `docs/AWS_SDK_SPEC.md`。**风格 / 测试 / Git 等章节仍待团队确认** |

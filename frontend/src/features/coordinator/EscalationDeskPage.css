@@ -1,0 +1,132 @@
+.escalation-desk {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.escalation-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.escalation-header h2 {
+  margin: 0 0 0.2rem;
+  color: #10243c;
+  font-size: 1.1rem;
+}
+
+.escalation-sync {
+  margin: 0.2rem 0 0;
+}
+
+/* 原来"方案快照/最终决定/通知记录"三段全部纵向堆叠，宽屏下右边一半空着——
+   决定表单是这页真正要操作的东西，拆成侧栏钉住，左边放只读的方案快照+通知记录，
+   两栏都用满宽度，不用再靠拉长滚动条才能看完。 */
+.escalation-desk-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.escalation-desk-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  min-width: 0;
+}
+
+.escalation-desk-side {
+  position: sticky;
+  top: 1rem;
+}
+
+@media (max-width: 980px) {
+  .escalation-desk-layout {
+    grid-template-columns: 1fr;
+  }
+  .escalation-desk-side {
+    position: static;
+  }
+}
+
+.escalation-section {
+  background: white;
+  border: 1px solid #e6edf3;
+  border-radius: 12px;
+  padding: 1.1rem 1.3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  animation: coord-fade-in 0.2s ease;
+}
+
+.escalation-section h3 {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #10243c;
+}
+
+.escalation-snapshot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.8rem;
+  align-items: stretch;
+}
+
+/* 方案数常见是奇数(defer/alternate/cancel 三个)，这个区域固定 2 列时最后一张落单，
+   右边整列陪跟着空出来——让它跨满整行，字段列表也跟着改多列摆，别让横向空间白占着。 */
+.escalation-snapshot-grid .escalation-option-snapshot:nth-last-child(1):nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
+.escalation-snapshot-grid .escalation-option-snapshot:nth-last-child(1):nth-child(odd) .escalation-snapshot-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.2rem 1rem;
+}
+
+.escalation-option-snapshot {
+  border: 1px solid #eef2f6;
+  border-radius: 10px;
+  padding: 0.8rem 1rem;
+  background: #fbfdfe;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.escalation-option-snapshot:hover {
+  box-shadow: 0 4px 12px rgba(16, 36, 60, 0.06);
+  transform: translateY(-2px);
+}
+
+.escalation-option-snapshot h4 {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #1f2d3d;
+  text-transform: capitalize;
+}
+
+.escalation-snapshot-fields {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.78rem;
+  color: #4d6072;
+}
+
+.escalation-refund-confirmed {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #2f8a4f;
+  animation: coord-fade-in 0.18s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .escalation-section,
+  .escalation-option-snapshot,
+  .escalation-refund-confirmed {
+    animation: none;
+  }
+}
