@@ -1,0 +1,306 @@
+.coord-panel h3 {
+  margin: 0 0 0.7rem;
+  font-size: 0.9rem;
+  color: #10243c;
+}
+
+/* "全部处理完"是个常见的真实状态(非仅边界情况)——原来只有一个图标+两行字，
+   宽屏下巨大的空白区域就靠改颜色糊弄不过去，补一行取自已加载的酒店资料的真实数据
+   (房型数/可用福利数/地址)，不是纯装饰。 */
+.hotel-caught-up-snapshot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2rem;
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #eef2f6;
+  width: 100%;
+}
+
+.hotel-caught-up-snapshot > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  min-width: 120px;
+}
+
+.hotel-caught-up-snapshot-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #10243c;
+}
+
+.hotel-caught-up-snapshot-value-sm {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #2e6f96;
+}
+
+.hotel-caught-up-snapshot-label {
+  font-size: 0.72rem;
+  color: #9fb0bf;
+}
+
+.hotel-overdue-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #e0483e;
+  margin-right: 0.3rem;
+  animation: coord-sync-pulse 1.2s ease-in-out infinite;
+}
+
+.hotel-profile-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.hotel-profile-col {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.hotel-perks-hint {
+  margin: -0.3rem 0 0.8rem;
+  font-size: 0.8rem;
+  color: #7d93a6;
+}
+
+.hotel-perks-list {
+  list-style: none;
+  margin: 0 0 0.8rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-width: 480px;
+}
+
+.hotel-perks-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid #eef2f6;
+  border-radius: 8px;
+  padding: 0.5rem 0.8rem;
+  font-size: 0.85rem;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.hotel-perks-list li:hover {
+  border-color: #cbd8e4;
+  background: #f8fbfd;
+}
+
+.hotel-perk-checkboxes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0.4rem 0 0.8rem;
+}
+
+.hotel-perk-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.hotel-room-type-card {
+  border: 1px solid #eef2f6;
+  border-radius: 10px;
+  padding: 0.9rem 1.1rem;
+  background: #fbfdfe;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  transition: box-shadow 0.15s ease;
+}
+
+.hotel-room-type-card:hover {
+  box-shadow: 0 4px 12px rgba(16, 36, 60, 0.06);
+}
+
+.hotel-room-type-card + .hotel-room-type-card {
+  margin-top: 0.9rem;
+}
+
+.hotel-room-type-empty-photos {
+  margin: 0.3rem 0;
+  font-size: 0.78rem;
+  color: #9fb0bf;
+}
+
+.hotel-amenity-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.4rem 0;
+}
+
+.hotel-amenity-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: #eef5fa;
+  color: #2e6f96;
+  border-radius: 999px;
+  padding: 0.25rem 0.4rem 0.25rem 0.65rem;
+  font-size: 0.76rem;
+  text-transform: capitalize;
+  animation: coord-fade-in 0.15s ease;
+}
+
+.hotel-amenity-chip button {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 0.85rem;
+  line-height: 1;
+  padding: 0 0.1rem;
+  opacity: 0.7;
+  transition: opacity 0.1s ease;
+}
+
+.hotel-amenity-chip button:hover {
+  opacity: 1;
+}
+
+.hotel-amenity-add {
+  margin-top: 0.2rem;
+}
+
+.hotel-perks-search {
+  margin-bottom: 0.6rem;
+}
+
+.hotel-lightbox-backdrop {
+  z-index: 60;
+}
+
+.hotel-lightbox-img {
+  max-width: min(80vw, 900px);
+  max-height: 80vh;
+  border-radius: 10px;
+  animation: coord-fade-in 0.2s ease;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+}
+
+.hotel-lightbox-close {
+  position: fixed;
+  top: 1.5rem;
+  right: 1.5rem;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.hotel-lightbox-close:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.room-type-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 0.5rem;
+  margin: 0.4rem 0;
+}
+
+.room-type-photo-thumb {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #eef2f6;
+}
+
+.room-type-photo-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.2s ease;
+}
+
+.room-type-photo-thumb:hover img {
+  transform: scale(1.08);
+}
+
+.room-type-photo-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  line-height: 1;
+  border: none;
+  border-radius: 50%;
+  background: rgba(16, 36, 60, 0.65);
+  color: white;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.hotel-room-photo-upload {
+  display: inline-block;
+  align-self: flex-start;
+  margin-top: 0.3rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px dashed #cbd8e4;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  color: #2e6f96;
+  cursor: pointer;
+}
+
+.hotel-room-photo-upload:hover {
+  background: #f1f6fa;
+}
+
+@media (max-width: 900px) {
+  .hotel-profile-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 队列说明文字之前是写死常驻在页面上的一整块，用户反馈这种固定说明不该占屏幕空间——
+   改成原生 <details>，默认折叠，需要时自己点开看。 */
+.hotel-queue-tip-collapsible summary {
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #10243c;
+  list-style: none;
+}
+
+.hotel-queue-tip-collapsible summary::-webkit-details-marker {
+  display: none;
+}
+
+.hotel-queue-tip-collapsible summary::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: 0.4rem;
+  transition: transform 0.15s ease;
+}
+
+.hotel-queue-tip-collapsible[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.hotel-queue-tip-collapsible p {
+  margin-top: 0.5rem;
+}
