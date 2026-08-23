@@ -1,0 +1,16 @@
+namespace TravelDisruptionAgent.Api.Features.Coordinator;
+
+public record AdminOptionDto(
+    Guid Id, string OptionType, string Availability, bool Selected, bool Locked, string? UnavailableReason,
+    string PayloadJson, DateTimeOffset CreatedAt, string? CustomTitle, List<string> PerkNames,
+    bool? CoordinatorVisibilityOverride);
+
+public record UpdateOptionPayloadRequest(Dictionary<string, object> Payload);
+
+public record MarkUnavailableRequest(string Reason);
+
+public record UnlockOptionRequest(string Reason);
+
+public record SetVisibilityRequest(bool? Visible);
+
+public record PushOptionsResultDto(bool Success, DateTimeOffset SentAt);

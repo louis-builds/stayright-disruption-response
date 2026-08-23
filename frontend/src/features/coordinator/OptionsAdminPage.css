@@ -1,0 +1,266 @@
+/* 卡片网格本身用 auto-fit 已经比较会用宽度了，但整页缺一个"这个案件现在什么状态、
+   聊天在哪"的入口——加个侧栏，跟其它页面已经用过的 side-panel 视觉语言保持一致。 */
+.options-admin-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.options-admin {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.options-admin-side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  position: sticky;
+  top: 1rem;
+}
+
+.options-admin-side-card {
+  background: white;
+  border: 1px solid #e6edf3;
+  border-radius: 10px;
+  padding: 1rem 1.1rem;
+  animation: coord-fade-in 0.2s ease;
+}
+
+.options-admin-side-card h3 {
+  margin: 0 0 0.7rem;
+  font-size: 0.85rem;
+  color: #10243c;
+}
+
+.options-admin-side-list {
+  margin: 0 0 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.options-admin-side-list dt {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #9fb0bf;
+  margin: 0;
+}
+
+.options-admin-side-list dd {
+  margin: 0.1rem 0 0;
+  font-size: 0.82rem;
+  color: #1f2d3d;
+}
+
+.options-admin-priority {
+  text-transform: capitalize;
+}
+
+.options-admin-chat-btn {
+  width: 100%;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid #2e6f96;
+  border-radius: 7px;
+  background: white;
+  color: #2e6f96;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+
+.options-admin-chat-btn:hover {
+  background: #2e6f96;
+  color: white;
+}
+
+.options-admin-chat-btn:active {
+  transform: scale(0.97);
+}
+
+.options-admin-sync {
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .options-admin-layout {
+    grid-template-columns: 1fr;
+  }
+  .options-admin-side {
+    position: static;
+  }
+}
+
+.options-admin-summary {
+  margin: 0;
+  color: #7d93a6;
+  font-size: 0.85rem;
+}
+
+.options-admin-alert {
+  background: #fbe3e1;
+  color: #b8382c;
+  border-radius: 10px;
+  padding: 0.8rem 1rem;
+  font-size: 0.85rem;
+}
+
+.options-admin-closed-note {
+  background: #eaf7ee;
+  color: #2f8a4f;
+  border-radius: 10px;
+  padding: 0.8rem 1rem;
+  font-size: 0.85rem;
+  animation: coord-fade-in 0.2s ease;
+}
+
+.options-admin-push-result {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #2f8a4f;
+}
+
+.option-admin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  align-items: stretch;
+}
+
+/* app-shell-content 封顶 1120px，这里的两栏(内容+侧栏)布局下 option 卡片区实际
+   宽度永远只够站 2 列——常见的 3 个方案(defer/alternate/cancel)是奇数，最后一张卡
+   落单占一列，右边整列跟着空出来。让落单的最后一张卡横跨整行，并把它的字段
+   区改成多列摆放，横跨的宽度用来放内容而不是留白。 */
+.option-admin-grid .option-admin-card:nth-last-child(1):nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
+.option-admin-grid .option-admin-card:nth-last-child(1):nth-child(odd) .option-admin-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.5rem 1rem;
+}
+
+.option-admin-card {
+  background: white;
+  border: 1px solid #e6edf3;
+  border-radius: 12px;
+  padding: 1.1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  animation: coord-fade-in 0.15s ease;
+  transition: box-shadow 0.15s ease;
+}
+
+.option-admin-card:hover {
+  box-shadow: 0 4px 14px rgba(16, 36, 60, 0.06);
+}
+
+.option-admin-card-unavailable {
+  opacity: 0.7;
+}
+
+.option-admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+.option-admin-header h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #10243c;
+}
+
+.option-admin-tags {
+  display: flex;
+  gap: 0.3rem;
+  flex-shrink: 0;
+}
+
+.option-admin-reason {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #b8382c;
+}
+
+.option-admin-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.option-admin-visibility {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  background: #f4f8fb;
+  border-radius: 8px;
+  font-size: 0.78rem;
+}
+
+.option-admin-visibility-label {
+  color: #4d6072;
+  font-weight: 500;
+}
+
+.option-admin-visibility-toggle {
+  display: flex;
+  gap: 0.2rem;
+}
+
+.option-admin-visibility-btn {
+  border: 1px solid #dde6ee;
+  background: white;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.55rem;
+  cursor: pointer;
+  color: #4d6072;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.option-admin-visibility-btn-active {
+  background: #2e6f96;
+  border-color: #2e6f96;
+  color: white;
+}
+
+.option-admin-fields input {
+  border: 1px solid #dde6ee;
+  border-radius: 8px;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.82rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.option-admin-fields input:hover:not(:disabled):not(:focus) {
+  border-color: #a9c2d6;
+}
+
+.option-admin-fields input:focus {
+  outline: none;
+  border-color: #2e6f96;
+  box-shadow: 0 0 0 3px rgba(46, 111, 150, 0.15);
+}
+
+.option-admin-fields input:disabled {
+  background: #f4f7f9;
+  color: #9fb0bf;
+}
+
+.option-admin-actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
