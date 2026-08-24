@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import argparse
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from src.detect.open_meteo import (
@@ -94,8 +94,9 @@ def main() -> None:
                   f"(risky={classification.is_risky}, severity={classification.severity})")
 
             if classification.is_risky:
+                now = datetime.now(timezone.utc)
                 event = build_disruption_event(
-                    location, raw_payload, classification, window_hours=DEMO_WINDOW_HOURS
+                    location, classification, now, now + timedelta(hours=DEMO_WINDOW_HOURS), raw_payload["current"]
                 )
                 print(f"  DisruptionEvent {event.event_id} -> querying affected bookings...")
                 affected = find_affected_bookings(event, conn)
