@@ -81,7 +81,7 @@
   font-size: 0.95rem;
   color: #a9d3f2;
   opacity: 0;
-  animation: login-type-in 7.2s ease-in-out infinite;
+  animation: login-type-in 4.5s ease-in-out infinite;
 }
 
 .login-typer-caret {

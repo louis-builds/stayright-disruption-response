@@ -31,6 +31,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<GoldenTestRunItem> GoldenTestRunItems => Set<GoldenTestRunItem>();
     public DbSet<UserDocumentVersion> UserDocumentVersions => Set<UserDocumentVersion>();
     public DbSet<SystemSettings> SystemSettings => Set<SystemSettings>();
+    public DbSet<FaqQuestion> FaqQuestions => Set<FaqQuestion>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

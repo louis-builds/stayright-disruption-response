@@ -4,6 +4,7 @@ import { AppShell } from "../../shared/components/AppShell";
 import { RoleTopNav } from "../../shared/components/RoleTopNav";
 import { useAuth } from "../auth";
 import { useCaseConversation } from "./useCaseConversation";
+import { fetchTopFaqQuestions } from "./api";
 import type { CaseMessage, SenderRole, Thread } from "./types";
 import "./CaseConversationPage.css";
 
@@ -84,6 +85,15 @@ export function CaseConversationPage() {
   const navigate = useNavigate();
   // 非 guest 角色不能往 ai 线程发消息(AI 从不接协调员的话),这个 tab 对他们是只读的。
   const canPostHere = user?.role === "guest" || thread === "coordinator";
+
+  // 全平台高频问题——后端按小时批量聚类，这里挂载时拉一次就够，不用跟着 8 秒轮询。
+  const [faqQuestions, setFaqQuestions] = useState<{ text: string; askCount: number }[]>([]);
+  useEffect(() => {
+    if (viewerRole !== "guest") return;
+    fetchTopFaqQuestions().then((res) => {
+      if (res.code === 0) setFaqQuestions(res.data);
+    });
+  }, [viewerRole]);
 
   // loading/sending 都要进依赖，且用 useLayoutEffect 不用 useEffect：
   // 1) 初次进页面时 messages 从 refreshMessages() 落地和 loading 变 false 是两次独立的
@@ -290,12 +300,6 @@ export function CaseConversationPage() {
                 </div>
               )}
               <div>
-                <dt>Status</dt>
-                <dd>
-                  <span className={`tag tag-status tag-status-${caseInfo.status}`}>{caseInfo.statusLabel}</span>
-                </dd>
-              </div>
-              <div>
                 <dt>Priority</dt>
                 <dd className="case-side-priority">{caseInfo.priority}</dd>
               </div>
@@ -316,15 +320,31 @@ export function CaseConversationPage() {
           </div>
 
           <div className="case-side-card case-side-tip">
-            <h3>How replies work</h3>
-            {thread === "ai" ? (
-              <p>
-                An AI assistant answers first using this case's policy and history. If a question is complex, ambiguous,
-                or you've asked a few times without resolution, it hands off to a human coordinator automatically —
-                no need to ask twice.
-              </p>
+            {viewerRole === "guest" && faqQuestions.length > 0 ? (
+              <>
+                <h3>Frequently asked</h3>
+                <div className="case-faq-list">
+                  {faqQuestions.map((q) => (
+                    <button key={q.text} type="button" className="case-faq-chip" onClick={() => setDraft(q.text)}>
+                      {q.text}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : thread === "ai" ? (
+              <>
+                <h3>How replies work</h3>
+                <p>
+                  An AI assistant answers first using this case's policy and history. If a question is complex, ambiguous,
+                  or you've asked a few times without resolution, it hands off to a human coordinator automatically —
+                  no need to ask twice.
+                </p>
+              </>
             ) : (
-              <p>This is a direct, human-only conversation with your assigned coordinator — the AI assistant never reads or replies here.</p>
+              <>
+                <h3>How replies work</h3>
+                <p>This is a direct, human-only conversation with your assigned coordinator — the AI assistant never reads or replies here.</p>
+              </>
             )}
             <p className="case-side-sync">
               <span className="case-side-sync-dot" aria-hidden="true" />

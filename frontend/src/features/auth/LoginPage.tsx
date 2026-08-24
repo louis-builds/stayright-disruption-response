@@ -170,7 +170,7 @@ export function LoginPage() {
         <TypingIllustration />
         <div className="login-typer">
           {TYPED_LINES.map((line, i) => (
-            <p key={line} className="login-typer-line" style={{ animationDelay: `${i * 2.4}s` }}>
+            <p key={line} className="login-typer-line" style={{ animationDelay: `${i * 1.5}s` }}>
               <span className="login-typer-caret">▍</span> {line}
             </p>
           ))}
