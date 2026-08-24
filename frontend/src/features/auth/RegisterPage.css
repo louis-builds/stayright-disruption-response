@@ -186,7 +186,7 @@
 
 .register-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.9rem 1rem;
   margin-bottom: 1.25rem;
 }
@@ -197,6 +197,7 @@
   gap: 0.3rem;
   font-size: 0.85rem;
   color: #2c3e50;
+  min-width: 0;
 }
 
 .register-field-wide {
@@ -205,6 +206,9 @@
 
 .register-field input,
 .register-field select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
   padding: 0.55rem 0.7rem;
   border: 1px solid #cbd8e4;
   border-radius: 7px;
@@ -294,7 +298,13 @@
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  min-width: 0;
+  overflow: hidden;
   animation: register-fade-up 0.25s ease;
+}
+
+.register-hotel > .register-field {
+  min-width: 0;
 }
 
 .register-roomtypes {
@@ -346,8 +356,12 @@
 
 .register-roomtype-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.7rem;
+}
+
+.register-roomtype-grid > .register-field {
+  min-width: 0;
 }
 
 .register-roomtype-remove {
@@ -446,9 +460,78 @@
   font-weight: 600;
 }
 
+.register-roomtype-photos {
+  grid-column: 1 / -1;
+}
+
+.register-roomtype-photos > span {
+  display: block;
+  margin-bottom: 0.4rem;
+}
+
+.register-roomtype-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.register-roomtype-photo-thumb {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #e1e9f0;
+  background: #f7fafc;
+}
+
+.register-roomtype-photo-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  cursor: zoom-in;
+}
+
+.register-roomtype-photo-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  color: #c0392b;
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.register-roomtype-photo-upload {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.8rem;
+  border: 1px dashed #2e6f96;
+  border-radius: 6px;
+  color: #2e6f96;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.register-roomtype-photo-upload:hover {
+  background: rgba(46, 111, 150, 0.06);
+}
+
 @media (max-width: 620px) {
   .register-grid,
-  .register-roomtype-grid {
+  .register-roomtype-grid,
+  .register-roomtype-photo-grid {
     grid-template-columns: 1fr;
   }
   .register-page::before,
