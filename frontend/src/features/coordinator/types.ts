@@ -174,6 +174,8 @@ export interface BadCaseReplay {
 export interface DisruptionListItem {
   id: string;
   type: string;
+  eventSubtype: string | null;
+  severity: string | null;
   title: string;
   region: string;
   startAt: string;
@@ -184,8 +186,14 @@ export interface DisruptionListItem {
   assigneeNickname: string | null;
 }
 
+// lat/lng/radiusKm/rawSignalJson 只在详情里有——对齐 docs/handoff.jsonl 的 disruption_event.geo / raw_signal，
+// 目前只有 weather/storm 这条对接链路会填，其它类型这几个字段是 null。
 export interface DisruptionDetail extends DisruptionListItem {
+  lat: number | null;
+  lng: number | null;
+  radiusKm: number | null;
   rawSignalText: string;
+  rawSignalJson: string | null;
 }
 
 export interface CandidateBooking {

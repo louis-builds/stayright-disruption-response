@@ -68,6 +68,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasOne(x => x.RoomType).WithMany().HasForeignKey(x => x.RoomTypeId).OnDelete(DeleteBehavior.Restrict);
         });
 
+        modelBuilder.Entity<Disruption>(e =>
+        {
+            e.Property(x => x.RawSignalJson).HasColumnType("jsonb");
+        });
+
         modelBuilder.Entity<Case>(e =>
         {
             e.HasIndex(x => x.BookingId);

@@ -831,8 +831,7 @@
 }
 
 .coord-candidate-row {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
+  display: flex;
   align-items: center;
   gap: 0.7rem;
   border: 1px solid #eef2f6;
@@ -849,6 +848,28 @@
   box-shadow: 0 2px 8px rgba(16, 36, 60, 0.05);
 }
 
+.coord-candidate-row input[type="checkbox"] {
+  flex-shrink: 0;
+}
+
+/* 一行放不下就省略号截断，不是换行——checkbox/Exclude 两端锚死，中间这段才是唯一该变窄的部分。 */
+.coord-candidate-info {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.coord-candidate-guest {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.82rem;
+  color: #4d6072;
+  min-width: 0;
+}
+
 @media (max-width: 900px) {
   .coord-disruptions {
     grid-template-columns: 1fr;
@@ -858,7 +879,11 @@
     grid-template-columns: 1fr;
   }
 
-  .coord-candidate-row {
-    grid-template-columns: auto 1fr;
+  .coord-candidate-info {
+    flex-wrap: wrap;
+  }
+
+  .coord-candidate-guest {
+    white-space: normal;
   }
 }

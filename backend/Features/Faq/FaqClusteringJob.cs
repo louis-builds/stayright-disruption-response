@@ -1,10 +1,8 @@
 namespace TravelDisruptionAgent.Api.Features.Faq;
 
-/// <summary>每小时把新增的客人提问聚类一次；启动时先跑一轮，不用干等一小时才有第一批数据。</summary>
+/// <summary>每天0点把新增的客人提问聚类一次；启动时先跑一轮，不用干等到第一个0点才有数据。</summary>
 public class FaqClusteringJob(IServiceScopeFactory scopeFactory, ILogger<FaqClusteringJob> logger) : BackgroundService
 {
-    private static readonly TimeSpan Interval = TimeSpan.FromHours(1);
-
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
@@ -20,9 +18,11 @@ public class FaqClusteringJob(IServiceScopeFactory scopeFactory, ILogger<FaqClus
                 logger.LogError(ex, "FAQ clustering run failed");
             }
 
+            var now = DateTimeOffset.Now;
+            var nextMidnight = now.Date.AddDays(1);
             try
             {
-                await Task.Delay(Interval, stoppingToken);
+                await Task.Delay(nextMidnight - now, stoppingToken);
             }
             catch (OperationCanceledException)
             {
