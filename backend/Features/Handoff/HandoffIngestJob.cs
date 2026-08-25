@@ -1,20 +1,28 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using TravelDisruptionAgent.Api.Features.Disruption;
 using TravelDisruptionAgent.Api.Infrastructure.Data;
 using DisruptionEntity = TravelDisruptionAgent.Api.Infrastructure.Data.Entities.Disruption;
-using HandoffAffectedCustomer = TravelDisruptionAgent.Api.Infrastructure.Data.Entities.HandoffAffectedCustomer;
 
 namespace TravelDisruptionAgent.Api.Features.Handoff;
 
 /// <summary>
-/// 每分钟扫一次 detect 那条 Python 管线写的 handoff.jsonl（disruption_event 一行 + 每个受影响客人一行）。
-/// 全量重读整份文件、按主键 upsert-if-absent，不维护读取偏移量——文件是 demo 规模，重扫成本可忽略，
-/// 换来的是逻辑简单、重启/文件轮替都不用另外处理。guest_id/booking_id 是外部系统的字符串 id，
-/// 跟这边的 Guid 对不上，先落进 handoff_affected_customers 留痕，真实匹配以后再做。
+/// 监听 detect 那条 Python 管线写的 handoff.jsonl，一有变化就立刻摄入——不再靠固定周期轮询。
+/// FileSystemWatcher 在部分部署环境(比如某些 Docker 挂载卷)不保证一定触发，所以还留一道
+/// 5 分钟兜底轮询，两条触发路径最终都调同一个 IngestAsync。
+///
+/// disruption_event 一行落一条 Disruption；disruption_event_id 那些行按 booking_id
+/// （detect 现在直接查真实 travel_disruption 库拿到的真 Guid，不是外部系统的占位符）分组，
+/// 交给 IDisruptionService.NotifyCandidatesAsync 走一遍跟协调员手动点"Notify guests"完全一样的
+/// 建案+指派+通知流程——这就是"探测到受影响客人后自动建案通知"这条集成的最后一段。
 /// </summary>
 public class HandoffIngestJob(IServiceScopeFactory scopeFactory, ILogger<HandoffIngestJob> logger) : BackgroundService
 {
-    private static readonly TimeSpan Interval = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan FallbackInterval = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan DebounceDelay = TimeSpan.FromMilliseconds(300);
+
+    private readonly SemaphoreSlim ingestLock = new(1, 1);
+    private System.Threading.Timer? debounceTimer;
 
     private static string ResolvePath() =>
         Environment.GetEnvironmentVariable("HANDOFF_JSONL_PATH") ??
@@ -25,62 +33,136 @@ public class HandoffIngestJob(IServiceScopeFactory scopeFactory, ILogger<Handoff
         var path = ResolvePath();
         logger.LogInformation("Handoff ingest watching {Path}", path);
 
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            try
-            {
-                if (File.Exists(path))
-                {
-                    using var scope = scopeFactory.CreateScope();
-                    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-                    await IngestAsync(db, path, stoppingToken);
-                }
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                logger.LogError(ex, "Handoff jsonl ingest failed");
-            }
+        await RunIngestSafelyAsync(path, stoppingToken);
 
-            try
+        using var watcher = TryCreateWatcher(path);
+
+        try
+        {
+            while (!stoppingToken.IsCancellationRequested)
             {
-                await Task.Delay(Interval, stoppingToken);
+                await Task.Delay(FallbackInterval, stoppingToken);
+                await RunIngestSafelyAsync(path, stoppingToken);
             }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
+        }
+        catch (OperationCanceledException)
+        {
+            // 正常停机
         }
     }
 
-    private static async Task IngestAsync(AppDbContext db, string path, CancellationToken ct)
+    private FileSystemWatcher? TryCreateWatcher(string path)
+    {
+        var dir = Path.GetDirectoryName(Path.GetFullPath(path));
+        var fileName = Path.GetFileName(path);
+        if (dir is null || !Directory.Exists(dir))
+        {
+            // detect/output 目录还没出现(比如本地没拉 detect/ 或者管线还没跑过一次)——
+            // FileSystemWatcher 建不到一个不存在的目录，靠上面的 5 分钟兜底轮询自己发现文件出现。
+            logger.LogInformation("Handoff directory {Dir} doesn't exist yet, relying on fallback poll", dir);
+            return null;
+        }
+
+        debounceTimer ??= new System.Threading.Timer(_ => _ = RunIngestSafelyAsync(path, CancellationToken.None));
+
+        var watcher = new FileSystemWatcher(dir, fileName)
+        {
+            NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName,
+        };
+        // detect 那边是逐行 append 写入，一次逻辑上的"写完一条消息"经常会触发好几个 Changed 事件——
+        // 用防抖：每次事件把定时器往后推，安静 300ms 之后才真正跑一次摄入，不是事件一响就跑。
+        void OnFileEvent(object sender, FileSystemEventArgs e) =>
+            debounceTimer?.Change(DebounceDelay, Timeout.InfiniteTimeSpan);
+        watcher.Changed += OnFileEvent;
+        watcher.Created += OnFileEvent;
+        watcher.Renamed += (_, _) => debounceTimer?.Change(DebounceDelay, Timeout.InfiniteTimeSpan);
+        watcher.EnableRaisingEvents = true;
+        return watcher;
+    }
+
+    private async Task RunIngestSafelyAsync(string path, CancellationToken ct)
+    {
+        if (!await ingestLock.WaitAsync(0, ct)) return; // 上一轮还没跑完就跳过这次触发，不重叠执行
+        try
+        {
+            if (!File.Exists(path)) return;
+            using var scope = scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var disruptionService = scope.ServiceProvider.GetRequiredService<IDisruptionService>();
+            await IngestAsync(db, disruptionService, path, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "Handoff jsonl ingest failed");
+        }
+        finally
+        {
+            ingestLock.Release();
+        }
+    }
+
+    private static async Task IngestAsync(AppDbContext db, IDisruptionService disruptionService, string path, CancellationToken ct)
     {
         var lines = await File.ReadAllLinesAsync(path, ct);
         var now = DateTimeOffset.UtcNow;
+        var severityByDisruption = new Dictionary<Guid, string?>();
+        var bookingIdsByDisruption = new Dictionary<Guid, List<Guid>>();
 
         foreach (var line in lines)
         {
             if (string.IsNullOrWhiteSpace(line)) continue;
 
-            using var doc = JsonDocument.Parse(line);
+            JsonDocument doc;
+            try
+            {
+                doc = JsonDocument.Parse(line);
+            }
+            catch (JsonException)
+            {
+                // 文件可能正被追加写入，最后一行有时候是写到一半的——跳过，等下一轮重扫读到完整的再处理。
+                continue;
+            }
+            using var _ = doc;
             var root = doc.RootElement;
 
             if (root.TryGetProperty("disruption_event", out var evt))
             {
-                await UpsertDisruptionAsync(db, evt, now, ct);
+                var id = await UpsertDisruptionAsync(db, evt, now, ct);
+                if (id.HasValue)
+                    severityByDisruption[id.Value] = evt.TryGetProperty("severity", out var sev) ? sev.GetString() : null;
             }
-            else if (root.TryGetProperty("disruption_event_id", out var disruptionIdProp))
+            else if (root.TryGetProperty("disruption_event_id", out var disruptionIdProp) &&
+                     Guid.TryParse(disruptionIdProp.GetString(), out var disruptionId) &&
+                     root.TryGetProperty("booking_id", out var bookingIdProp) &&
+                     Guid.TryParse(bookingIdProp.GetString(), out var bookingId))
             {
-                await UpsertAffectedCustomerAsync(db, root, disruptionIdProp, now, ct);
+                if (!bookingIdsByDisruption.TryGetValue(disruptionId, out var list))
+                    bookingIdsByDisruption[disruptionId] = list = [];
+                list.Add(bookingId);
             }
         }
 
         await db.SaveChangesAsync(ct);
+
+        foreach (var (disruptionId, bookingIds) in bookingIdsByDisruption)
+        {
+            var priority = severityByDisruption.GetValueOrDefault(disruptionId) == "high" ? "high" : "normal";
+            try
+            {
+                await disruptionService.NotifyCandidatesAsync(
+                    disruptionId, new NotifyCandidatesRequest([.. bookingIds.Distinct()], priority), ct);
+            }
+            catch (DisruptionNotFoundException)
+            {
+                // 这一行引用的 disruption_event 从没成功落库过(比如那一行本身格式不对被跳过了)——跳过这批。
+            }
+        }
     }
 
-    private static async Task UpsertDisruptionAsync(AppDbContext db, JsonElement evt, DateTimeOffset now, CancellationToken ct)
+    private static async Task<Guid?> UpsertDisruptionAsync(AppDbContext db, JsonElement evt, DateTimeOffset now, CancellationToken ct)
     {
-        var id = Guid.Parse(evt.GetProperty("id").GetString()!);
-        if (await db.Disruptions.AnyAsync(d => d.Id == id, ct)) return;
+        if (!Guid.TryParse(evt.GetProperty("id").GetString(), out var id)) return null;
+        if (await db.Disruptions.AnyAsync(d => d.Id == id, ct)) return id;
 
         var type = evt.GetProperty("type").GetString() ?? "weather";
         var subtype = evt.TryGetProperty("event_subtype", out var st) ? st.GetString() : null;
@@ -107,23 +189,13 @@ public class HandoffIngestJob(IServiceScopeFactory scopeFactory, ILogger<Handoff
             CreatedAt = now,
             UpdatedAt = now,
         });
+        return id;
     }
 
-    private static async Task UpsertAffectedCustomerAsync(
-        AppDbContext db, JsonElement root, JsonElement disruptionIdProp, DateTimeOffset now, CancellationToken ct)
+    public override void Dispose()
     {
-        var disruptionId = Guid.Parse(disruptionIdProp.GetString()!);
-        var guestId = root.GetProperty("guest_id").GetString() ?? "";
-        var bookingId = root.GetProperty("booking_id").GetString() ?? "";
-
-        var exists = await db.HandoffAffectedCustomers.AnyAsync(
-            x => x.DisruptionId == disruptionId && x.ExternalBookingId == bookingId, ct);
-        if (exists) return;
-
-        db.HandoffAffectedCustomers.Add(new HandoffAffectedCustomer
-        {
-            Id = Guid.NewGuid(), DisruptionId = disruptionId,
-            ExternalGuestId = guestId, ExternalBookingId = bookingId, ReceivedAt = now,
-        });
+        debounceTimer?.Dispose();
+        ingestLock.Dispose();
+        base.Dispose();
     }
 }
