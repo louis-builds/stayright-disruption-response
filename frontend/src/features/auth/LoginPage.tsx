@@ -71,7 +71,16 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const state = location.state as { from?: string; registered?: boolean } | null;
-  const from = state?.from || sessionStorage.getItem(RETURN_URL_KEY);
+  // 落地页一挂载就把 sessionStorage 里的返回地址读掉清空(不是等提交成功才清)——
+  // 不然共用同一个浏览器标签的两个人依次登录时,第一个人被 401 弹回登录页存下的旧地址,
+  // 会在第二个人根本没提交过表单、只是打开这个标签重新登录时,原封不动地"继承"过去,
+  // 把人带到跟自己毫不相关的旧页面上,而不是各自角色的首页。用 useState 的惰性初始化
+  // 保证这个读取+清空只在挂载时发生一次，本次挂载期间不会因为重渲染又变回去。
+  const [from] = useState(() => {
+    const initial = state?.from || sessionStorage.getItem(RETURN_URL_KEY);
+    sessionStorage.removeItem(RETURN_URL_KEY);
+    return initial;
+  });
 
   const remembered = readRememberedLogin();
   const [identifier, setIdentifier] = useState(remembered?.identifier ?? "");
@@ -112,15 +121,22 @@ export function LoginPage() {
       const user = await login({ identifier, password, rememberMe });
       if (rememberMe) writeRememberedLogin(identifier, password);
       else clearRememberedLogin();
-      sessionStorage.removeItem(RETURN_URL_KEY);
       setSubmitting(false);
       setSucceeded(true);
       // 成功后短暂停留展示"完成"态,再跳转——不是提交完立刻无声无息地换页。
-      window.setTimeout(() => navigate(from || user.homeRoute), 420);
+      window.setTimeout(() => navigate(resolveDestination(user)), 420);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
       setSubmitting(false);
     }
+  }
+
+  // 断线/切标签页回来时被弹回登录页,再登回去还接着看刚才那页——这个"接着看"只对 guest 有意义
+  // (比如从邮件通知点进某个 case,session 过期要求重新登录,登完当然该回到那个 case)。
+  // hotel/coordinator 是员工操作台,登录就是"打开今天的任务队列",不该被某个残留的
+  // 旧 case 链接劫持,固定回自己角色的首页。
+  function resolveDestination(user: { role: string; homeRoute: string }): string {
+    return user.role === "guest" ? from || user.homeRoute : user.homeRoute;
   }
 
   async function handleForgotSubmit(e: FormEvent) {
@@ -147,7 +163,7 @@ export function LoginPage() {
   // 没有这个条件时，user 一变真就立刻命中这条 early return 跳走，succeeded 为 true 那一支的
   // 对勾动画根本没机会画出来——代码注释里说的"短暂停留展示完成态"从来没真正发生过，截图会
   // 一直看到从表单直接跳目标页，抓不到中间那帧。
-  if (!loading && user && !succeeded) return <Navigate to={from || user.homeRoute} replace />;
+  if (!loading && user && !succeeded) return <Navigate to={resolveDestination(user)} replace />;
 
   return (
     <div className="login-page">
@@ -170,7 +186,7 @@ export function LoginPage() {
         <TypingIllustration />
         <div className="login-typer">
           {TYPED_LINES.map((line, i) => (
-            <p key={line} className="login-typer-line" style={{ animationDelay: `${i * 2.4}s` }}>
+            <p key={line} className="login-typer-line" style={{ animationDelay: `${i * 1.5}s` }}>
               <span className="login-typer-caret">▍</span> {line}
             </p>
           ))}
@@ -185,9 +201,7 @@ export function LoginPage() {
       <div className="login-panel">
         <svg className="login-route" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
           <path className="login-route-path" d="M -5 78 C 25 58, 40 92, 68 55 S 95 15, 108 22" />
-          <circle className="login-route-dot" r="1.4">
-            <animateMotion dur="9s" repeatCount="indefinite" path="M -5 78 C 25 58, 40 92, 68 55 S 95 15, 108 22" />
-          </circle>
+          <circle className="login-route-dot" r="1.4" />
         </svg>
         <div className="login-panel-inner">
           <div className="login-card">

@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TravelDisruptionAgent.Api.Infrastructure.Data;
@@ -12,9 +13,11 @@ using TravelDisruptionAgent.Api.Infrastructure.Data;
 namespace TravelDisruptionAgent.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260825014601_AddDisruptionHandoffFields")]
+    partial class AddDisruptionHandoffFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -592,41 +595,6 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .HasDatabaseName("ix_golden_test_run_items_run_id");
 
                     b.ToTable("golden_test_run_items", (string)null);
-                });
-
-            modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.HandoffAffectedCustomer", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<Guid>("DisruptionId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("disruption_id");
-
-                    b.Property<string>("ExternalBookingId")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("external_booking_id");
-
-                    b.Property<string>("ExternalGuestId")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("external_guest_id");
-
-                    b.Property<DateTimeOffset>("ReceivedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("received_at");
-
-                    b.HasKey("Id")
-                        .HasName("pk_handoff_affected_customers");
-
-                    b.HasIndex("DisruptionId", "ExternalBookingId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_handoff_affected_customers_disruption_id_external_booking_id");
-
-                    b.ToTable("handoff_affected_customers", (string)null);
                 });
 
             modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.Hotel", b =>

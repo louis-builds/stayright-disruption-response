@@ -52,22 +52,32 @@ export function useCaseConversation(caseId: string, role: string, thread: Thread
     async (content: string) => {
       setSending(true);
       setError(null);
+
+      // 客人自己发的这条先乐观显示出来，不用等 AI 回完才一起冒出来——用临时 id 占位，
+      // 拿到真实返回后按 id 替换掉，避免出现内容重复的两条。
+      const tempId = `temp-${crypto.randomUUID()}`;
+      const optimisticMessage: CaseMessage = {
+        id: tempId, caseId, senderRole: "guest", content, vote: null, thread, createdAt: new Date().toISOString(), readAt: null,
+      };
+      setMessages((prev) => [...prev, optimisticMessage]);
+
       try {
         // /chat 只对 guest 开放,还会触发 AI 自动回复,而且只在 ai 线程用——guest 在 coordinator
         // 线程回复、或任何非 guest 角色发消息,都走不触发 AI 的普通消息接口。
         if (role === "guest" && thread === "ai") {
           const res = await api.postChatMessage(caseId, content);
           if (res.code !== 0) throw new Error(res.message);
-          setMessages((prev) => [...prev, ...res.data]);
+          setMessages((prev) => [...prev.filter((m) => m.id !== tempId), ...res.data]);
           for (const m of res.data) knownIds.current.add(m.id);
         } else {
           const res = await api.postMessage(caseId, content, thread);
           if (res.code !== 0) throw new Error(res.message);
-          setMessages((prev) => [...prev, res.data]);
+          setMessages((prev) => [...prev.filter((m) => m.id !== tempId), res.data]);
           knownIds.current.add(res.data.id);
         }
         await api.markThreadRead(caseId, thread);
       } catch (err) {
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
         setError(err instanceof Error ? err.message : "Failed to send message");
       } finally {
         setSending(false);

@@ -9,14 +9,36 @@ public class HotelRepository(AppDbContext db) : IHotelRepository
     public Task<Guid?> FindHotelIdForUserAsync(Guid userId, CancellationToken ct = default) =>
         db.Users.Where(u => u.Id == userId).Select(u => u.HotelId).FirstOrDefaultAsync(ct);
 
-    public async Task<HashSet<Guid>> GetHighValueGuestIdsAsync(IEnumerable<Guid> guestUserIds, CancellationToken ct = default)
+    // 酒店口径的回头客：在这一家酒店本身≥2单，不看客人在平台其它酒店订过多少次——
+    // 跟下面 GetPlatformHighValueGuestIdsAsync 那个"平台高价值客人"是两个不同概念，之前三边
+    // (Coordinator/Disruption/Hotel)共用同一段终身累计、不分酒店的代码，酒店视角显示的"回头客"
+    // 其实是"在平台任何酒店订过两次"，跟这家酒店本身有没有回头客毫无关系，语义是错的。
+    // 不加时间窗口——同一家酒店订两次本来就是小概率事件，不需要再靠时间衰减去筛。
+    public async Task<HashSet<Guid>> GetReturningGuestIdsAsync(IEnumerable<Guid> guestUserIds, Guid hotelId, CancellationToken ct = default)
     {
         var ids = guestUserIds.Distinct().ToList();
         if (ids.Count == 0) return [];
         var highValue = await db.Bookings
-            .Where(b => ids.Contains(b.GuestUserId) && b.Status != "cancelled")
+            .Where(b => ids.Contains(b.GuestUserId) && b.HotelId == hotelId && b.Status != "cancelled")
             .GroupBy(b => b.GuestUserId)
             .Where(g => g.Count() >= 2)
+            .Select(g => g.Key)
+            .ToListAsync(ct);
+        return [.. highValue];
+    }
+
+    // 平台口径的高价值客人：跟 CoordinatorRepository/DisruptionRepository 同一套口径(近12个月≥2单
+    // 且累计消费≥NZD 1000)。酒店端也要能看到——这标签跟"是不是我这家的回头客"无关，是平台整体
+    // 判断这个客人值不值得多花心思服务，酒店视角同样有用。
+    public async Task<HashSet<Guid>> GetPlatformHighValueGuestIdsAsync(IEnumerable<Guid> guestUserIds, CancellationToken ct = default)
+    {
+        var ids = guestUserIds.Distinct().ToList();
+        if (ids.Count == 0) return [];
+        var since = DateTimeOffset.UtcNow.AddYears(-1);
+        var highValue = await db.Bookings
+            .Where(b => ids.Contains(b.GuestUserId) && b.Status != "cancelled" && b.CreatedAt >= since)
+            .GroupBy(b => b.GuestUserId)
+            .Where(g => g.Count() >= 2 && g.Sum(b => b.TotalAmount) >= 1000m)
             .Select(g => g.Key)
             .ToListAsync(ct);
         return [.. highValue];

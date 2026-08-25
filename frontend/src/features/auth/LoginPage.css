@@ -81,7 +81,7 @@
   font-size: 0.95rem;
   color: #a9d3f2;
   opacity: 0;
-  animation: login-type-in 7.2s ease-in-out infinite;
+  animation: login-type-in 4.5s ease-in-out infinite;
 }
 
 .login-typer-caret {
@@ -201,9 +201,24 @@
   stroke-dasharray: 1.6 1.4;
 }
 
+/* 换成 CSS offset-path 走位，不再用 SMIL <animateMotion>——实测 SMIL 靠 begin="indefinite" +
+   beginElement() 显式起播，仍然会被晚开好几秒才真正跑起来（具体机制没深究，大概率是 SMIL
+   自己的时间线跟 beginElement() 调用时机对不上）。CSS 动画跟这页其它稳定生效的动效
+   （雪花、打字机行）走同一套引擎，样式一应用就播，没有这层不确定性。 */
 .login-route-dot {
   fill: #2e6f96;
   opacity: 0.55;
+  offset-path: path("M -5 78 C 25 58, 40 92, 68 55 S 95 15, 108 22");
+  animation: login-route-dot-move 9s linear infinite;
+}
+
+@keyframes login-route-dot-move {
+  from {
+    offset-distance: 0%;
+  }
+  to {
+    offset-distance: 100%;
+  }
 }
 
 .login-panel-inner {

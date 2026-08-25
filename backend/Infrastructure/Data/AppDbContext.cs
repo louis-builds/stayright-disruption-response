@@ -31,6 +31,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<GoldenTestRunItem> GoldenTestRunItems => Set<GoldenTestRunItem>();
     public DbSet<UserDocumentVersion> UserDocumentVersions => Set<UserDocumentVersion>();
     public DbSet<SystemSettings> SystemSettings => Set<SystemSettings>();
+    public DbSet<FaqQuestion> FaqQuestions => Set<FaqQuestion>();
+    public DbSet<HandoffAffectedCustomer> HandoffAffectedCustomers => Set<HandoffAffectedCustomer>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -65,6 +67,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasOne(x => x.GuestUser).WithMany().HasForeignKey(x => x.GuestUserId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.Hotel).WithMany().HasForeignKey(x => x.HotelId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.RoomType).WithMany().HasForeignKey(x => x.RoomTypeId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Disruption>(e =>
+        {
+            e.Property(x => x.RawSignalJson).HasColumnType("jsonb");
         });
 
         modelBuilder.Entity<Case>(e =>
@@ -133,6 +140,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<DisruptionExclusion>(e =>
         {
             e.HasIndex(x => new { x.DisruptionId, x.BookingId }).IsUnique();
+        });
+
+        modelBuilder.Entity<HandoffAffectedCustomer>(e =>
+        {
+            e.HasIndex(x => new { x.DisruptionId, x.ExternalBookingId }).IsUnique();
         });
 
         modelBuilder.Entity<DisruptionWindowAudit>(e =>

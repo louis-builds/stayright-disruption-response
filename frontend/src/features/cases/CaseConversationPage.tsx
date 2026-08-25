@@ -4,6 +4,7 @@ import { AppShell } from "../../shared/components/AppShell";
 import { RoleTopNav } from "../../shared/components/RoleTopNav";
 import { useAuth } from "../auth";
 import { useCaseConversation } from "./useCaseConversation";
+import { fetchTopFaqQuestions } from "./api";
 import type { CaseMessage, SenderRole, Thread } from "./types";
 import "./CaseConversationPage.css";
 
@@ -14,20 +15,44 @@ const ROLE_META: Record<SenderRole, { label: string; avatar: string }> = {
   coordinator: { label: "Coordinator", avatar: "🧑‍💼" },
 };
 
+// 假流式：内容已经整段拿到手了，只是本地按字符逐步显示，制造"AI正在打字"的观感。
+// 没有真的分段请求后端，服务端压力跟一次性返回完全一样。
+function useTypewriter(text: string, enabled: boolean) {
+  const [shown, setShown] = useState(enabled ? "" : text);
+  useEffect(() => {
+    if (!enabled) {
+      setShown(text);
+      return;
+    }
+    setShown("");
+    let i = 0;
+    const id = setInterval(() => {
+      i += 3;
+      setShown(text.slice(0, i));
+      if (i >= text.length) clearInterval(id);
+    }, 20);
+    return () => clearInterval(id);
+  }, [text, enabled]);
+  return shown;
+}
+
 function MessageBubble({
   message,
   onVote,
   viewerRole,
+  typewriter,
 }: {
   message: CaseMessage;
   onVote: (v: "like" | "dislike") => void;
   viewerRole: string;
+  typewriter?: boolean;
 }) {
   const meta = ROLE_META[message.senderRole];
   const isGuest = message.senderRole === "guest";
   // 自己发的消息不需要已读标记——只标"对方发给我的这条我读了没"，跟后端 SenderRole != readerRole 的口径一致。
   const isOwnMessage = message.senderRole === viewerRole;
   const isRead = !!message.readAt;
+  const displayedContent = useTypewriter(message.content, !!typewriter);
 
   return (
     <div className={`msg-row ${isGuest ? "msg-row-mine" : ""}`}>
@@ -40,7 +65,7 @@ function MessageBubble({
           <span className="msg-time">{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
         </div>
         <div className="msg-bubble-line">
-          <div className={`msg-bubble msg-bubble-${message.senderRole}`}>{message.content}</div>
+          <div className={`msg-bubble msg-bubble-${message.senderRole}`}>{displayedContent}</div>
           {!isOwnMessage && (
             <span className={`msg-read-indicator ${isRead ? "msg-read-indicator-read" : "msg-read-indicator-unread"}`}>
               {isRead ? "Read" : "Unread"}
@@ -85,6 +110,15 @@ export function CaseConversationPage() {
   // 非 guest 角色不能往 ai 线程发消息(AI 从不接协调员的话),这个 tab 对他们是只读的。
   const canPostHere = user?.role === "guest" || thread === "coordinator";
 
+  // 全平台高频问题——后端每天0点批量聚类，这里挂载时拉一次就够，不用跟着 8 秒轮询。
+  const [faqQuestions, setFaqQuestions] = useState<{ text: string; askCount: number }[]>([]);
+  useEffect(() => {
+    if (viewerRole !== "guest") return;
+    fetchTopFaqQuestions().then((res) => {
+      if (res.code === 0) setFaqQuestions(res.data);
+    });
+  }, [viewerRole]);
+
   // loading/sending 都要进依赖，且用 useLayoutEffect 不用 useEffect：
   // 1) 初次进页面时 messages 从 refreshMessages() 落地和 loading 变 false 是两次独立的
   //    setState（同一个 async 函数里但隔着一次 await，不保证同批渲染）——真被拆成两次渲染时，
@@ -105,6 +139,18 @@ export function CaseConversationPage() {
   useEffect(() => {
     setLastSyncedAt(new Date());
   }, [messages]);
+
+  // sending 从 true 变 false 那一刻，AI 的回复刚落地——只对这一条播打字机效果，
+  // 8 秒轮询带回来的历史消息、协调员消息都不算，不然每次轮询都重播一遍。
+  const wasSendingRef = useRef(false);
+  const [typewriterId, setTypewriterId] = useState<string | null>(null);
+  useEffect(() => {
+    if (wasSendingRef.current && !sending && thread === "ai") {
+      const lastAi = [...messages].reverse().find((m) => m.senderRole === "ai");
+      if (lastAi) setTypewriterId(lastAi.id);
+    }
+    wasSendingRef.current = sending;
+  }, [sending, messages, thread]);
 
   // unreadIds 而不是直接依赖 messages：8 秒轮询每次都会换一个新的数组引用，即使内容没变——
   // 直接依赖 messages 会让下面这个 effect 每次轮询都重建 observer、打断正在计时的 3 秒停留。
@@ -227,7 +273,15 @@ export function CaseConversationPage() {
               {thread === "coordinator" ? "No messages with your coordinator yet." : "No messages yet."}
             </p>
           ) : (
-            messages.map((m) => <MessageBubble key={m.id} message={m} onVote={(v) => void vote(m.id, v)} viewerRole={viewerRole} />)
+            messages.map((m) => (
+              <MessageBubble
+                key={m.id}
+                message={m}
+                onVote={(v) => void vote(m.id, v)}
+                viewerRole={viewerRole}
+                typewriter={m.id === typewriterId}
+              />
+            ))
           )}
           {sending && (
             <div className="msg-row">
@@ -290,12 +344,6 @@ export function CaseConversationPage() {
                 </div>
               )}
               <div>
-                <dt>Status</dt>
-                <dd>
-                  <span className={`tag tag-status tag-status-${caseInfo.status}`}>{caseInfo.statusLabel}</span>
-                </dd>
-              </div>
-              <div>
                 <dt>Priority</dt>
                 <dd className="case-side-priority">{caseInfo.priority}</dd>
               </div>
@@ -316,15 +364,31 @@ export function CaseConversationPage() {
           </div>
 
           <div className="case-side-card case-side-tip">
-            <h3>How replies work</h3>
-            {thread === "ai" ? (
-              <p>
-                An AI assistant answers first using this case's policy and history. If a question is complex, ambiguous,
-                or you've asked a few times without resolution, it hands off to a human coordinator automatically —
-                no need to ask twice.
-              </p>
+            {viewerRole === "guest" && faqQuestions.length > 0 ? (
+              <>
+                <h3>Frequently asked</h3>
+                <div className="case-faq-list">
+                  {faqQuestions.map((q) => (
+                    <button key={q.text} type="button" className="case-faq-chip" onClick={() => setDraft(q.text)}>
+                      {q.text}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : thread === "ai" ? (
+              <>
+                <h3>How replies work</h3>
+                <p>
+                  An AI assistant answers first using this case's policy and history. If a question is complex, ambiguous,
+                  or you've asked a few times without resolution, it hands off to a human coordinator automatically —
+                  no need to ask twice.
+                </p>
+              </>
             ) : (
-              <p>This is a direct, human-only conversation with your assigned coordinator — the AI assistant never reads or replies here.</p>
+              <>
+                <h3>How replies work</h3>
+                <p>This is a direct, human-only conversation with your assigned coordinator — the AI assistant never reads or replies here.</p>
+              </>
             )}
             <p className="case-side-sync">
               <span className="case-side-sync-dot" aria-hidden="true" />

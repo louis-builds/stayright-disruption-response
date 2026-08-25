@@ -112,6 +112,31 @@
   line-height: 1.5;
 }
 
+.case-faq-list {
+  margin-top: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.case-faq-chip {
+  text-align: left;
+  border: 1px solid #dde6ee;
+  background: white;
+  border-radius: 8px;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.78rem;
+  color: #2e6f96;
+  cursor: pointer;
+  line-height: 1.4;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.case-faq-chip:hover {
+  background: rgba(46, 111, 150, 0.07);
+  border-color: #2e6f96;
+}
+
 .case-side-sync {
   display: flex;
   align-items: center;

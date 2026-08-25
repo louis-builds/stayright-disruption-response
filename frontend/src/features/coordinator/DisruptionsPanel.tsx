@@ -160,7 +160,9 @@ function DetailPanel({ disruption, coordinators, onChanged }: DetailPanelProps) 
         <div>
           <h3>{disruption.title}</h3>
           <p className="coord-row-sub">
-            {disruption.type} · {disruption.region} · {disruption.affectedCount} affected cases
+            {disruption.type}
+            {disruption.eventSubtype ? `/${disruption.eventSubtype}` : ""} · {disruption.region} · {disruption.affectedCount} affected cases
+            {disruption.severity && ` · severity: ${disruption.severity}`}
           </p>
         </div>
         {disruption.status === "active" && (
@@ -184,6 +186,17 @@ function DetailPanel({ disruption, coordinators, onChanged }: DetailPanelProps) 
           <div className="coord-detail-section">
             <h4>Signal</h4>
             <p className="coord-signal-text">{disruption.rawSignalText}</p>
+            {disruption.lat != null && disruption.lng != null && (
+              <p className="coord-row-meta">
+                geo: {disruption.lat}, {disruption.lng} (radius {disruption.radiusKm}km)
+              </p>
+            )}
+            {disruption.rawSignalJson &&
+              Object.entries(JSON.parse(disruption.rawSignalJson) as Record<string, unknown>).map(([key, value]) => (
+                <p className="coord-row-meta" key={key}>
+                  {key}: {String(value)}
+                </p>
+              ))}
           </div>
 
           <div className="coord-detail-section coord-detail-grid">
@@ -275,10 +288,17 @@ function DetailPanel({ disruption, coordinators, onChanged }: DetailPanelProps) 
                   {pagedCandidates.map((c) => (
                     <label key={c.bookingId} className="coord-candidate-row">
                       <input type="checkbox" checked={selected.has(c.bookingId)} onChange={() => toggle(c.bookingId)} />
-                      <span className="coord-row-conf">{c.confirmationNo}</span>
-                      {c.isHighValueGuest && <span className="tag tag-status-vip">returning guest</span>}
-                      <span className="coord-row-sub">
-                        {c.guestNickname} · {c.hotelName} · {c.checkIn} → {c.checkOut}
+                      <span className="coord-candidate-info">
+                        <span className="coord-candidate-line1">
+                          <span className="coord-row-conf">{c.confirmationNo}</span>
+                          <span className="coord-candidate-name">{c.guestNickname}</span>
+                          {c.isHighValueGuest && <span className="tag tag-status-vip">high value</span>}
+                        </span>
+                        <span className="coord-candidate-line2">
+                          <span className="coord-candidate-guest">
+                            {c.hotelName} · {c.checkIn} → {c.checkOut}
+                          </span>
+                        </span>
                       </span>
                       <button
                         type="button"
@@ -437,9 +457,11 @@ export function DisruptionsPanel({ coordinators }: { coordinators: CoordinatorOp
                 <div className="coord-row-title">
                   <span className="coord-row-conf">{d.title}</span>
                   <span className={`tag tag-status-${d.status === "active" ? "warn" : "normal"}`}>{d.status}</span>
+                  {d.severity === "high" && <span className="tag tag-status-overdue">{d.severity}</span>}
                 </div>
                 <p className="coord-row-sub">
-                  {d.type} · {d.region} · {d.affectedCount} affected
+                  {d.type}
+                  {d.eventSubtype ? `/${d.eventSubtype}` : ""} · {d.region} · {d.affectedCount} affected
                 </p>
                 <p className="coord-row-meta">{d.assigneeNickname ? `owner: ${d.assigneeNickname}` : "unassigned"}</p>
               </button>
