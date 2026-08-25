@@ -15,6 +15,60 @@ function emptyRoomType(): RoomTypeInput {
   return { name: "", description: "", amenities: [], capacity: 2, priceAmount: 0, currency: "NZD", imageUrls: [] };
 }
 
+function readAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function PhotoPreview({ url, onClose }: { url: string; onClose: () => void }) {
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.65)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 100,
+        padding: "1rem",
+      }}
+    >
+      <img
+        src={url}
+        alt="Room preview"
+        style={{ maxWidth: "90vw", maxHeight: "90vh", borderRadius: "8px" }}
+        onClick={(e) => e.stopPropagation()}
+      />
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close preview"
+        style={{
+          position: "absolute",
+          top: "1rem",
+          right: "1rem",
+          width: "36px",
+          height: "36px",
+          borderRadius: "50%",
+          border: "none",
+          background: "rgba(255,255,255,0.9)",
+          color: "#1f2d3d",
+          fontSize: "1.4rem",
+          cursor: "pointer",
+        }}
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
 /** 只是一个粗启发式（长度 + 字符类别数），不接后端也不装模作样精确评分——
    够用来给用户一个即时的"这个密码够不够"的方向感就行。 */
 function passwordStrength(pw: string): { pct: number; label: string; tier: "weak" | "fair" | "strong" } {
@@ -55,6 +109,8 @@ export function RegisterPage() {
   const [succeeded, setSucceeded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [avatarJustUpdated, setAvatarJustUpdated] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [roomImageError, setRoomImageError] = useState<string | null>(null);
 
   const emailError = email && !EMAIL_RE.test(email) ? "Invalid email format" : null;
   const phoneError = phone && !PHONE_RE.test(phone) ? "Invalid phone format" : null;
@@ -79,6 +135,27 @@ export function RegisterPage() {
 
   function updateRoomType(index: number, patch: Partial<RoomTypeInput>) {
     setRoomTypes((prev) => prev.map((rt, i) => (i === index ? { ...rt, ...patch } : rt)));
+  }
+
+  async function addRoomTypePhotos(index: number, files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setRoomImageError(null);
+    const list = [...files];
+    const oversized = list.some((f) => f.size > 2 * 1024 * 1024);
+    if (oversized) {
+      setRoomImageError("Each photo must be under 2MB");
+      return;
+    }
+    const dataUrls = await Promise.all(list.map(readAsDataUrl));
+    setRoomTypes((prev) =>
+      prev.map((rt, i) => (i === index ? { ...rt, imageUrls: [...rt.imageUrls, ...dataUrls] } : rt))
+    );
+  }
+
+  function removeRoomTypePhoto(index: number, photoIndex: number) {
+    setRoomTypes((prev) =>
+      prev.map((rt, i) => (i === index ? { ...rt, imageUrls: rt.imageUrls.filter((_, idx) => idx !== photoIndex) } : rt))
+    );
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -279,15 +356,41 @@ export function RegisterPage() {
                         }
                       />
                     </label>
-                    <label className="register-field register-field-wide">
-                      <span>Image URLs (comma-separated)</span>
-                      <input
-                        value={rt.imageUrls.join(",")}
-                        onChange={(e) =>
-                          updateRoomType(i, { imageUrls: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })
-                        }
-                      />
-                    </label>
+                    <div className="register-field register-roomtype-photos">
+                      <span>Photos ({rt.imageUrls.length})</span>
+                      {rt.imageUrls.length > 0 && (
+                        <div className="register-roomtype-photo-grid">
+                          {rt.imageUrls.map((url, idx) => (
+                            <div key={idx} className="register-roomtype-photo-thumb">
+                              <img
+                                src={url}
+                                alt={`${rt.name || "Room"} photo ${idx + 1}`}
+                                onClick={() => setPreviewUrl(url)}
+                                style={{ cursor: "pointer" }}
+                              />
+                              <button
+                                type="button"
+                                className="register-roomtype-photo-remove"
+                                onClick={() => removeRoomTypePhoto(i, idx)}
+                                aria-label="Remove photo"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <label className="register-roomtype-photo-upload">
+                        + Upload photos
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          onChange={(e) => void addRoomTypePhotos(i, e.target.files)}
+                          hidden
+                        />
+                      </label>
+                    </div>
                   </div>
                   {roomTypes.length > 1 && (
                     <button
@@ -300,9 +403,12 @@ export function RegisterPage() {
                   )}
                 </div>
               ))}
+              {roomImageError && <em className="register-field-error">{roomImageError}</em>}
             </div>
           </fieldset>
         )}
+
+        {previewUrl && <PhotoPreview url={previewUrl} onClose={() => setPreviewUrl(null)} />}
 
         {error && <p className="register-error">{error}</p>}
 
