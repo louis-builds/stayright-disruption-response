@@ -1,5 +1,6 @@
 [
   { "id": "44444444-4444-4444-4444-000000000001", "name": "Queenstown Lakeview Hotel", "address": "1 Lake Esplanade, Queenstown, New Zealand", "lat": -45.0312, "lng": 168.6626, "google_place_id": null, "status": "active" },
   { "id": "44444444-4444-4444-4444-000000000002", "name": "Rotorua Thermal Hotel", "address": "88 Fenton Street, Rotorua, New Zealand", "lat": -38.1368, "lng": 176.2497, "google_place_id": null, "status": "active" },
-  { "id": "44444444-4444-4444-4444-000000000003", "name": "Auckland Harbour Hotel", "address": "12 Quay Street, Auckland, New Zealand", "lat": -36.8485, "lng": 174.7633, "google_place_id": null, "status": "active" }
+  { "id": "44444444-4444-4444-4444-000000000003", "name": "Auckland Harbour Hotel", "address": "12 Quay Street, Auckland, New Zealand", "lat": -36.8485, "lng": 174.7633, "google_place_id": null, "status": "active" },
+  { "id": "0e0fa03e-e442-4e7f-9575-fe73c87eb26e", "name": "Test Auckland CBD Hotel", "address": "1 Queen Street, Auckland, New Zealand", "lat": -36.8485, "lng": 174.7633, "google_place_id": null, "status": "active" }
 ]

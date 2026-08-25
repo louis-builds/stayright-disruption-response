@@ -6,5 +6,7 @@
   { "id": "55555555-5555-5555-5555-000000000004", "hotel_id": "44444444-4444-4444-4444-000000000002", "name": "Thermal Suite", "description": "带私人温泉浴缸的套房", "amenities": ["wifi", "breakfast", "private_spa"], "capacity": 2, "price_amount": 220.00, "currency": "NZD", "image_urls": ["https://picsum.photos/seed/rt4a/640/400", "https://picsum.photos/seed/rt4b/640/400"] },
 
   { "id": "55555555-5555-5555-5555-000000000005", "hotel_id": "44444444-4444-4444-4444-000000000003", "name": "City View Room", "description": "市景客房，步行可达渡轮码头", "amenities": ["wifi", "gym_access"], "capacity": 2, "price_amount": 200.00, "currency": "NZD", "image_urls": ["https://picsum.photos/seed/rt5a/640/400", "https://picsum.photos/seed/rt5b/640/400"] },
-  { "id": "55555555-5555-5555-5555-000000000006", "hotel_id": "44444444-4444-4444-4444-000000000003", "name": "Harbour Suite", "description": "海港景观套房，配独立起居区", "amenities": ["wifi", "breakfast", "harbour_view", "minibar"], "capacity": 4, "price_amount": 320.00, "currency": "NZD", "image_urls": ["https://picsum.photos/seed/rt6a/640/400", "https://picsum.photos/seed/rt6b/640/400"] }
+  { "id": "55555555-5555-5555-5555-000000000006", "hotel_id": "44444444-4444-4444-4444-000000000003", "name": "Harbour Suite", "description": "海港景观套房，配独立起居区", "amenities": ["wifi", "breakfast", "harbour_view", "minibar"], "capacity": 4, "price_amount": 320.00, "currency": "NZD", "image_urls": ["https://picsum.photos/seed/rt6a/640/400", "https://picsum.photos/seed/rt6b/640/400"] },
+
+  { "id": "fb604d7f-e9a5-4012-b78f-e6354db7e700", "hotel_id": "0e0fa03e-e442-4e7f-9575-fe73c87eb26e", "name": "Standard Queen", "description": "Queen bed, city view", "amenities": ["wifi", "aircon"], "capacity": 2, "price_amount": 150.00, "currency": "NZD", "image_urls": [] }
 ]
