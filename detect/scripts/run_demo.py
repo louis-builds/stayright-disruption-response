@@ -34,19 +34,18 @@ from src.detect.open_meteo import (
     classify,
     fetch_weather,
 )
-from src.identify.db import apply_sql_file, get_connection
+from src.identify.db import get_connection
 from src.identify.matcher import find_affected_bookings
-
-SEED_DATA_DIR = Path(__file__).resolve().parent.parent / "seed_data"
 
 # Comfortably past the storm thresholds in open_meteo.py so classify()
 # always calls this a high-severity storm.
 MOCK_STORM_PAYLOAD = {"current": {"wind_gusts_10m": 150, "precipitation": 0, "snowfall": 0}}
 
-# Wide enough that the mock event overlaps the fixed 2026-08 dates in
-# seed_data/seed.sql regardless of exactly which day the demo runs on;
-# a real detect run would use open_meteo.py's much narrower default.
-DEMO_WINDOW_HOURS = 24 * 7
+# Wide enough to reliably overlap the C# backend's seed bookings (their
+# check-in dates are relative offsets from whenever they were last seeded,
+# see backend/SeedData/bookings.json) regardless of exactly when the demo
+# runs; a real detect run would use open_meteo.py's much narrower default.
+DEMO_WINDOW_HOURS = 24 * 30
 
 
 def _iso_z(dt: datetime) -> str:
@@ -88,8 +87,11 @@ def build_handoff_payloads(event, affected_bookings: list[dict]) -> tuple[dict, 
     affected_customer_messages = [
         {
             "disruption_event_id": event.event_id,
-            "guest_id": booking["guest_id"],
-            "booking_id": booking["booking_id"],
+            # guest_id/booking_id come back from psycopg as UUID objects
+            # (real Postgres uuid columns, not the old TEXT ids) -- stringify
+            # for JSON.
+            "guest_id": str(booking["guest_id"]),
+            "booking_id": str(booking["booking_id"]),
         }
         for booking in affected_bookings
     ]
@@ -124,7 +126,6 @@ def main() -> None:
         help="1-indexed iteration to inject a mock storm reading on; 0 disables mocking (default: 3)",
     )
     parser.add_argument("--iterations", type=int, default=0, help="stop after N iterations (default: run forever)")
-    parser.add_argument("--seed", action="store_true", help="(re)apply schema.sql and seed.sql before starting")
     parser.add_argument(
         "--output", type=Path, default=Path("output/handoff.jsonl"),
         help="append handoff JSON messages here, one per line (default: output/handoff.jsonl)",
@@ -134,11 +135,6 @@ def main() -> None:
     location = _find_location(args.location)
     conn = get_connection()
     output_path = args.output
-
-    if args.seed:
-        print("Applying schema + seed data...")
-        apply_sql_file(conn, SEED_DATA_DIR / "schema.sql")
-        apply_sql_file(conn, SEED_DATA_DIR / "seed.sql")
 
     print(f"Demo mode: polling {location.name} every {args.interval:g}s (Ctrl+C to stop)")
     if args.mock_at:
@@ -173,7 +169,7 @@ def main() -> None:
                     print(f"  {len(affected)} affected booking(s):")
                     for booking in affected:
                         print(f"    - {booking['booking_id']} / guest {booking['guest_id']} "
-                              f"/ {booking['property_name']} ({booking['check_in']} -> {booking['check_out']})")
+                              f"/ {booking['hotel_name']} ({booking['check_in']} -> {booking['check_out']})")
                     disruption_event_message, customer_messages = build_handoff_payloads(event, affected)
                     append_handoff_messages(output_path, [disruption_event_message, *customer_messages])
                     print(f"  Wrote 1 disruption_event + {len(customer_messages)} affected_customer "

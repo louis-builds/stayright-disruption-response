@@ -20,9 +20,9 @@ def get_connection() -> psycopg.Connection[Any]:
     return psycopg.connect(
         host=os.environ.get("PGHOST", "localhost"),
         port=os.environ.get("PGPORT", "5432"),
-        dbname=os.environ.get("PGDATABASE", "kakapo"),
-        user=os.environ.get("PGUSER", "kakapo"),
-        password=os.environ.get("PGPASSWORD", "kakapo"),
+        dbname=os.environ.get("PGDATABASE", "travel_disruption"),
+        user=os.environ.get("PGUSER", "app"),
+        password=os.environ.get("PGPASSWORD", "app_password"),
         autocommit=True,
         connect_timeout=3,
     )

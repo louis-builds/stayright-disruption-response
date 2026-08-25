@@ -14,23 +14,20 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import json
-import sys
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 from src.detect.models import DisruptionEvent, EventSource, Geo, GeoPoint, GeoType, Severity, TimeWindow
 from src.detect.open_meteo import DEFAULT_LOCATIONS, detect_events
-from src.identify.db import apply_sql_file, get_connection
+from src.identify.db import get_connection
 from src.identify.matcher import find_affected_bookings
-
-SEED_DATA_DIR = Path(__file__).resolve().parent.parent / "seed_data"
 
 
 def simulated_storm_event() -> DisruptionEvent:
-    """A canned high-severity storm over Queenstown, matching the scenario
-    documented in seed_data/seed.sql, for demoing without waiting on real
-    weather.
+    """A canned high-severity storm over Queenstown (matches the real
+    Queenstown Lakeview Hotel's coordinates), for demoing without waiting
+    on real weather. Window is wide (30 days) to reliably overlap the C#
+    backend's seed bookings, whose check-in dates are relative offsets
+    from whenever they were last seeded (backend/SeedData/bookings.json).
     """
     now = datetime.now(timezone.utc)
     return DisruptionEvent(
@@ -38,7 +35,7 @@ def simulated_storm_event() -> DisruptionEvent:
         event_type="storm",
         severity=Severity.HIGH,
         detected_at=now,
-        affects_window=TimeWindow(start=now, end=now + timedelta(days=2)),
+        affects_window=TimeWindow(start=now, end=now + timedelta(days=30)),
         geo=Geo(type=GeoType.POINT, center=GeoPoint(lat=-45.0312, lng=168.6626), radius_km=30),
         raw_payload={"note": "simulated event for local e2e demo"},
     )
@@ -49,17 +46,9 @@ def main() -> None:
     parser.add_argument(
         "--simulate", action="store_true", help="use a canned storm event instead of polling Open-Meteo"
     )
-    parser.add_argument(
-        "--seed", action="store_true", help="(re)apply schema.sql and seed.sql before matching"
-    )
     args = parser.parse_args()
 
     conn = get_connection()
-
-    if args.seed:
-        print("Applying schema + seed data...")
-        apply_sql_file(conn, SEED_DATA_DIR / "schema.sql")
-        apply_sql_file(conn, SEED_DATA_DIR / "seed.sql")
 
     if args.simulate:
         events = [simulated_storm_event()]
@@ -82,7 +71,7 @@ def main() -> None:
         print(f"  {len(affected)} affected booking(s):")
         for booking in affected:
             print(f"    - {booking['booking_id']} / guest {booking['guest_id']} "
-                  f"/ {booking['property_name']} ({booking['check_in']} -> {booking['check_out']})")
+                  f"/ {booking['hotel_name']} ({booking['check_in']} -> {booking['check_out']})")
 
 
 if __name__ == "__main__":

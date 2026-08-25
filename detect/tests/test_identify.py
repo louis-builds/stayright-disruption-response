@@ -1,5 +1,4 @@
-from datetime import date, datetime, timezone
-from pathlib import Path
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
 import pytest
@@ -7,8 +6,6 @@ import pytest
 from src.detect.models import DisruptionEvent, EventSource, Geo, GeoPoint, GeoType, Severity, TimeWindow
 from src.identify.geo import haversine_km
 from src.identify.matcher import filter_by_distance, find_affected_bookings
-
-SEED_DATA_DIR = Path(__file__).resolve().parent.parent / "seed_data"
 
 QUEENSTOWN = GeoPoint(lat=-45.0312, lng=168.6626)
 
@@ -75,22 +72,22 @@ class TestFindAffectedBookings:
     def test_queries_by_window_and_filters_by_distance(self):
         rows = [
             {
-                "booking_id": "booking-0001",
-                "property_id": "prop-qtn-1",
-                "guest_id": "guest-001",
+                "booking_id": "11111111-0000-0000-0000-000000000001",
+                "hotel_id": "22222222-0000-0000-0000-000000000001",
+                "guest_id": "33333333-0000-0000-0000-000000000001",
                 "check_in": date(2026, 8, 25),
                 "check_out": date(2026, 8, 28),
-                "property_name": "Queenstown Lakefront Lodge",
+                "hotel_name": "Queenstown Lakeview Hotel",
                 "lat": -45.0312,
                 "lng": 168.6626,
             },
             {
-                "booking_id": "booking-0004",
-                "property_id": "prop-akl-1",
-                "guest_id": "guest-004",
+                "booking_id": "11111111-0000-0000-0000-000000000002",
+                "hotel_id": "22222222-0000-0000-0000-000000000002",
+                "guest_id": "33333333-0000-0000-0000-000000000002",
                 "check_in": date(2026, 8, 25),
                 "check_out": date(2026, 8, 27),
-                "property_name": "Auckland CBD Apartment",
+                "hotel_name": "Auckland Harbour Hotel",
                 "lat": -36.8485,
                 "lng": 174.7633,
             },
@@ -99,7 +96,7 @@ class TestFindAffectedBookings:
 
         affected = find_affected_bookings(_storm_event(), conn)
 
-        assert [b["booking_id"] for b in affected] == ["booking-0001"]
+        assert [b["booking_id"] for b in affected] == ["11111111-0000-0000-0000-000000000001"]
         args, kwargs = cursor.execute.call_args
         params = args[1]
         assert params["window_start"] == date(2026, 8, 25)
@@ -116,11 +113,12 @@ class TestFindAffectedBookings:
 
 @pytest.fixture
 def live_pg_conn():
-    """Optional integration fixture: only runs if a local Postgres (e.g.
-    from `docker compose up`) is reachable. Skips otherwise so the default
-    test run never depends on real infrastructure.
+    """Optional integration fixture: only runs if the shared Postgres
+    (`travel_disruption`, the same database the C# backend uses) is
+    reachable and already seeded. Skips otherwise so the default test run
+    never depends on real infrastructure.
     """
-    from src.identify.db import apply_sql_file, get_connection
+    from src.identify.db import get_connection
 
     try:
         conn = get_connection()
@@ -128,17 +126,37 @@ def live_pg_conn():
         pytest.skip(f"no local Postgres available: {exc}")
         return
 
-    apply_sql_file(conn, SEED_DATA_DIR / "schema.sql")
     with conn.cursor() as cur:
-        cur.execute("TRUNCATE bookings, properties CASCADE")
-    apply_sql_file(conn, SEED_DATA_DIR / "seed.sql")
+        cur.execute("SELECT count(*) FROM hotels")
+        if cur.fetchone()[0] == 0:
+            pytest.skip("travel_disruption has no hotels yet -- run the C# backend once (dotnet run) to seed it")
 
     yield conn
     conn.close()
 
 
 class TestFindAffectedBookingsIntegration:
-    def test_seed_data_matches_expected_bookings(self, live_pg_conn):
-        affected = find_affected_bookings(_storm_event(), live_pg_conn)
-        ids = {b["booking_id"] for b in affected}
-        assert ids == {"booking-0001", "booking-0002"}
+    def test_matches_only_non_cancelled_bookings_at_the_targeted_hotel(self, live_pg_conn):
+        with live_pg_conn.cursor() as cur:
+            cur.execute("SELECT id, lat, lng FROM hotels ORDER BY name LIMIT 1")
+            hotel_id, lat, lng = cur.fetchone()
+            cur.execute(
+                "SELECT count(*) FROM bookings WHERE hotel_id = %(hotel_id)s AND status != 'cancelled'",
+                {"hotel_id": hotel_id},
+            )
+            expected_count = cur.fetchone()[0]
+
+        # Wide window (real hotels' bookings use offsets we don't control
+        # here) + a radius that only reaches this one hotel (the seeded
+        # hotels are hundreds of km apart) -> every non-cancelled booking
+        # at this hotel should match, and nothing from the other hotels.
+        now = datetime.now(timezone.utc)
+        event = _storm_event(
+            geo=Geo(type=GeoType.POINT, center=GeoPoint(lat=lat, lng=lng), radius_km=1),
+            affects_window=TimeWindow(start=now - timedelta(days=365), end=now + timedelta(days=365)),
+        )
+
+        affected = find_affected_bookings(event, live_pg_conn)
+
+        assert len(affected) == expected_count
+        assert all(b["hotel_id"] == hotel_id for b in affected)
