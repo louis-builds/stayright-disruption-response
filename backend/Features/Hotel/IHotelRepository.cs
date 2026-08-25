@@ -5,8 +5,13 @@ namespace TravelDisruptionAgent.Api.Features.HotelPortal;
 public interface IHotelRepository
 {
     Task<Guid?> FindHotelIdForUserAsync(Guid userId, CancellationToken ct = default);
-    /// <summary>"高价值客人"：判定口径是有 2 次及以上非取消预订(回头客)——跟协调员端同一套口径(CoordinatorRepository)。</summary>
-    Task<HashSet<Guid>> GetHighValueGuestIdsAsync(IEnumerable<Guid> guestUserIds, CancellationToken ct = default);
+    /// <summary>"回头客"：在这一家酒店(hotelId)本身有 2 次及以上非取消预订——酒店视角看的是自家回头客，
+    /// 跟"平台高价值客人"是不同口径，不共用。</summary>
+    Task<HashSet<Guid>> GetReturningGuestIdsAsync(IEnumerable<Guid> guestUserIds, Guid hotelId, CancellationToken ct = default);
+
+    /// <summary>"平台高价值客人"：近12个月≥2单且累计消费≥NZD 1000，不分酒店——
+    /// 跟 CoordinatorRepository/DisruptionRepository 同一套口径。</summary>
+    Task<HashSet<Guid>> GetPlatformHighValueGuestIdsAsync(IEnumerable<Guid> guestUserIds, CancellationToken ct = default);
 
     Task<List<Inquiry>> ListInquiriesAsync(Guid hotelId, string? status, CancellationToken ct = default);
     Task<Inquiry?> FindInquiryAsync(Guid inquiryId, Guid hotelId, CancellationToken ct = default);

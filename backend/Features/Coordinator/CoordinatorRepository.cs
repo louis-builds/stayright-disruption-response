@@ -62,14 +62,20 @@ public class CoordinatorRepository(AppDbContext db) : ICoordinatorRepository
     public async Task AddNoteAsync(CaseNote note, CancellationToken ct = default) =>
         await db.CaseNotes.AddAsync(note, ct);
 
+    // 平台口径的高价值客人：近12个月内下单≥2次且累计消费≥NZD 1000，不分酒店。跟 HotelRepository
+    // 那个"这家酒店的回头客"是两个不同概念——之前两边共用一套终身累计、只看单量的口径，
+    // 一来酒店视角显示的"回头客"其实是"在平台任何酒店订过两次"，语义是错的；二来光看单量
+    // 不看金额，两次订最便宜房型的客人跟两次订套房的客人被同等对待，对协调员没有区分度。
+    // ponytail: 金额阈值先写死 1000，不同货币不做汇率换算（这个平台目前只有 NZD 一种）。
     public async Task<HashSet<Guid>> GetHighValueGuestIdsAsync(IEnumerable<Guid> guestUserIds, CancellationToken ct = default)
     {
         var ids = guestUserIds.Distinct().ToList();
         if (ids.Count == 0) return [];
+        var since = DateTimeOffset.UtcNow.AddYears(-1);
         var highValue = await db.Bookings
-            .Where(b => ids.Contains(b.GuestUserId) && b.Status != "cancelled")
+            .Where(b => ids.Contains(b.GuestUserId) && b.Status != "cancelled" && b.CreatedAt >= since)
             .GroupBy(b => b.GuestUserId)
-            .Where(g => g.Count() >= 2)
+            .Where(g => g.Count() >= 2 && g.Sum(b => b.TotalAmount) >= 1000m)
             .Select(g => g.Key)
             .ToListAsync(ct);
         return [.. highValue];

@@ -32,6 +32,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<UserDocumentVersion> UserDocumentVersions => Set<UserDocumentVersion>();
     public DbSet<SystemSettings> SystemSettings => Set<SystemSettings>();
     public DbSet<FaqQuestion> FaqQuestions => Set<FaqQuestion>();
+    public DbSet<HandoffAffectedCustomer> HandoffAffectedCustomers => Set<HandoffAffectedCustomer>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -139,6 +140,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<DisruptionExclusion>(e =>
         {
             e.HasIndex(x => new { x.DisruptionId, x.BookingId }).IsUnique();
+        });
+
+        modelBuilder.Entity<HandoffAffectedCustomer>(e =>
+        {
+            e.HasIndex(x => new { x.DisruptionId, x.ExternalBookingId }).IsUnique();
         });
 
         modelBuilder.Entity<DisruptionWindowAudit>(e =>

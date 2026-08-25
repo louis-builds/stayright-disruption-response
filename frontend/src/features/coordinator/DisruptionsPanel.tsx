@@ -289,9 +289,15 @@ function DetailPanel({ disruption, coordinators, onChanged }: DetailPanelProps) 
                     <label key={c.bookingId} className="coord-candidate-row">
                       <input type="checkbox" checked={selected.has(c.bookingId)} onChange={() => toggle(c.bookingId)} />
                       <span className="coord-candidate-info">
-                        <span className="coord-row-conf">{c.confirmationNo}</span>
-                        <span className="coord-candidate-guest">
-                          {c.guestNickname} · {c.hotelName} · {c.checkIn} → {c.checkOut}
+                        <span className="coord-candidate-line1">
+                          <span className="coord-row-conf">{c.confirmationNo}</span>
+                          <span className="coord-candidate-name">{c.guestNickname}</span>
+                          {c.isHighValueGuest && <span className="tag tag-status-vip">high value</span>}
+                        </span>
+                        <span className="coord-candidate-line2">
+                          <span className="coord-candidate-guest">
+                            {c.hotelName} · {c.checkIn} → {c.checkOut}
+                          </span>
                         </span>
                       </span>
                       <button

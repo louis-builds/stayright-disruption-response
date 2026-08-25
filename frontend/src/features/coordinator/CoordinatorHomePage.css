@@ -326,6 +326,13 @@
   color: #9a7300;
 }
 
+/* 平台"high value"跟酒店自家的"returning"是两个不同概念，紧挨着一起出现时颜色不能撞——
+   high value 沿用原来的金黄(tag-status-vip)，returning 换成绿色，一眼能分清是哪种口径。 */
+.tag-status-returning {
+  background: #e2f3e6;
+  color: #2f7a45;
+}
+
 .coord-modal-backdrop {
   position: fixed;
   inset: 0;
@@ -852,11 +859,32 @@
   flex-shrink: 0;
 }
 
-/* 一行放不下就省略号截断，不是换行——checkbox/Exclude 两端锚死，中间这段才是唯一该变窄的部分。 */
+.coord-candidate-line1,
+.coord-candidate-line2 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.coord-candidate-line1 .tag {
+  flex-shrink: 0;
+}
+
+.coord-candidate-name {
+  font-size: 0.82rem;
+  color: #1f2d3d;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 名字一行、酒店/日期(+returning标签)一行——每行内部放不下就省略号截断，不整体换行。
+   checkbox/Exclude 两端锚死，中间这两行才是唯一该变窄的部分。 */
 .coord-candidate-info {
   display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
+  flex-direction: column;
+  gap: 0.2rem;
   flex: 1;
   min-width: 0;
 }
@@ -879,11 +907,8 @@
     grid-template-columns: 1fr;
   }
 
-  .coord-candidate-info {
-    flex-wrap: wrap;
-  }
-
-  .coord-candidate-guest {
+  .coord-candidate-guest,
+  .coord-candidate-name {
     white-space: normal;
   }
 }

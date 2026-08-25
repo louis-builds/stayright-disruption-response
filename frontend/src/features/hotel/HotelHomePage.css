@@ -276,31 +276,3 @@
   }
 }
 
-/* 队列说明文字之前是写死常驻在页面上的一整块，用户反馈这种固定说明不该占屏幕空间——
-   改成原生 <details>，默认折叠，需要时自己点开看。 */
-.hotel-queue-tip-collapsible summary {
-  cursor: pointer;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: #10243c;
-  list-style: none;
-}
-
-.hotel-queue-tip-collapsible summary::-webkit-details-marker {
-  display: none;
-}
-
-.hotel-queue-tip-collapsible summary::before {
-  content: "▸";
-  display: inline-block;
-  margin-right: 0.4rem;
-  transition: transform 0.15s ease;
-}
-
-.hotel-queue-tip-collapsible[open] summary::before {
-  transform: rotate(90deg);
-}
-
-.hotel-queue-tip-collapsible p {
-  margin-top: 0.5rem;
-}

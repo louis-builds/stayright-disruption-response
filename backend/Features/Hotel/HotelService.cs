@@ -12,15 +12,17 @@ public class HotelService(IHotelRepository repo, ICaseService caseService, IOpti
     private async Task<Guid> RequireHotelIdAsync(Guid hotelUserId, CancellationToken ct) =>
         await repo.FindHotelIdForUserAsync(hotelUserId, ct) ?? throw new HotelNotFoundException();
 
-    private static InquiryItemDto ToDto(Inquiry i, HashSet<Guid> highValueGuestIds)
+    private static InquiryItemDto ToDto(Inquiry i, HashSet<Guid> returningGuestIds, HashSet<Guid> highValueGuestIds)
     {
         var now = DateTimeOffset.UtcNow;
+        var guestId = i.Case?.Booking?.GuestUserId;
         return new InquiryItemDto(
             i.Id, i.CaseId, i.Case?.Booking?.ConfirmationNo ?? "", i.Case?.Booking?.GuestUser?.Nickname ?? "",
             i.Case?.Disruption?.Title ?? "", i.Case?.Booking?.CheckIn ?? default, i.Case?.Booking?.CheckOut ?? default,
             i.Case?.Booking?.RoomType?.Name ?? "", i.Status, i.RequestedAt, now - i.RequestedAt,
             i.Status == "pending" && now - i.RequestedAt > OverdueThreshold,
-            i.Case?.Booking is not null && highValueGuestIds.Contains(i.Case.Booking.GuestUserId),
+            guestId.HasValue && returningGuestIds.Contains(guestId.Value),
+            guestId.HasValue && highValueGuestIds.Contains(guestId.Value),
             i.RespondedAt, i.RejectReason);
     }
 
@@ -28,8 +30,10 @@ public class HotelService(IHotelRepository repo, ICaseService caseService, IOpti
     {
         var hotelId = await RequireHotelIdAsync(hotelUserId, ct);
         var list = await repo.ListInquiriesAsync(hotelId, status, ct);
-        var highValue = await repo.GetHighValueGuestIdsAsync(list.Where(i => i.Case?.Booking is not null).Select(i => i.Case!.Booking!.GuestUserId), ct);
-        return [.. list.Select(i => ToDto(i, highValue))];
+        var guestIds = list.Where(i => i.Case?.Booking is not null).Select(i => i.Case!.Booking!.GuestUserId);
+        var returning = await repo.GetReturningGuestIdsAsync(guestIds, hotelId, ct);
+        var highValue = await repo.GetPlatformHighValueGuestIdsAsync(guestIds, ct);
+        return [.. list.Select(i => ToDto(i, returning, highValue))];
     }
 
     public async Task ConfirmInquiryAsync(Guid hotelUserId, Guid inquiryId, ConfirmInquiryRequest request, CancellationToken ct = default)
@@ -71,11 +75,16 @@ public class HotelService(IHotelRepository repo, ICaseService caseService, IOpti
         await caseService.NotifyGuestOfInquiryDecisionAsync(inquiry.CaseId, false, request.Reason, ct);
     }
 
-    private static SelectedOptionItemDto ToDto(Option o, HashSet<Guid> highValueGuestIds) => new(
-        o.Id, o.CaseId, o.Case?.Booking?.ConfirmationNo ?? "", o.Case?.Booking?.GuestUser?.Nickname ?? "",
-        o.OptionType, o.PayloadJson, o.UpdatedAt, o.CustomTitle, o.PerkNames,
-        o.Case?.Booking is not null && highValueGuestIds.Contains(o.Case.Booking.GuestUserId),
-        o.Availability, o.UnavailableReason);
+    private static SelectedOptionItemDto ToDto(Option o, HashSet<Guid> returningGuestIds, HashSet<Guid> highValueGuestIds)
+    {
+        var guestId = o.Case?.Booking?.GuestUserId;
+        return new(
+            o.Id, o.CaseId, o.Case?.Booking?.ConfirmationNo ?? "", o.Case?.Booking?.GuestUser?.Nickname ?? "",
+            o.OptionType, o.PayloadJson, o.UpdatedAt, o.CustomTitle, o.PerkNames,
+            guestId.HasValue && returningGuestIds.Contains(guestId.Value),
+            guestId.HasValue && highValueGuestIds.Contains(guestId.Value),
+            o.Availability, o.UnavailableReason);
+    }
 
     private async Task<bool> OptionTargetsHotelAsync(Option option, Guid hotelId, CancellationToken ct)
     {
@@ -95,8 +104,10 @@ public class HotelService(IHotelRepository repo, ICaseService caseService, IOpti
         var mine = new List<Option>();
         foreach (var o in all)
             if (await OptionTargetsHotelAsync(o, hotelId, ct)) mine.Add(o);
-        var highValue = await repo.GetHighValueGuestIdsAsync(mine.Where(o => o.Case?.Booking is not null).Select(o => o.Case!.Booking!.GuestUserId), ct);
-        return [.. mine.Select(o => ToDto(o, highValue))];
+        var guestIds = mine.Where(o => o.Case?.Booking is not null).Select(o => o.Case!.Booking!.GuestUserId);
+        var returning = await repo.GetReturningGuestIdsAsync(guestIds, hotelId, ct);
+        var highValue = await repo.GetPlatformHighValueGuestIdsAsync(guestIds, ct);
+        return [.. mine.Select(o => ToDto(o, returning, highValue))];
     }
 
     public async Task<List<SelectedOptionItemDto>> ListResolvedOptionsHistoryAsync(Guid hotelUserId, CancellationToken ct = default)
@@ -106,8 +117,10 @@ public class HotelService(IHotelRepository repo, ICaseService caseService, IOpti
         var mine = new List<Option>();
         foreach (var o in all)
             if (await OptionTargetsHotelAsync(o, hotelId, ct)) mine.Add(o);
-        var highValue = await repo.GetHighValueGuestIdsAsync(mine.Where(o => o.Case?.Booking is not null).Select(o => o.Case!.Booking!.GuestUserId), ct);
-        return [.. mine.Select(o => ToDto(o, highValue))];
+        var guestIds = mine.Where(o => o.Case?.Booking is not null).Select(o => o.Case!.Booking!.GuestUserId);
+        var returning = await repo.GetReturningGuestIdsAsync(guestIds, hotelId, ct);
+        var highValue = await repo.GetPlatformHighValueGuestIdsAsync(guestIds, ct);
+        return [.. mine.Select(o => ToDto(o, returning, highValue))];
     }
 
     public async Task ConfirmOptionAsync(Guid hotelUserId, Guid optionId, CancellationToken ct = default)
@@ -257,10 +270,12 @@ public class HotelService(IHotelRepository repo, ICaseService caseService, IOpti
         // 酒店走个性化响应这条路时不经过 Inquiry 确认那套自动补全逻辑，客人这时也该同时看到
         // 标准的 defer/alternate/cancel 候选，不用等协调员另外手动开后台才生成。
         await optionsAdmin.GetOptionsAsync(caseId, ct);
-        var highValue = await repo.GetHighValueGuestIdsAsync([full.Booking.GuestUserId], ct);
+        var returning = await repo.GetReturningGuestIdsAsync([full.Booking.GuestUserId], hotelId, ct);
+        var highValue = await repo.GetPlatformHighValueGuestIdsAsync([full.Booking.GuestUserId], ct);
         return new SelectedOptionItemDto(
             option.Id, caseId, full.Booking.ConfirmationNo, full.Booking.GuestUser?.Nickname ?? "",
             option.OptionType, option.PayloadJson, option.UpdatedAt, option.CustomTitle, option.PerkNames,
-            highValue.Contains(full.Booking.GuestUserId), option.Availability, option.UnavailableReason);
+            returning.Contains(full.Booking.GuestUserId), highValue.Contains(full.Booking.GuestUserId),
+            option.Availability, option.UnavailableReason);
     }
 }

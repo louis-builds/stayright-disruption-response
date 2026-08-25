@@ -10,6 +10,7 @@ using TravelDisruptionAgent.Api.Features.Chat;
 using TravelDisruptionAgent.Api.Features.Coordinator;
 using TravelDisruptionAgent.Api.Features.Disruption;
 using TravelDisruptionAgent.Api.Features.Faq;
+using TravelDisruptionAgent.Api.Features.Handoff;
 using TravelDisruptionAgent.Api.Features.HotelPortal;
 using TravelDisruptionAgent.Api.Features.Notifications;
 using TravelDisruptionAgent.Api.Features.Users;
@@ -124,6 +125,7 @@ builder.Services.AddScoped<IHotelService, HotelService>();
 builder.Services.AddScoped<IFaqRepository, FaqRepository>();
 builder.Services.AddScoped<IFaqService, FaqService>();
 builder.Services.AddHostedService<FaqClusteringJob>();
+builder.Services.AddHostedService<HandoffIngestJob>();
 
 var app = builder.Build();
 
