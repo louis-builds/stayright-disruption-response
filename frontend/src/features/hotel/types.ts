@@ -11,6 +11,7 @@ export interface InquiryItem {
   requestedAt: string;
   waitTime: string;
   overdue: boolean;
+  isReturningGuest: boolean;
   isHighValueGuest: boolean;
   respondedAt: string | null;
   rejectReason: string | null;
@@ -26,6 +27,7 @@ export interface SelectedOptionItem {
   selectedSince: string;
   customTitle: string | null;
   perkNames: string[];
+  isReturningGuest: boolean;
   isHighValueGuest: boolean;
   availability: "pending" | "available" | "unavailable";
   unavailableReason: string | null;

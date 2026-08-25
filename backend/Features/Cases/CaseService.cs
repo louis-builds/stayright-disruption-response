@@ -90,8 +90,8 @@ public class CaseService(
         var guest = await users.FindByIdAsync(full.Booking!.GuestUserId, ct);
         var language = guest?.Language ?? "en";
         var opening = language == "zh"
-            ? "您好，协调员已经收到通知，很快会加入这边的对话为您处理。"
-            : "Hi, a coordinator has been notified and will join this conversation shortly.";
+            ? "您好，我是您的专属协调员，请问有什么可以帮您？"
+            : "Hi, I'm your coordinator — how can I help you with this?";
 
         var now = DateTimeOffset.UtcNow;
         await cases.AddMessageAsync(new Message

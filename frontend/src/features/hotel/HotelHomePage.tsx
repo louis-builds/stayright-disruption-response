@@ -243,7 +243,7 @@ export function HotelHomePage() {
     .sort((a, b) => Number(b.overdue) - Number(a.overdue));
   const filteredPendingOptions = pendingOptions
     .filter((o) => matchesHotelFilter(taskFilter, o.confirmationNo, o.guestNickname, o.optionType))
-    .sort((a, b) => Number(b.isHighValueGuest) - Number(a.isHighValueGuest) || a.selectedSince.localeCompare(b.selectedSince));
+    .sort((a, b) => Number(b.isReturningGuest) - Number(a.isReturningGuest) || a.selectedSince.localeCompare(b.selectedSince));
   const filteredDoneInquiries = doneInquiries
     .filter((i) => matchesHotelFilter(taskFilter, i.confirmationNo, i.guestNickname, i.disruptionTitle, i.status))
     .sort((a, b) => (b.respondedAt ?? "").localeCompare(a.respondedAt ?? ""));
@@ -261,7 +261,7 @@ export function HotelHomePage() {
       h1Total: pendingInquiries.length,
       overdueCount: pendingInquiries.filter((i) => i.overdue).length,
       h2Total: pendingOptions.length,
-      highValueCount: pendingInquiries.filter((i) => i.isHighValueGuest).length + pendingOptions.filter((o) => o.isHighValueGuest).length,
+      returningCount: pendingInquiries.filter((i) => i.isReturningGuest).length + pendingOptions.filter((o) => o.isReturningGuest).length,
     }),
     [pendingInquiries, pendingOptions],
   );
@@ -340,7 +340,7 @@ export function HotelHomePage() {
               </div>
               <div className="coord-stat-card">
                 <span className="coord-stat-label">Returning guests</span>
-                <span className="coord-stat-value">{todoStats.highValueCount}</span>
+                <span className="coord-stat-value">{todoStats.returningCount}</span>
                 <span className="coord-stat-sub">across both queues</span>
               </div>
             </div>
@@ -384,10 +384,14 @@ export function HotelHomePage() {
                   {pendingInquiriesPage.paged.map((i) => (
                     <div key={i.id} className={`coord-row ${i.overdue ? "coord-row-overdue" : ""}`}>
                       <div className="coord-row-main">
-                        <span className="coord-row-conf">{i.confirmationNo}</span>
-                        {i.isHighValueGuest && <span className="tag tag-status-vip">returning guest</span>}
+                        <p className="coord-row-title">
+                          <span className="coord-row-conf">{i.confirmationNo}</span>
+                          <span className="coord-row-conf">{i.guestNickname}</span>
+                          {i.isReturningGuest && <span className="tag tag-status-returning">returning</span>}
+                          {i.isHighValueGuest && <span className="tag tag-status-vip">high value</span>}
+                        </p>
                         <p className="coord-row-sub">
-                          {i.guestNickname} · {i.disruptionTitle} · {i.roomTypeName} · {i.checkIn} → {i.checkOut}
+                          {i.disruptionTitle} · {i.roomTypeName} · {i.checkIn} → {i.checkOut}
                         </p>
                         {i.overdue && <p className="coord-row-meta">overdue — please respond soon</p>}
                       </div>
@@ -426,10 +430,14 @@ export function HotelHomePage() {
                     return (
                       <div key={o.optionId} className="coord-row">
                         <div className="coord-row-main">
-                          <span className="coord-row-conf">{o.confirmationNo}</span>
-                          {o.isHighValueGuest && <span className="tag tag-status-vip">returning guest</span>}
+                          <p className="coord-row-title">
+                            <span className="coord-row-conf">{o.confirmationNo}</span>
+                            <span className="coord-row-conf">{o.guestNickname}</span>
+                            {o.isReturningGuest && <span className="tag tag-status-returning">returning</span>}
+                            {o.isHighValueGuest && <span className="tag tag-status-vip">high value</span>}
+                          </p>
                           <p className="coord-row-sub">
-                            {o.guestNickname} · {o.optionType}
+                            {o.optionType}
                             {payload.room_type ? ` · ${payload.room_type}` : ""}
                           </p>
                         </div>
@@ -503,15 +511,6 @@ export function HotelHomePage() {
                   )}
                 </div>
               </div>
-              <details className="coord-queue-tip hotel-queue-tip-collapsible">
-                <summary>About this history</summary>
-                <p>
-                  Every disruption request and guest selection your team has resolved lives here permanently as an audit
-                  trail — reject/decline reasons are kept so you can spot patterns (e.g. a room type that keeps getting
-                  declined) and settle disputes with guests or coordinators later.
-                </p>
-              </details>
-
               {doneInquiries.length + doneOptions.length === 0 ? (
                 <div className="hotel-caught-up">
                   <span className="hotel-caught-up-icon" aria-hidden="true">
@@ -551,10 +550,14 @@ export function HotelHomePage() {
                   {doneInquiriesPage.paged.map((i) => (
                     <div key={i.id} className="coord-row">
                       <div className="coord-row-main">
-                        <span className="coord-row-conf">{i.confirmationNo}</span>
-                        {i.isHighValueGuest && <span className="tag tag-status-vip">returning guest</span>}
+                        <p className="coord-row-title">
+                          <span className="coord-row-conf">{i.confirmationNo}</span>
+                          <span className="coord-row-conf">{i.guestNickname}</span>
+                          {i.isReturningGuest && <span className="tag tag-status-returning">returning</span>}
+                          {i.isHighValueGuest && <span className="tag tag-status-vip">high value</span>}
+                        </p>
                         <p className="coord-row-sub">
-                          {i.guestNickname} · {i.disruptionTitle} ·{" "}
+                          {i.disruptionTitle} ·{" "}
                           <span className={`tag tag-status-${i.status === "accepted" ? "normal" : "overdue"}`}>{i.status}</span>
                           {timeAgo(i.respondedAt) && <span className="coord-row-meta"> · {timeAgo(i.respondedAt)}</span>}
                         </p>
@@ -578,10 +581,14 @@ export function HotelHomePage() {
                   {doneOptionsPage.paged.map((o) => (
                     <div key={o.optionId} className="coord-row">
                       <div className="coord-row-main">
-                        <span className="coord-row-conf">{o.confirmationNo}</span>
-                        {o.isHighValueGuest && <span className="tag tag-status-vip">returning guest</span>}
+                        <p className="coord-row-title">
+                          <span className="coord-row-conf">{o.confirmationNo}</span>
+                          <span className="coord-row-conf">{o.guestNickname}</span>
+                          {o.isReturningGuest && <span className="tag tag-status-returning">returning</span>}
+                          {o.isHighValueGuest && <span className="tag tag-status-vip">high value</span>}
+                        </p>
                         <p className="coord-row-sub">
-                          {o.guestNickname} · {o.optionType} ·{" "}
+                          {o.optionType} ·{" "}
                           <span className={`tag tag-status-${o.availability === "available" ? "normal" : "overdue"}`}>
                             {o.availability === "available" ? "confirmed" : "declined"}
                           </span>

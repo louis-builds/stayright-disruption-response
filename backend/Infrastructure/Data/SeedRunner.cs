@@ -65,9 +65,10 @@ public static class SeedRunner
         var disruptions = Load<DisruptionSeed>(seedDir, "disruptions.json");
         db.Disruptions.AddRange(disruptions.Select(d => new Disruption
         {
-            Id = d.Id, Type = d.Type, Title = d.Title, Region = d.Region,
+            Id = d.Id, Type = d.Type, EventSubtype = d.EventSubtype, Title = d.Title, Region = d.Region,
+            Severity = d.Severity, Lat = d.Lat, Lng = d.Lng, RadiusKm = d.RadiusKm,
             StartAt = now.AddHours(d.StartOffsetHours), EndAtOrWindow = now.AddHours(d.EndOffsetHours),
-            Status = d.Status, RawSignalText = d.RawSignalText, CreatedAt = now, UpdatedAt = now,
+            Status = d.Status, RawSignalText = d.RawSignalText, RawSignalJson = d.RawSignalJson, CreatedAt = now, UpdatedAt = now,
         }));
 
         var cases = Load<CaseSeed>(seedDir, "cases.json");
@@ -150,8 +151,12 @@ public static class SeedRunner
     private record BookingSeed(Guid Id, string ConfirmationNo, Guid GuestUserId, Guid HotelId, Guid RoomTypeId,
         int CheckInOffsetDays, int CheckOutOffsetDays, int GuestsCount, decimal TotalAmount, string Currency, string Status);
 
+    // EventSubtype/Severity/Lat/Lng/RadiusKm/RawSignalJson 对齐 docs/handoff.jsonl 的对接结构，
+    // 目前只有 weather/storm 这条会填，其它 disruption 留 null 照样能反序列化。
     private record DisruptionSeed(Guid Id, string Type, string Title, string Region,
-        double StartOffsetHours, double EndOffsetHours, string Status, string RawSignalText);
+        double StartOffsetHours, double EndOffsetHours, string Status, string RawSignalText,
+        string? EventSubtype = null, string? Severity = null,
+        double? Lat = null, double? Lng = null, double? RadiusKm = null, string? RawSignalJson = null);
 
     private record CaseSeed(Guid Id, Guid BookingId, Guid DisruptionId, string Status,
         Guid? AssigneeCoordinatorId, string Priority, string? CloseReason, string? EscalationReason);
