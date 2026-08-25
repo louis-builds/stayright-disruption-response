@@ -1,6 +1,11 @@
 """Affected-customer identification: given a DisruptionEvent, find the
-bookings whose stay overlaps the event's time window and whose property
+bookings whose stay overlaps the event's time window and whose hotel
 falls inside the event's geo radius.
+
+Queries the real C# backend's schema directly (`hotels`/`bookings` in the
+shared `travel_disruption` database) rather than a separate toy dataset,
+so guest_id/booking_id in the output are real ids the rest of the system
+(case lookup, cancellation policy, etc.) already understands.
 
 The SQL layer only narrows candidates by date overlap (portable, simple
 SQL every DB understands); the actual distance check runs in Python via
@@ -21,17 +26,18 @@ logger = logging.getLogger(__name__)
 
 _CANDIDATE_QUERY = """
     SELECT
-        b.booking_id,
-        b.property_id,
-        b.guest_id,
+        b.id AS booking_id,
+        b.hotel_id,
+        b.guest_user_id AS guest_id,
         b.check_in,
         b.check_out,
-        p.name AS property_name,
-        p.lat,
-        p.lng
+        h.name AS hotel_name,
+        h.lat,
+        h.lng
     FROM bookings b
-    JOIN properties p ON p.property_id = b.property_id
-    WHERE b.check_in <= %(window_end)s
+    JOIN hotels h ON h.id = b.hotel_id
+    WHERE b.status != 'cancelled'
+      AND b.check_in <= %(window_end)s
       AND b.check_out >= %(window_start)s
 """
 

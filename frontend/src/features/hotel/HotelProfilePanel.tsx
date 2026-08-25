@@ -270,6 +270,29 @@ function PerksSection({ perks, onAdd, onDelete }: {
   );
 }
 
+function RoomTypeSummaryCard({ roomType, onClick }: { roomType: RoomType; onClick: () => void }) {
+  const firstPhoto = roomType.imageUrls[0];
+  return (
+    <button type="button" className="hotel-room-type-summary" onClick={onClick}>
+      <div className="hotel-room-type-summary-photo">
+        {firstPhoto ? (
+          <img src={firstPhoto} alt={roomType.name} />
+        ) : (
+          <span className="hotel-room-type-summary-placeholder">No photo</span>
+        )}
+      </div>
+      <div className="hotel-room-type-summary-body">
+        <span className="hotel-room-type-summary-name">{roomType.name || "Unnamed room"}</span>
+        <span className="hotel-room-type-summary-price">
+          {roomType.currency} {roomType.priceAmount}
+          <span className="hotel-room-type-summary-unit">/ night</span>
+        </span>
+        <span className="hotel-room-type-summary-capacity">{roomType.capacity} guests</span>
+      </div>
+    </button>
+  );
+}
+
 export function HotelProfilePanel() {
   const [profile, setProfile] = useState<HotelProfile | null>(null);
   const [name, setName] = useState("");
@@ -279,6 +302,7 @@ export function HotelProfilePanel() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [addingRoomType, setAddingRoomType] = useState(false);
+  const [editingRoomTypeId, setEditingRoomTypeId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const res = await api.fetchProfile();
@@ -294,6 +318,12 @@ export function HotelProfilePanel() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (editingRoomTypeId && !profile?.roomTypes.some((r) => r.id === editingRoomTypeId)) {
+      setEditingRoomTypeId(null);
+    }
+  }, [editingRoomTypeId, profile]);
 
   async function saveProfile() {
     setSaving(true);
@@ -315,9 +345,12 @@ export function HotelProfilePanel() {
 
   async function addRoomType() {
     setAddingRoomType(true);
-    await api.addRoomType(EMPTY_ROOM_TYPE);
+    const res = await api.addRoomType(EMPTY_ROOM_TYPE);
     setAddingRoomType(false);
     await refresh();
+    if (res.code === 0) {
+      setEditingRoomTypeId(res.data.id);
+    }
   }
 
   async function addPerk(name: string) {
@@ -407,23 +440,50 @@ export function HotelProfilePanel() {
         )}
       </div>
 
-      <div className="escalation-section">
+      <div className="escalation-section hotel-room-types-section">
         <h3>Room types</h3>
-        {profile.roomTypes.length === 0 ? (
+        {editingRoomTypeId ? (
+          <div className="hotel-room-type-editor">
+            <div className="hotel-room-type-editor-header">
+              <button
+                type="button"
+                className="hotel-room-type-editor-back"
+                onClick={() => setEditingRoomTypeId(null)}
+              >
+                ← Back to room types
+              </button>
+            </div>
+            {(() => {
+              const roomType = profile.roomTypes.find((r) => r.id === editingRoomTypeId);
+              if (!roomType) return null;
+              return (
+                <RoomTypeCard
+                  roomType={roomType}
+                  onSave={(v) => saveRoomType(roomType.id, v)}
+                  onDelete={() => deleteRoomType(roomType.id)}
+                />
+              );
+            })()}
+          </div>
+        ) : profile.roomTypes.length === 0 ? (
           <p className="coord-empty">No room types yet — add one so guests have something to book.</p>
         ) : (
-          profile.roomTypes.map((r) => (
-            <RoomTypeCard
-              key={r.id}
-              roomType={r}
-              onSave={(v) => saveRoomType(r.id, v)}
-              onDelete={() => deleteRoomType(r.id)}
-            />
-          ))
+          <div className="hotel-room-type-grid">
+            {profile.roomTypes.map((r) => (
+              <RoomTypeSummaryCard key={r.id} roomType={r} onClick={() => setEditingRoomTypeId(r.id)} />
+            ))}
+          </div>
         )}
-        <button type="button" className="coord-btn-secondary" disabled={addingRoomType} onClick={() => void addRoomType()}>
-          {addingRoomType ? "Adding…" : "+ Add room type"}
-        </button>
+        {!editingRoomTypeId && (
+          <button
+            type="button"
+            className="coord-btn-secondary"
+            disabled={addingRoomType}
+            onClick={() => void addRoomType()}
+          >
+            {addingRoomType ? "Adding…" : "+ Add room type"}
+          </button>
+        )}
       </div>
     </div>
   );
