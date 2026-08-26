@@ -42,3 +42,4 @@ obj/
 .DS_Store
 .idea/
 .vscode/
+.zcode/
