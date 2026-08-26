@@ -11,6 +11,12 @@ namespace TravelDisruptionAgent.Api.Features.Handoff;
 /// FileSystemWatcher 在部分部署环境(比如某些 Docker 挂载卷)不保证一定触发，所以还留一道
 /// 5 分钟兜底轮询，两条触发路径最终都调同一个 IngestAsync。
 ///
+/// detect/output 目录第一次出现是在 detect 那边真正跑起来、第一次写文件的那一刻——如果
+/// backend 启动得比它早，目录当时还不存在，watcher 建不起来。这种情况不是"直接放弃、
+/// 永远靠 5 分钟轮询、除非重启 backend"：下面用一个更短的重试间隔持续尝试重建 watcher，
+/// 直到目录出现、真正挂上为止，挂上之后才转成慢速兜底轮询——不用手动重启 backend 去"发现"
+/// detect 已经跑过了。
+///
 /// disruption_event 一行落一条 Disruption；disruption_event_id 那些行按 booking_id
 /// （detect 现在直接查真实 travel_disruption 库拿到的真 Guid，不是外部系统的占位符）分组，
 /// 交给 IDisruptionService.NotifyCandidatesAsync 走一遍跟协调员手动点"Notify guests"完全一样的
@@ -19,6 +25,7 @@ namespace TravelDisruptionAgent.Api.Features.Handoff;
 public class HandoffIngestJob(IServiceScopeFactory scopeFactory, ILogger<HandoffIngestJob> logger) : BackgroundService
 {
     private static readonly TimeSpan FallbackInterval = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan WatcherRetryInterval = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan DebounceDelay = TimeSpan.FromMilliseconds(300);
 
     private readonly SemaphoreSlim ingestLock = new(1, 1);
@@ -35,19 +42,24 @@ public class HandoffIngestJob(IServiceScopeFactory scopeFactory, ILogger<Handoff
 
         await RunIngestSafelyAsync(path, stoppingToken);
 
-        using var watcher = TryCreateWatcher(path);
+        var watcher = TryCreateWatcher(path);
 
         try
         {
             while (!stoppingToken.IsCancellationRequested)
             {
-                await Task.Delay(FallbackInterval, stoppingToken);
+                await Task.Delay(watcher is null ? WatcherRetryInterval : FallbackInterval, stoppingToken);
+                watcher ??= TryCreateWatcher(path);
                 await RunIngestSafelyAsync(path, stoppingToken);
             }
         }
         catch (OperationCanceledException)
         {
             // 正常停机
+        }
+        finally
+        {
+            watcher?.Dispose();
         }
     }
 
@@ -58,8 +70,8 @@ public class HandoffIngestJob(IServiceScopeFactory scopeFactory, ILogger<Handoff
         if (dir is null || !Directory.Exists(dir))
         {
             // detect/output 目录还没出现(比如本地没拉 detect/ 或者管线还没跑过一次)——
-            // FileSystemWatcher 建不到一个不存在的目录，靠上面的 5 分钟兜底轮询自己发现文件出现。
-            logger.LogInformation("Handoff directory {Dir} doesn't exist yet, relying on fallback poll", dir);
+            // FileSystemWatcher 建不到一个不存在的目录，先靠 15 秒间隔重试，目录一出现就补上。
+            logger.LogInformation("Handoff directory {Dir} doesn't exist yet, will retry watcher setup every {Interval}", dir, WatcherRetryInterval);
             return null;
         }
 

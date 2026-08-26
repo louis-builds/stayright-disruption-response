@@ -267,6 +267,11 @@
   color: #9fb0bf;
 }
 
+.coord-row-meta-warn {
+  color: #b8703f;
+  font-weight: 600;
+}
+
 .coord-row-actions {
   display: flex;
   gap: 0.6rem;

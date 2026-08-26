@@ -222,6 +222,7 @@ export function GuestHomePage() {
                         {c.checkIn} → {c.checkOut}
                       </p>
                     )}
+                    <p className="todo-created">{formatDate(c.createdAt)}</p>
                   </li>
                 );
               })}

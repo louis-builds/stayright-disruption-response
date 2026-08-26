@@ -160,8 +160,13 @@ public class CoordinatorService(ICoordinatorRepository repo, IEmailService email
             var guestSuccess = true;
             try
             {
+                var caseLink = CaseEmailLinks.BuildCaseLink(caseId);
+                var htmlBody = EmailTemplate.Build("Your case has been resolved", $"""
+                    <p>Your case for {System.Net.WebUtility.HtmlEncode(c.Booking!.Hotel?.Name)} has been resolved: {System.Net.WebUtility.HtmlEncode(request.ResultSummary)}</p>
+                    {EmailTemplate.Button(caseLink, "View this case")}
+                    """);
                 await email.SendEmailAsync(guest.Email, "Your case has been resolved",
-                    $"Your case for {c.Booking!.Hotel?.Name} has been resolved: {request.ResultSummary}\n\nView this case: {CaseEmailLinks.BuildCaseLink(caseId)}", ct);
+                    $"Your case for {c.Booking!.Hotel?.Name} has been resolved: {request.ResultSummary}\n\nView this case: {caseLink}", ct, htmlBody);
             }
             catch
             {
@@ -207,8 +212,13 @@ public class CoordinatorService(ICoordinatorRepository repo, IEmailService email
         {
             try
             {
-                var body = n.CaseId is { } cid ? $"{n.Body}\n\nView this case: {CaseEmailLinks.BuildCaseLink(cid)}" : n.Body;
-                await email.SendEmailAsync(recipient.Email, n.Title, body, ct);
+                var caseLink = n.CaseId is { } cid ? CaseEmailLinks.BuildCaseLink(cid) : null;
+                var body = caseLink is null ? n.Body : $"{n.Body}\n\nView this case: {caseLink}";
+                var htmlBody = EmailTemplate.Build(n.Title, $"""
+                    <p>{System.Net.WebUtility.HtmlEncode(n.Body)}</p>
+                    {(caseLink is null ? "" : EmailTemplate.Button(caseLink, "View this case"))}
+                    """);
+                await email.SendEmailAsync(recipient.Email, n.Title, body, ct, htmlBody);
             }
             catch
             {

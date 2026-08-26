@@ -111,6 +111,7 @@ function CustomOptionModal({ confirmationNo, perks, onCancel, onConfirm }: {
 }) {
   const [title, setTitle] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
+  const [submitting, setSubmitting] = useState(false);
 
   function toggle(name: string) {
     setSelected((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]));
@@ -126,11 +127,19 @@ function CustomOptionModal({ confirmationNo, perks, onCancel, onConfirm }: {
         </label>
         <PerkCheckboxes perks={perks} selected={selected} onToggle={toggle} />
         <div className="coord-modal-actions">
-          <button type="button" className="coord-btn-secondary" onClick={onCancel}>
+          <button type="button" className="coord-btn-secondary" onClick={onCancel} disabled={submitting}>
             Cancel
           </button>
-          <button type="button" className="coord-btn-primary" disabled={!title.trim()} onClick={() => onConfirm(title.trim(), selected)}>
-            Offer option
+          <button
+            type="button"
+            className="coord-btn-primary"
+            disabled={!title.trim() || submitting}
+            onClick={() => {
+              setSubmitting(true);
+              onConfirm(title.trim(), selected);
+            }}
+          >
+            {submitting ? "Offering…" : "Offer option"}
           </button>
         </div>
       </div>
@@ -238,23 +247,55 @@ export function HotelHomePage() {
 
   const isTaskTab = tab === "todo" || tab === "done";
 
-  const filteredPendingInquiries = pendingInquiries
-    .filter((i) => matchesHotelFilter(taskFilter, i.confirmationNo, i.guestNickname, i.disruptionTitle))
-    .sort((a, b) => Number(b.overdue) - Number(a.overdue));
-  const filteredPendingOptions = pendingOptions
-    .filter((o) => matchesHotelFilter(taskFilter, o.confirmationNo, o.guestNickname, o.optionType))
-    .sort((a, b) => Number(b.isReturningGuest) - Number(a.isReturningGuest) || a.selectedSince.localeCompare(b.selectedSince));
-  const filteredDoneInquiries = doneInquiries
-    .filter((i) => matchesHotelFilter(taskFilter, i.confirmationNo, i.guestNickname, i.disruptionTitle, i.status))
-    .sort((a, b) => (b.respondedAt ?? "").localeCompare(a.respondedAt ?? ""));
-  const filteredDoneOptions = doneOptions
-    .filter((o) => matchesHotelFilter(taskFilter, o.confirmationNo, o.guestNickname, o.optionType, o.availability))
-    .sort((a, b) => b.selectedSince.localeCompare(a.selectedSince));
+  // 合并展示：跟下面 Done 列表同理——酒店只关心"我现在要处理哪些请求"，不关心背后是
+  // 延期请求(以前叫 H1)还是候补方案(以前叫 H2)。分两块列表容易让人以为漏了数据。
+  type TodoItem = { kind: "inquiry"; item: InquiryItem } | { kind: "option"; item: SelectedOptionItem };
+  const todoItems: TodoItem[] = [
+    ...pendingInquiries.map((item): TodoItem => ({ kind: "inquiry", item })),
+    ...pendingOptions.map((item): TodoItem => ({ kind: "option", item })),
+  ]
+    .filter((d) =>
+      d.kind === "inquiry"
+        ? matchesHotelFilter(taskFilter, d.item.confirmationNo, d.item.guestNickname, d.item.disruptionTitle)
+        : matchesHotelFilter(taskFilter, d.item.confirmationNo, d.item.guestNickname, d.item.optionType),
+    )
+    .sort((a, b) => {
+      const aOverdue = a.kind === "inquiry" && a.item.overdue;
+      const bOverdue = b.kind === "inquiry" && b.item.overdue;
+      if (aOverdue !== bOverdue) return aOverdue ? -1 : 1;
+      if (a.item.isReturningGuest !== b.item.isReturningGuest) return a.item.isReturningGuest ? -1 : 1;
+      const aTime = a.kind === "inquiry" ? a.item.requestedAt : a.item.selectedSince;
+      const bTime = b.kind === "inquiry" ? b.item.requestedAt : b.item.selectedSince;
+      return aTime.localeCompare(bTime);
+    });
 
-  const pendingInquiriesPage = usePagination(filteredPendingInquiries);
-  const pendingOptionsPage = usePagination(filteredPendingOptions);
-  const doneInquiriesPage = usePagination(filteredDoneInquiries);
-  const doneOptionsPage = usePagination(filteredDoneOptions);
+  // 合并展示：酒店只关心"我处理过哪些客人请求"，不关心背后是延期请求(H1)还是候补方案(H2)——
+  // 分开两块列表反而容易让人以为漏了数据(酒店提前批准过的延期方案客人选中后自动生效，
+  // H2那块永远不会出现它，看着像是"处理记录消失了")。合并成一条按时间排序的历史。
+  const doneItems = [
+    ...doneInquiries.map((i) => ({
+      id: i.id, confirmationNo: i.confirmationNo, guestNickname: i.guestNickname,
+      isReturningGuest: i.isReturningGuest, isHighValueGuest: i.isHighValueGuest,
+      label: i.disruptionTitle, statusTag: i.status === "accepted" ? "accepted" : "rejected",
+      timestamp: i.respondedAt ?? "", reason: i.status === "rejected" ? i.rejectReason : null,
+      // 酒店点了Accept之后案子还会继续走，H1这条请求本身的status永远停在accepted不会变——
+      // 靠这个字段告诉酒店客人最终有没有真的留下，不然它可能还在按原计划留房。
+      finalOutcome:
+        i.status === "accepted" && i.finalOutcome === "moved" ? "Guest moved to another hotel" : null,
+    })),
+    ...doneOptions.map((o) => ({
+      id: o.optionId, confirmationNo: o.confirmationNo, guestNickname: o.guestNickname,
+      isReturningGuest: o.isReturningGuest, isHighValueGuest: o.isHighValueGuest,
+      label: o.optionType, statusTag: o.availability === "available" ? "confirmed" : "declined",
+      timestamp: o.selectedSince, reason: o.availability === "unavailable" ? o.unavailableReason : null,
+      finalOutcome: null as string | null,
+    })),
+  ]
+    .filter((d) => matchesHotelFilter(taskFilter, d.confirmationNo, d.guestNickname, d.label, d.statusTag))
+    .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+
+  const todoPage = usePagination(todoItems);
+  const donePage = usePagination(doneItems);
 
   const todoStats = useMemo(
     () => ({
@@ -272,10 +313,10 @@ export function HotelHomePage() {
     const availableCount = doneOptions.filter((o) => o.availability === "available").length;
     const unavailableCount = doneOptions.filter((o) => o.availability === "unavailable").length;
     const outcomeEntries: [string, number][] = [
-      ["H1 accepted", acceptedCount],
-      ["H1 rejected", rejectedCount],
-      ["H2 confirmed", availableCount],
-      ["H2 declined", unavailableCount],
+      ["Deferral accepted", acceptedCount],
+      ["Deferral rejected", rejectedCount],
+      ["Selection confirmed", availableCount],
+      ["Selection declined", unavailableCount],
     ];
     const byOutcome = outcomeEntries.filter(([, count]) => count > 0);
     const total = acceptedCount + rejectedCount + availableCount + unavailableCount;
@@ -326,7 +367,7 @@ export function HotelHomePage() {
           {tab === "todo" && (
             <div className="coord-queue-stats">
               <div className={`coord-stat-card ${todoStats.overdueCount > 0 ? "coord-stat-card-warn" : ""}`}>
-                <span className="coord-stat-label">Disruption requests (H1)</span>
+                <span className="coord-stat-label">Disruption requests</span>
                 <span className="coord-stat-value">{todoStats.h1Total}</span>
                 <span className="coord-stat-sub">
                   {todoStats.overdueCount > 0 && <span className="hotel-overdue-dot" aria-hidden="true" />}
@@ -334,7 +375,7 @@ export function HotelHomePage() {
                 </span>
               </div>
               <div className="coord-stat-card">
-                <span className="coord-stat-label">Guest selections (H2)</span>
+                <span className="coord-stat-label">Guest selections</span>
                 <span className="coord-stat-value">{todoStats.h2Total}</span>
                 <span className="coord-stat-sub">awaiting hotel confirmation</span>
               </div>
@@ -354,7 +395,7 @@ export function HotelHomePage() {
               </span>
               <p className="hotel-caught-up-title">You're all caught up</p>
               <p className="hotel-caught-up-body">
-                No pending disruption deferral requests (H1) or guest rebooking selections (H2) right now. New requests
+                No pending disruption deferral requests or guest rebooking selections right now. New requests
                 will show up here as soon as a disruption affects one of your bookings or a guest confirms a plan.
               </p>
               {profileSnapshot && (
@@ -376,104 +417,104 @@ export function HotelHomePage() {
             </div>
           ) : tab === "todo" ? (
             <>
-              <h3>H1 — Disruption deferral requests</h3>
-              {filteredPendingInquiries.length === 0 ? (
-                <p className="coord-empty">No pending disruption requests.</p>
-              ) : (
-                <div className="coord-table" style={{ marginBottom: "1.2rem" }}>
-                  {pendingInquiriesPage.paged.map((i) => (
-                    <div key={i.id} className={`coord-row ${i.overdue ? "coord-row-overdue" : ""}`}>
-                      <div className="coord-row-main">
-                        <p className="coord-row-title">
-                          <span className="coord-row-conf">{i.confirmationNo}</span>
-                          <span className="coord-row-conf">{i.guestNickname}</span>
-                          {i.isReturningGuest && <span className="tag tag-status-returning">returning</span>}
-                          {i.isHighValueGuest && <span className="tag tag-status-vip">high value</span>}
-                        </p>
-                        <p className="coord-row-sub">
-                          {i.disruptionTitle} · {i.roomTypeName} · {i.checkIn} → {i.checkOut}
-                        </p>
-                        {i.overdue && <p className="coord-row-meta">overdue — please respond soon</p>}
-                      </div>
-                      <div className="coord-row-actions">
-                        <button type="button" className="coord-btn-link" disabled={busyId === i.id} onClick={() => void confirmInquiry(i.id)}>
-                          {busyId === i.id ? "Confirming…" : "Confirm deferral"}
-                        </button>
-                        <button
-                          type="button"
-                          className="coord-btn-link"
-                          onClick={() => setCustomOptionTarget({ caseId: i.caseId, confirmationNo: i.confirmationNo })}
-                        >
-                          + Offer custom option
-                        </button>
-                        <button
-                          type="button"
-                          className="coord-btn-link coord-btn-danger"
-                          onClick={() => setRejectTarget({ kind: "inquiry", id: i.id, label: i.confirmationNo })}
-                        >
-                          Reject
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <Pagination page={pendingInquiriesPage.page} totalPages={pendingInquiriesPage.totalPages} onChange={pendingInquiriesPage.setPage} />
-
-              <h3>H2 — Guest selected a rebooking plan</h3>
-              {filteredPendingOptions.length === 0 ? (
-                <p className="coord-empty">No pending guest selections.</p>
+              <h3>Pending requests</h3>
+              {todoItems.length === 0 ? (
+                <p className="coord-empty">No pending requests.</p>
               ) : (
                 <div className="coord-table">
-                  {pendingOptionsPage.paged.map((o) => {
-                    const payload = parsePayload(o.payloadJson);
-                    return (
-                      <div key={o.optionId} className="coord-row">
+                  {todoPage.paged.map((d) =>
+                    d.kind === "inquiry" ? (
+                      <div key={`inq-${d.item.id}`} className={`coord-row ${d.item.overdue ? "coord-row-overdue" : ""}`}>
                         <div className="coord-row-main">
                           <p className="coord-row-title">
-                            <span className="coord-row-conf">{o.confirmationNo}</span>
-                            <span className="coord-row-conf">{o.guestNickname}</span>
-                            {o.isReturningGuest && <span className="tag tag-status-returning">returning</span>}
-                            {o.isHighValueGuest && <span className="tag tag-status-vip">high value</span>}
+                            <span className="coord-row-conf">{d.item.confirmationNo}</span>
+                            <span className="coord-row-conf">{d.item.guestNickname}</span>
+                            {d.item.isReturningGuest && <span className="tag tag-status-returning">returning</span>}
+                            {d.item.isHighValueGuest && <span className="tag tag-status-vip">high value</span>}
                           </p>
                           <p className="coord-row-sub">
-                            {o.optionType}
-                            {payload.room_type ? ` · ${payload.room_type}` : ""}
+                            {d.item.disruptionTitle} · {d.item.roomTypeName} · {d.item.checkIn} → {d.item.checkOut}
                           </p>
+                          {d.item.overdue && <p className="coord-row-meta">overdue — please respond soon</p>}
                         </div>
                         <div className="coord-row-actions">
                           <button
                             type="button"
                             className="coord-btn-link"
-                            disabled={busyId === o.optionId}
-                            onClick={() => void confirmOption(o.optionId)}
+                            disabled={busyId === d.item.id}
+                            onClick={() => void confirmInquiry(d.item.id)}
                           >
-                            {busyId === o.optionId ? "Confirming…" : "Confirm availability"}
-                          </button>
-                          <button type="button" className="coord-btn-link" onClick={() => setPerksTarget(o)}>
-                            Add perks{o.perkNames.length > 0 ? ` (${o.perkNames.length})` : ""}
+                            {busyId === d.item.id ? "Confirming…" : "Confirm deferral"}
                           </button>
                           <button
                             type="button"
                             className="coord-btn-link"
-                            onClick={() => setCustomOptionTarget({ caseId: o.caseId, confirmationNo: o.confirmationNo })}
+                            onClick={() => setCustomOptionTarget({ caseId: d.item.caseId, confirmationNo: d.item.confirmationNo })}
                           >
                             + Offer custom option
                           </button>
                           <button
                             type="button"
                             className="coord-btn-link coord-btn-danger"
-                            onClick={() => setRejectTarget({ kind: "option", id: o.optionId, label: o.confirmationNo })}
+                            onClick={() => setRejectTarget({ kind: "inquiry", id: d.item.id, label: d.item.confirmationNo })}
                           >
                             Reject
                           </button>
                         </div>
                       </div>
-                    );
-                  })}
+                    ) : (
+                      (() => {
+                        const o = d.item;
+                        const payload = parsePayload(o.payloadJson);
+                        return (
+                          <div key={`opt-${o.optionId}`} className="coord-row">
+                            <div className="coord-row-main">
+                              <p className="coord-row-title">
+                                <span className="coord-row-conf">{o.confirmationNo}</span>
+                                <span className="coord-row-conf">{o.guestNickname}</span>
+                                {o.isReturningGuest && <span className="tag tag-status-returning">returning</span>}
+                                {o.isHighValueGuest && <span className="tag tag-status-vip">high value</span>}
+                              </p>
+                              <p className="coord-row-sub">
+                                {o.optionType}
+                                {payload.room_type ? ` · ${payload.room_type}` : ""}
+                              </p>
+                            </div>
+                            <div className="coord-row-actions">
+                              <button
+                                type="button"
+                                className="coord-btn-link"
+                                disabled={busyId === o.optionId}
+                                onClick={() => void confirmOption(o.optionId)}
+                              >
+                                {busyId === o.optionId ? "Confirming…" : "Confirm availability"}
+                              </button>
+                              <button type="button" className="coord-btn-link" onClick={() => setPerksTarget(o)}>
+                                Add perks{o.perkNames.length > 0 ? ` (${o.perkNames.length})` : ""}
+                              </button>
+                              <button
+                                type="button"
+                                className="coord-btn-link"
+                                onClick={() => setCustomOptionTarget({ caseId: o.caseId, confirmationNo: o.confirmationNo })}
+                              >
+                                + Offer custom option
+                              </button>
+                              <button
+                                type="button"
+                                className="coord-btn-link coord-btn-danger"
+                                onClick={() => setRejectTarget({ kind: "option", id: o.optionId, label: o.confirmationNo })}
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })()
+                    ),
+                  )}
                 </div>
               )}
-              <Pagination page={pendingOptionsPage.page} totalPages={pendingOptionsPage.totalPages} onChange={pendingOptionsPage.setPage} />
+              <Pagination page={todoPage.page} totalPages={todoPage.totalPages} onChange={todoPage.setPage} />
             </>
           ) : tab === "done" ? (
             <>
@@ -540,69 +581,37 @@ export function HotelHomePage() {
                 </div>
               ) : (
                 <>
-              <h3>Answered disruption requests</h3>
-              {filteredDoneInquiries.length === 0 ? (
+              <h3>Processed requests</h3>
+              {doneItems.length === 0 ? (
                 <p className="coord-empty">
-                  {taskFilter.trim() ? "No answered requests match your filter." : "No answered requests yet."}
-                </p>
-              ) : (
-                <div className="coord-table" style={{ marginBottom: "1.2rem" }}>
-                  {doneInquiriesPage.paged.map((i) => (
-                    <div key={i.id} className="coord-row">
-                      <div className="coord-row-main">
-                        <p className="coord-row-title">
-                          <span className="coord-row-conf">{i.confirmationNo}</span>
-                          <span className="coord-row-conf">{i.guestNickname}</span>
-                          {i.isReturningGuest && <span className="tag tag-status-returning">returning</span>}
-                          {i.isHighValueGuest && <span className="tag tag-status-vip">high value</span>}
-                        </p>
-                        <p className="coord-row-sub">
-                          {i.disruptionTitle} ·{" "}
-                          <span className={`tag tag-status-${i.status === "accepted" ? "normal" : "overdue"}`}>{i.status}</span>
-                          {timeAgo(i.respondedAt) && <span className="coord-row-meta"> · {timeAgo(i.respondedAt)}</span>}
-                        </p>
-                        {i.status === "rejected" && i.rejectReason && (
-                          <p className="coord-row-meta">Reason: {i.rejectReason}</p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <Pagination page={doneInquiriesPage.page} totalPages={doneInquiriesPage.totalPages} onChange={doneInquiriesPage.setPage} />
-
-              <h3>Resolved guest selections</h3>
-              {filteredDoneOptions.length === 0 ? (
-                <p className="coord-empty">
-                  {taskFilter.trim() ? "No resolved selections match your filter." : "No resolved selections yet."}
+                  {taskFilter.trim() ? "No processed requests match your filter." : "No processed requests yet."}
                 </p>
               ) : (
                 <div className="coord-table">
-                  {doneOptionsPage.paged.map((o) => (
-                    <div key={o.optionId} className="coord-row">
+                  {donePage.paged.map((d) => (
+                    <div key={d.id} className="coord-row">
                       <div className="coord-row-main">
                         <p className="coord-row-title">
-                          <span className="coord-row-conf">{o.confirmationNo}</span>
-                          <span className="coord-row-conf">{o.guestNickname}</span>
-                          {o.isReturningGuest && <span className="tag tag-status-returning">returning</span>}
-                          {o.isHighValueGuest && <span className="tag tag-status-vip">high value</span>}
+                          <span className="coord-row-conf">{d.confirmationNo}</span>
+                          <span className="coord-row-conf">{d.guestNickname}</span>
+                          {d.isReturningGuest && <span className="tag tag-status-returning">returning</span>}
+                          {d.isHighValueGuest && <span className="tag tag-status-vip">high value</span>}
                         </p>
                         <p className="coord-row-sub">
-                          {o.optionType} ·{" "}
-                          <span className={`tag tag-status-${o.availability === "available" ? "normal" : "overdue"}`}>
-                            {o.availability === "available" ? "confirmed" : "declined"}
+                          {d.label} ·{" "}
+                          <span className={`tag tag-status-${d.statusTag === "accepted" || d.statusTag === "confirmed" ? "normal" : "overdue"}`}>
+                            {d.statusTag}
                           </span>
-                          {timeAgo(o.selectedSince) && <span className="coord-row-meta"> · {timeAgo(o.selectedSince)}</span>}
+                          {timeAgo(d.timestamp) && <span className="coord-row-meta"> · {timeAgo(d.timestamp)}</span>}
                         </p>
-                        {o.availability === "unavailable" && o.unavailableReason && (
-                          <p className="coord-row-meta">Reason: {o.unavailableReason}</p>
-                        )}
+                        {d.reason && <p className="coord-row-meta">Reason: {d.reason}</p>}
+                        {d.finalOutcome && <p className="coord-row-meta coord-row-meta-warn">{d.finalOutcome}</p>}
                       </div>
                     </div>
                   ))}
                 </div>
               )}
-              <Pagination page={doneOptionsPage.page} totalPages={doneOptionsPage.totalPages} onChange={doneOptionsPage.setPage} />
+              <Pagination page={donePage.page} totalPages={donePage.totalPages} onChange={donePage.setPage} />
                 </>
               )}
             </>

@@ -54,6 +54,9 @@ public class DisruptionRepository(AppDbContext db) : IDisruptionRepository
     public Task<Guid?> FindHotelAccountUserIdAsync(Guid hotelId, CancellationToken ct = default) =>
         db.Users.Where(u => u.Role == "hotel" && u.HotelId == hotelId).Select(u => (Guid?)u.Id).FirstOrDefaultAsync(ct);
 
+    public Task<string?> FindHotelAccountEmailAsync(Guid hotelId, CancellationToken ct = default) =>
+        db.Users.Where(u => u.Role == "hotel" && u.HotelId == hotelId).Select(u => u.Email).FirstOrDefaultAsync(ct);
+
     // 平台口径的高价值客人：近12个月内下单≥2次且累计消费≥NZD 1000，不分酒店——跟 HotelRepository
     // 的"这家酒店的回头客"是两个不同概念，见 CoordinatorRepository 里同名方法的注释。
     public async Task<HashSet<Guid>> GetHighValueGuestIdsAsync(IEnumerable<Guid> guestUserIds, CancellationToken ct = default)

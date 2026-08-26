@@ -18,6 +18,7 @@ public interface ICaseRepository
     Task UnselectOtherOptionsAsync(Guid caseId, Guid keepOptionId, CancellationToken ct = default);
     Task<Hotel?> FindHotelByNameAsync(string name, CancellationToken ct = default);
     Task<Guid?> FindHotelAccountUserIdAsync(Guid hotelId, CancellationToken ct = default);
+    Task<string?> FindHotelAccountEmailAsync(Guid hotelId, CancellationToken ct = default);
     Task<PagedResult<Message>> ListMessagesAsync(Guid caseId, string thread, int page, int pageSize, CancellationToken ct = default);
     Task AddMessageAsync(Message message, CancellationToken ct = default);
     Task AddNotificationAsync(Notification notification, CancellationToken ct = default);
