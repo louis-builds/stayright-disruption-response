@@ -20,8 +20,8 @@ from src.detect.open_meteo import (
     Classification,
     Location,
     build_disruption_event,
-    classify,
-    fetch_weather,
+    fetch_forecast,
+    find_risky_window,
 )
 from src.detect.models import DisruptionEvent
 
@@ -35,13 +35,15 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     ingested = 0
 
     for location in DEFAULT_LOCATIONS:
-        raw_payload = fetch_weather(location.lat, location.lng)
-        classification = classify(raw_payload)
-        if not classification.is_risky:
+        raw_forecast = fetch_forecast(location.lat, location.lng)
+        window = find_risky_window(raw_forecast)
+        if window is None:
             continue
 
-        disruption_event = build_disruption_event(location, raw_payload, classification, detected_at=now)
-        ingest_disruption(disruption_event, location, classification)
+        disruption_event = build_disruption_event(
+            location, window.classification, window.start, window.end, window.peak_reading, detected_at=now
+        )
+        ingest_disruption(disruption_event, location, window.classification)
         ingested += 1
 
     logger.info('{"evt": "weather_collector.done", "ingested": %d}', ingested)

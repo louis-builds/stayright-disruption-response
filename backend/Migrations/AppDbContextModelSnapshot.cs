@@ -302,6 +302,26 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("end_at_or_window");
 
+                    b.Property<string>("EventSubtype")
+                        .HasColumnType("text")
+                        .HasColumnName("event_subtype");
+
+                    b.Property<double?>("Lat")
+                        .HasColumnType("double precision")
+                        .HasColumnName("lat");
+
+                    b.Property<double?>("Lng")
+                        .HasColumnType("double precision")
+                        .HasColumnName("lng");
+
+                    b.Property<double?>("RadiusKm")
+                        .HasColumnType("double precision")
+                        .HasColumnName("radius_km");
+
+                    b.Property<string>("RawSignalJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("raw_signal_json");
+
                     b.Property<string>("RawSignalText")
                         .IsRequired()
                         .HasColumnType("text")
@@ -311,6 +331,10 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("region");
+
+                    b.Property<string>("Severity")
+                        .HasColumnType("text")
+                        .HasColumnName("severity");
 
                     b.Property<DateTimeOffset>("StartAt")
                         .HasColumnType("timestamp with time zone")
@@ -417,6 +441,45 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .HasDatabaseName("ix_disruption_window_audits_disruption_id");
 
                     b.ToTable("disruption_window_audits", (string)null);
+                });
+
+            modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.FaqQuestion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("AskCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("ask_count");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.PrimitiveCollection<float[]>("Embedding")
+                        .IsRequired()
+                        .HasColumnType("real[]")
+                        .HasColumnName("embedding");
+
+                    b.Property<DateTimeOffset>("LastAskedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_asked_at");
+
+                    b.Property<string>("QuestionText")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("question_text");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_faq_questions");
+
+                    b.ToTable("faq_questions", (string)null);
                 });
 
             modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.GoldenTest", b =>
@@ -1113,6 +1176,10 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("FaqProcessedThrough")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("faq_processed_through");
 
                     b.Property<bool>("LowConfidenceEscalationEnabled")
                         .HasColumnType("boolean")

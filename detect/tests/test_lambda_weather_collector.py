@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from src.detect.open_meteo import DEFAULT_LOCATIONS, Classification, Location, build_disruption_event
 from src.detect.models import Severity
@@ -6,8 +6,23 @@ from src.runtimes.lambda_weather_collector import handler, ingest_disruption
 
 QUEENSTOWN = DEFAULT_LOCATIONS[0]
 
-CALM_PAYLOAD = {"current": {"wind_gusts_10m": 5, "precipitation": 0, "snowfall": 0}}
-STORM_PAYLOAD = {"current": {"wind_gusts_10m": 150, "precipitation": 0, "snowfall": 0}}
+STORM_READING = {"wind_gusts_10m": 150, "precipitation": 0, "snowfall": 0}
+
+
+def _hourly_forecast(times, gusts=None, precipitation=None, snowfall=None):
+    n = len(times)
+    return {
+        "hourly": {
+            "time": times,
+            "wind_gusts_10m": gusts or [0] * n,
+            "precipitation": precipitation or [0] * n,
+            "snowfall": snowfall or [0] * n,
+        }
+    }
+
+
+CALM_FORECAST = _hourly_forecast(["2026-08-25T00:00", "2026-08-25T01:00"], gusts=[5, 10])
+STORM_FORECAST = _hourly_forecast(["2026-08-25T00:00", "2026-08-25T01:00"], gusts=[150, 100])
 
 
 def _fake_cfg(key: str) -> str:
@@ -28,8 +43,9 @@ class TestIngestDisruption:
         mock_post.return_value.raise_for_status = mocker.Mock()
 
         now = datetime(2026, 8, 25, tzinfo=timezone.utc)
+        end = now + timedelta(hours=1)
         classification = Classification(True, "storm", Severity.HIGH)
-        event = build_disruption_event(QUEENSTOWN, STORM_PAYLOAD, classification, detected_at=now)
+        event = build_disruption_event(QUEENSTOWN, classification, now, end, STORM_READING, detected_at=now)
 
         ingest_disruption(event, QUEENSTOWN, classification)
 
@@ -50,8 +66,9 @@ class TestIngestDisruption:
         mock_post.return_value.raise_for_status.side_effect = RuntimeError("boom")
 
         now = datetime(2026, 8, 25, tzinfo=timezone.utc)
+        end = now + timedelta(hours=1)
         classification = Classification(True, "storm", Severity.HIGH)
-        event = build_disruption_event(QUEENSTOWN, STORM_PAYLOAD, classification, detected_at=now)
+        event = build_disruption_event(QUEENSTOWN, classification, now, end, STORM_READING, detected_at=now)
 
         try:
             ingest_disruption(event, QUEENSTOWN, classification)
@@ -63,8 +80,8 @@ class TestIngestDisruption:
 class TestHandler:
     def test_skips_locations_with_calm_weather(self, mocker):
         mocker.patch(
-            "src.runtimes.lambda_weather_collector.fetch_weather",
-            return_value=CALM_PAYLOAD,
+            "src.runtimes.lambda_weather_collector.fetch_forecast",
+            return_value=CALM_FORECAST,
         )
         mock_ingest = mocker.patch("src.runtimes.lambda_weather_collector.ingest_disruption")
 
@@ -74,10 +91,10 @@ class TestHandler:
         assert result == {"ingested": 0}
 
     def test_ingests_only_the_risky_locations(self, mocker):
-        def fetch_for(lat: float, lng: float, *, timeout: float = 10.0):
-            return STORM_PAYLOAD if (lat, lng) == (QUEENSTOWN.lat, QUEENSTOWN.lng) else CALM_PAYLOAD
+        def forecast_for(lat: float, lng: float):
+            return STORM_FORECAST if (lat, lng) == (QUEENSTOWN.lat, QUEENSTOWN.lng) else CALM_FORECAST
 
-        mocker.patch("src.runtimes.lambda_weather_collector.fetch_weather", side_effect=fetch_for)
+        mocker.patch("src.runtimes.lambda_weather_collector.fetch_forecast", side_effect=forecast_for)
         mock_ingest = mocker.patch("src.runtimes.lambda_weather_collector.ingest_disruption")
 
         result = handler({}, None)

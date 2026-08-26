@@ -270,37 +270,125 @@
   background: #f1f6fa;
 }
 
+.hotel-room-types-section > .coord-btn-secondary {
+  margin-top: 1rem;
+}
+
+.hotel-room-type-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.hotel-room-type-editor-header {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.hotel-room-type-editor-back {
+  padding: 0;
+  border: none;
+  background: none;
+  color: #2e6f96;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.hotel-room-type-editor-back:hover {
+  color: #1c4d73;
+  text-decoration: underline;
+}
+
+.hotel-room-type-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1rem;
+}
+
+.hotel-room-type-summary {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  border: 1px solid #eef2f6;
+  border-radius: 12px;
+  padding: 0;
+  background: #fbfdfe;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.hotel-room-type-summary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(16, 36, 60, 0.08);
+  border-color: #cbd8e4;
+}
+
+.hotel-room-type-summary:active {
+  transform: scale(0.98);
+}
+
+.hotel-room-type-summary-photo {
+  aspect-ratio: 4 / 3;
+  background: #f0f6fb;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hotel-room-type-summary-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.hotel-room-type-summary-placeholder {
+  font-size: 0.78rem;
+  color: #9fb0bf;
+}
+
+.hotel-room-type-summary-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.7rem;
+}
+
+.hotel-room-type-summary-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #10243c;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hotel-room-type-summary-price {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #2e6f96;
+}
+
+.hotel-room-type-summary-unit {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: #7d93a6;
+}
+
+.hotel-room-type-summary-capacity {
+  font-size: 0.78rem;
+  color: #7d93a6;
+}
+
 @media (max-width: 900px) {
   .hotel-profile-grid {
     grid-template-columns: 1fr;
   }
+
+  .hotel-room-type-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
 }
 
-/* 队列说明文字之前是写死常驻在页面上的一整块，用户反馈这种固定说明不该占屏幕空间——
-   改成原生 <details>，默认折叠，需要时自己点开看。 */
-.hotel-queue-tip-collapsible summary {
-  cursor: pointer;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: #10243c;
-  list-style: none;
-}
-
-.hotel-queue-tip-collapsible summary::-webkit-details-marker {
-  display: none;
-}
-
-.hotel-queue-tip-collapsible summary::before {
-  content: "▸";
-  display: inline-block;
-  margin-right: 0.4rem;
-  transition: transform 0.15s ease;
-}
-
-.hotel-queue-tip-collapsible[open] summary::before {
-  transform: rotate(90deg);
-}
-
-.hotel-queue-tip-collapsible p {
-  margin-top: 0.5rem;
-}

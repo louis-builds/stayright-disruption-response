@@ -9,6 +9,10 @@ export function fetchCase(caseId: string) {
   return apiGet<CaseSummary>(`/api/cases/${caseId}`);
 }
 
+export function fetchTopFaqQuestions() {
+  return apiGet<{ text: string; askCount: number }[]>("/api/faq/top");
+}
+
 interface PagedResult<T> {
   list: T[];
   total: number;

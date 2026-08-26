@@ -124,12 +124,13 @@ function CaseTable({ items, loading, showAssignee, actionable, onOpen, onOptions
           <div className="coord-row-main">
             <div className="coord-row-title">
               <span className="coord-row-conf">{it.confirmationNo}</span>
+              <span className="coord-row-conf">{it.guestNickname}</span>
               <span className={`tag tag-status-${it.priority === "high" ? "warn" : "normal"}`}>{it.priority}</span>
               {it.overdue && <span className="tag tag-status-overdue">overdue</span>}
-              {it.isHighValueGuest && <span className="tag tag-status-vip">returning guest</span>}
+              {it.isHighValueGuest && <span className="tag tag-status-vip">high value</span>}
             </div>
             <p className="coord-row-sub">
-              {it.guestNickname} · {it.disruptionTitle}
+              {it.disruptionTitle}
               {it.escalationReason && ` · ${escalationReasonLabel(it.escalationReason)}`}
             </p>
             <p className="coord-row-meta">
@@ -585,7 +586,7 @@ export function CoordinatorHomePage() {
                   <span className="coord-stat-value">{queueStats.overdueCount}</span>
                 </div>
                 <div className="coord-stat-card">
-                  <span className="coord-stat-label">Returning guests</span>
+                  <span className="coord-stat-label">High value guests</span>
                   <span className="coord-stat-value">{queueStats.highValueCount}</span>
                 </div>
                 <div className="coord-stat-card coord-stat-card-wide coord-queue-reason-card">
@@ -710,7 +711,7 @@ export function CoordinatorHomePage() {
                   <span className="coord-stat-value">{taskStats.overdueCount}</span>
                 </div>
                 <div className="coord-stat-card">
-                  <span className="coord-stat-label">Returning guests</span>
+                  <span className="coord-stat-label">High value guests</span>
                   <span className="coord-stat-value">{taskStats.highValueCount}</span>
                 </div>
                 <div className="coord-stat-card coord-stat-card-wide coord-queue-reason-card">

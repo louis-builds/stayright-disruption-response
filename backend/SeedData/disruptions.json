@@ -1,4 +1,4 @@
 [
-  { "id": "77777777-7777-7777-7777-000000000001", "type": "weather", "title": "Queenstown Snowstorm", "region": "Queenstown", "start_offset_hours": -24, "end_offset_hours": 72, "status": "active", "raw_signal_text": "MetService heavy snow warning for Queenstown region, roads may close intermittently over the next 3 days." },
+  { "id": "77777777-7777-7777-7777-000000000001", "type": "weather", "event_subtype": "storm", "title": "Queenstown Snowstorm", "region": "Queenstown", "severity": "high", "lat": -45.0312, "lng": 168.6626, "radius_km": 30.0, "start_offset_hours": -24, "end_offset_hours": 72, "status": "active", "raw_signal_text": "MetService heavy snow warning for Queenstown region, roads may close intermittently over the next 3 days.", "raw_signal_json": "{\"wind_gusts_kmh\": 150, \"precipitation_mm\": 0, \"snowfall_cm\": 0}" },
   { "id": "77777777-7777-7777-7777-000000000002", "type": "flight", "title": "Auckland Airport Ground Stop", "region": "Auckland", "start_offset_hours": -2, "end_offset_hours": 24, "status": "active", "raw_signal_text": "Auckland Airport ground stop due to a system outage, arriving flights delayed 4+ hours." }
 ]

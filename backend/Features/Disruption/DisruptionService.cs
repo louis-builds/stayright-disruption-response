@@ -23,7 +23,7 @@ public class DisruptionService(
         foreach (var d in list)
         {
             var affected = await repo.CountAffectedAsync(d.Id, ct);
-            result.Add(new DisruptionListItemDto(d.Id, d.Type, d.Title, d.Region, d.StartAt, d.EndAtOrWindow,
+            result.Add(new DisruptionListItemDto(d.Id, d.Type, d.EventSubtype, d.Severity, d.Title, d.Region, d.StartAt, d.EndAtOrWindow,
                 d.Status, affected, d.AssigneeCoordinatorId, Name(d.AssigneeCoordinatorId, names)));
         }
         return result;
@@ -48,8 +48,9 @@ public class DisruptionService(
         var d = await repo.FindByIdAsync(id, ct) ?? throw new DisruptionNotFoundException();
         var affected = await repo.CountAffectedAsync(id, ct);
         var names = await CoordinatorNamesAsync(ct);
-        return new DisruptionDetailDto(d.Id, d.Type, d.Title, d.Region, d.StartAt, d.EndAtOrWindow, d.Status,
-            d.RawSignalText, affected, d.AssigneeCoordinatorId, Name(d.AssigneeCoordinatorId, names));
+        return new DisruptionDetailDto(d.Id, d.Type, d.EventSubtype, d.Severity, d.Title, d.Region,
+            d.Lat, d.Lng, d.RadiusKm, d.StartAt, d.EndAtOrWindow, d.Status,
+            d.RawSignalText, d.RawSignalJson, affected, d.AssigneeCoordinatorId, Name(d.AssigneeCoordinatorId, names));
     }
 
     public async Task AssignAsync(Guid id, Guid toCoordinatorId, CancellationToken ct = default)
