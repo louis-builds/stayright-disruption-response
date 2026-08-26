@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../auth";
 import { useNotifications } from "./useNotifications";
 import "./NotificationBell.css";
 
@@ -16,6 +17,7 @@ function useClickOutside(onOutside: () => void) {
 }
 
 export function NotificationBell() {
+  const { user } = useAuth();
   const { items, unreadCount, markRead } = useNotifications();
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
@@ -27,7 +29,9 @@ export function NotificationBell() {
   async function handleItemClick(id: string, caseId: string | null) {
     await markRead(id);
     setOpen(false);
-    if (caseId) navigate(`/cases/${caseId}`);
+    // /cases/:id 是客人视角的对话页，酒店角色不是这个线程的参与者——点进去只会看到空对话框。
+    // 酒店的通知只是提醒去"My to-dos"处理，点开就该只标记已读，不用跳一个没内容的页面。
+    if (caseId && user?.role !== "hotel") navigate(`/cases/${caseId}`);
   }
 
   return (
@@ -45,7 +49,12 @@ export function NotificationBell() {
       {open && unreadItems.length > 0 && (
         <div className="bell-dropdown">
           {unreadItems.map((n) => (
-            <button key={n.id} className="bell-item bell-item-unread" onClick={() => void handleItemClick(n.id, n.caseId)}>
+            <button
+              key={n.id}
+              className="bell-item bell-item-unread"
+              title={`${n.title}\n${n.body}`}
+              onClick={() => void handleItemClick(n.id, n.caseId)}
+            >
               <span className="bell-item-title">{n.title}</span>
               <span className="bell-item-body">{n.body}</span>
               <span className="bell-item-time">{new Date(n.sentAt).toLocaleString()}</span>

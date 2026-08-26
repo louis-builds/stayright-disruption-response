@@ -212,8 +212,13 @@ public class OptionsAdminService(IOptionsAdminRepository repo, IEmailService ema
         {
             try
             {
+                var caseLink = CaseEmailLinks.BuildCaseLink(caseId);
+                var htmlBody = EmailTemplate.Build("New rebooking options are ready", $"""
+                    <p>We've updated the options for your booking affected by {System.Net.WebUtility.HtmlEncode(c.Disruption?.Title)}. Please check your case conversation to review them.</p>
+                    {EmailTemplate.Button(caseLink, "View this case")}
+                    """);
                 await email.SendEmailAsync(guest.Email, "New rebooking options are ready",
-                    $"We've updated the options for your booking affected by {c.Disruption?.Title}. Please check your case conversation to review them.\n\nView this case: {CaseEmailLinks.BuildCaseLink(caseId)}", ct);
+                    $"We've updated the options for your booking affected by {c.Disruption?.Title}. Please check your case conversation to review them.\n\nView this case: {caseLink}", ct, htmlBody);
             }
             catch
             {

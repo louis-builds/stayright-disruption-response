@@ -326,6 +326,12 @@
   color: #7d93a6;
 }
 
+.todo-created {
+  margin: 0.2rem 0 0;
+  font-size: 0.72rem;
+  color: #9aabb9;
+}
+
 .todo-countdown {
   font-size: 0.68rem;
   font-weight: 600;

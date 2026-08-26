@@ -2,10 +2,13 @@ namespace TravelDisruptionAgent.Api.Features.HotelPortal;
 
 // IsReturningGuest: 在这家酒店本身≥2单(HotelRepository)。IsHighValueGuest: 平台口径,近12个月≥2单且
 // 累计消费≥NZD 1000(CoordinatorRepository/DisruptionRepository 同一套)。两个概念不同,标签颜色也不同。
+// FinalOutcome: 案件结案后，客人最终有没有留在这家酒店("stayed"/"moved")——酒店点了 Accept 之后
+// 案子会继续往下走(客人后续可能选了别的方案换到别家)，H1 这条请求本身的 Status 永远停在
+// accepted 不会变，不看这个字段的话酒店无从知道自己批的方案最终有没有真被用上。还没结案时是 null。
 public record InquiryItemDto(
     Guid Id, Guid CaseId, string ConfirmationNo, string GuestNickname, string DisruptionTitle,
     DateOnly CheckIn, DateOnly CheckOut, string RoomTypeName, string Status, DateTimeOffset RequestedAt, TimeSpan WaitTime, bool Overdue,
-    bool IsReturningGuest, bool IsHighValueGuest, DateTimeOffset? RespondedAt, string? RejectReason);
+    bool IsReturningGuest, bool IsHighValueGuest, DateTimeOffset? RespondedAt, string? RejectReason, string? FinalOutcome);
 
 public record ConfirmInquiryRequest(DateOnly? NewCheckIn, DateOnly? NewCheckOut, string? Note);
 

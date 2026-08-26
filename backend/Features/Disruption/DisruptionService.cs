@@ -6,7 +6,8 @@ using DisruptionEntity = TravelDisruptionAgent.Api.Infrastructure.Data.Entities.
 namespace TravelDisruptionAgent.Api.Features.Disruption;
 
 public class DisruptionService(
-    IDisruptionRepository repo, ICoordinatorRepository coordinatorRepo, ICoordinatorService coordinatorService, IEmailService email)
+    IDisruptionRepository repo, ICoordinatorRepository coordinatorRepo, ICoordinatorService coordinatorService, IEmailService email,
+    ILogger<DisruptionService> logger)
     : IDisruptionService
 {
     private async Task<Dictionary<Guid, string>> CoordinatorNamesAsync(CancellationToken ct) =>
@@ -151,27 +152,59 @@ public class DisruptionService(
                     CaseId = caseEntity.Id, SentAt = now, Success = true, CreatedAt = now, UpdatedAt = now,
                 }, ct);
 
+                var caseLink = CaseEmailLinks.BuildCaseLink(caseEntity.Id);
+                var guestPlainBody =
+                    $"Due to {d.Title}, your booking at {booking.Hotel?.Name} ({booking.ConfirmationNo}) may be affected. " +
+                    $"We're checking with the hotel and will update you shortly.\n\nView this case: {caseLink}";
+                var guestHtmlBody = EmailTemplate.Build("Your booking may be affected", $"""
+                    <p>Due to {System.Net.WebUtility.HtmlEncode(d.Title)}, your booking at
+                    {System.Net.WebUtility.HtmlEncode(booking.Hotel?.Name)} ({System.Net.WebUtility.HtmlEncode(booking.ConfirmationNo)}) may be affected.
+                    We're checking with the hotel and will update you shortly.</p>
+                    {EmailTemplate.Button(caseLink, "View this case")}
+                    """);
                 try
                 {
-                    await email.SendEmailAsync(guest.Email, "Your booking may be affected",
-                        $"Due to {d.Title}, your booking at {booking.Hotel?.Name} ({booking.ConfirmationNo}) may be affected. We're checking with the hotel and will update you shortly.\n\nView this case: {CaseEmailLinks.BuildCaseLink(caseEntity.Id)}", ct);
+                    await email.SendEmailAsync(guest.Email, "Your booking may be affected", guestPlainBody, ct, guestHtmlBody);
                 }
-                catch
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    // ponytail: 邮件失败不回滚已落库的通知记录，跟站内通知本来就该独立存在。
+                    // 邮件失败不回滚已落库的通知记录，跟站内通知本来就该独立存在——但吞掉异常之前
+                    // 之前是彻底不留痕迹，SMTP 真出问题时无从判断是没配置、认证失败还是网络问题。
+                    logger.LogWarning(ex, "Failed to send disruption notice email to {Email}", guest.Email);
                 }
             }
 
             var hotelUserId = await repo.FindHotelAccountUserIdAsync(booking.HotelId, ct);
             if (hotelUserId is not null)
             {
+                var hotelBody = $"Due to {d.Title}, booking {booking.ConfirmationNo} needs your response — check My to-dos.";
                 await repo.AddNotificationAsync(new Notification
                 {
                     Id = Guid.NewGuid(), UserId = hotelUserId.Value, Channel = "in_app", Type = "new_inquiry",
                     Title = "New disruption affects a booking",
-                    Body = $"Due to {d.Title}, booking {booking.ConfirmationNo} needs your response — check My to-dos.",
+                    Body = hotelBody,
                     CaseId = caseEntity.Id, SentAt = now, Success = true, CreatedAt = now, UpdatedAt = now,
                 }, ct);
+
+                var hotelEmail = await repo.FindHotelAccountEmailAsync(booking.HotelId, ct);
+                if (!string.IsNullOrWhiteSpace(hotelEmail))
+                {
+                    // 酒店账号没有案件对话页可看，链接指回酒店自己的待办首页(见 CaseEmailLinks.BuildHotelHomeLink 的注释)。
+                    var hotelHomeLink = CaseEmailLinks.BuildHotelHomeLink();
+                    var hotelHtmlBody = EmailTemplate.Build("New disruption affects a booking", $"""
+                        <p>{System.Net.WebUtility.HtmlEncode(hotelBody)}</p>
+                        {EmailTemplate.Button(hotelHomeLink, "Open your dashboard")}
+                        """);
+                    try
+                    {
+                        await email.SendEmailAsync(hotelEmail, "New disruption affects a booking",
+                            $"{hotelBody}\n\nOpen your dashboard: {hotelHomeLink}", ct, hotelHtmlBody);
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        logger.LogWarning(ex, "Failed to send disruption notice email to {Email}", hotelEmail);
+                    }
+                }
             }
 
             count++;

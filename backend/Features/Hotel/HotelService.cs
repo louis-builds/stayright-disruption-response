@@ -16,6 +16,9 @@ public class HotelService(IHotelRepository repo, ICaseService caseService, IOpti
     {
         var now = DateTimeOffset.UtcNow;
         var guestId = i.Case?.Booking?.GuestUserId;
+        var finalOutcome = i.Case?.Status == "closed"
+            ? (i.Case.Booking?.HotelId == i.HotelId ? "stayed" : "moved")
+            : null;
         return new InquiryItemDto(
             i.Id, i.CaseId, i.Case?.Booking?.ConfirmationNo ?? "", i.Case?.Booking?.GuestUser?.Nickname ?? "",
             i.Case?.Disruption?.Title ?? "", i.Case?.Booking?.CheckIn ?? default, i.Case?.Booking?.CheckOut ?? default,
@@ -23,7 +26,7 @@ public class HotelService(IHotelRepository repo, ICaseService caseService, IOpti
             i.Status == "pending" && now - i.RequestedAt > OverdueThreshold,
             guestId.HasValue && returningGuestIds.Contains(guestId.Value),
             guestId.HasValue && highValueGuestIds.Contains(guestId.Value),
-            i.RespondedAt, i.RejectReason);
+            i.RespondedAt, i.RejectReason, finalOutcome);
     }
 
     public async Task<List<InquiryItemDto>> ListInquiriesAsync(Guid hotelUserId, string? status, CancellationToken ct = default)
@@ -40,6 +43,7 @@ public class HotelService(IHotelRepository repo, ICaseService caseService, IOpti
     {
         var hotelId = await RequireHotelIdAsync(hotelUserId, ct);
         var inquiry = await repo.FindInquiryAsync(inquiryId, hotelId, ct) ?? throw new HotelItemNotFoundException();
+        if (inquiry.Status != "pending") return;
 
         inquiry.Status = "accepted";
         inquiry.RespondedAt = DateTimeOffset.UtcNow;
@@ -62,6 +66,7 @@ public class HotelService(IHotelRepository repo, ICaseService caseService, IOpti
     {
         var hotelId = await RequireHotelIdAsync(hotelUserId, ct);
         var inquiry = await repo.FindInquiryAsync(inquiryId, hotelId, ct) ?? throw new HotelItemNotFoundException();
+        if (inquiry.Status != "pending") return;
 
         inquiry.Status = "rejected";
         inquiry.RejectReason = request.Reason;

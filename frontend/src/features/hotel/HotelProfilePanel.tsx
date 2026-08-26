@@ -189,7 +189,7 @@ function RoomTypeCard({ roomType, onSave, onDelete }: {
 }
 
 /** 权益目录：中断发生后，可以挂到"原房延期"这类方案上(免费早餐/饮品)，或者用来配一个全新的自定义
- * 方案(比如免费升房)——具体挂哪个方案是在酒店工作台的 H1/H2 待办里做的，这里只管维护这份可选名单。 */
+ * 方案(比如免费升房)——具体挂哪个方案是在酒店工作台的待办列表里做的，这里只管维护这份可选名单。 */
 function PerksSection({ perks, onAdd, onDelete }: {
   perks: HotelPerk[]; onAdd: (name: string) => Promise<void>; onDelete: (id: string) => Promise<void>;
 }) {
