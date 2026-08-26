@@ -180,6 +180,8 @@ docker exec sr-pg psql -U postgres -d stayright -c "\dx"
 > 🔴 **先决条件**：需要 AWS IAM 用户 + `ssm:StartSession` 权限。**找 Zachary 申请**，说明你要做什么。
 > 日常开发不需要这个——只有集成验证、排查线上数据时才用。
 
+> 📌 **线上实机形态（2026-08-27 实测）**：Postgres 跑在 EC2 上的 **Docker 容器 `pg`**（镜像 `postgis/postgis:16-3.4`，监听 `127.0.0.1:5432`），不是系统服务——机器上没有 `postgres` 系统用户，在 EC2 上执行 SQL 用 `sudo docker exec pg psql -U postgres -d stayright -c "..."`。库 `stayright` 目前是空库（仅 PostGIS/pgvector 系统对象，无业务表），等应用首次迁移建表。容器当前 `POSTGRES_PASSWORD` 为与本地相同的 dev 密码；与 Secrets Manager `stayright/dev/db/password` 是否一致尚未核对，上线统一前先确认。
+
 ## 4. 装 AWS CLI 与 Session Manager 插件
 
 线上数据库**只监听 `127.0.0.1`**，EC2 **不开任何入站端口**（没有 22，没有 5432）。唯一通道是 AWS Systems Manager 的端口转发。

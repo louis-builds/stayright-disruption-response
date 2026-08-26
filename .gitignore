@@ -23,6 +23,7 @@ output/
 *.key
 infra/连接信息.md
 infra/手建资源清单.md
+AWS-Deployment-History.md
 
 # SAM / 构建产物
 .aws-sam/
@@ -41,3 +42,4 @@ obj/
 .DS_Store
 .idea/
 .vscode/
+.zcode/

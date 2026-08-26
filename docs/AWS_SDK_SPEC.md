@@ -49,6 +49,8 @@
 > ⚠️ **EC2 是按需开停的**（省抵扣金）。你连不上数据库时，先问 Zachary 机器开着没有。
 > 👉 即便如此，**开发不依赖 AWS 是否在线**——用 §9 的本地假实现。
 
+> 📌 **2026-08-27 复核（Zachary 实测）**：上表资源仍在线。Lambda 仍为 0（MVP 只需 1 个 `weather-collector`）；SES 仍处沙箱（发件人已验证）；EC2 当前运行中、未绑 Elastic IP；线上 Postgres 实为 EC2 上的 **Docker 容器 `pg`**（`postgis/postgis:16-3.4`），库 `stayright` 为空库待应用首次迁移建表。新增待建资源：SSM `API_BASE_URL`、Secret `ingest/shared-key`（探测 → C# 建案桥接用）。
+
 ---
 
 ## 2. 六条铁律
