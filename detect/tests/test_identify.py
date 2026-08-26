@@ -1,3 +1,5 @@
+import json
+import uuid
 from datetime import date, datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
@@ -5,6 +7,7 @@ import pytest
 
 from src.detect.models import DisruptionEvent, EventSource, Geo, GeoPoint, GeoType, Severity, TimeWindow
 from src.identify.geo import haversine_km
+from src.identify.handoff import build_handoff_payloads, write_handoff_messages
 from src.identify.matcher import filter_by_distance, find_affected_bookings
 
 QUEENSTOWN = GeoPoint(lat=-45.0312, lng=168.6626)
@@ -51,6 +54,68 @@ class TestFilterByDistance:
 
     def test_empty_candidates_returns_empty(self):
         assert filter_by_distance([], -45.0312, 168.6626, radius_km=30) == []
+
+
+class TestBuildHandoffPayloads:
+    def test_disruption_event_message_shape(self):
+        event = _storm_event(raw_payload={"wind_gusts_10m": 150, "precipitation": 0, "snowfall": 0})
+
+        disruption_event_message, customer_messages = build_handoff_payloads(event, [])
+
+        de = disruption_event_message["disruption_event"]
+        assert de["id"] == event.event_id
+        assert de["type"] == "weather"
+        assert de["event_subtype"] == "storm"
+        assert de["severity"] == "high"
+        assert de["geo"] == {"lat": QUEENSTOWN.lat, "lng": QUEENSTOWN.lng, "radius_km": 30}
+        assert de["raw_signal"] == {"wind_gusts_kmh": 150, "precipitation_mm": 0, "snowfall_cm": 0}
+        assert customer_messages == []
+
+    def test_affected_customer_messages_reference_event_and_stringify_uuids(self):
+        event = _storm_event()
+        booking = {
+            "guest_id": uuid.UUID("11111111-1111-1111-1111-111111111111"),
+            "booking_id": uuid.UUID("22222222-2222-2222-2222-222222222222"),
+        }
+
+        _, customer_messages = build_handoff_payloads(event, [booking])
+
+        assert customer_messages == [{
+            "disruption_event_id": event.event_id,
+            "guest_id": "11111111-1111-1111-1111-111111111111",
+            "booking_id": "22222222-2222-2222-2222-222222222222",
+        }]
+
+    def test_one_customer_message_per_affected_booking(self):
+        event = _storm_event()
+        bookings = [
+            {"guest_id": "g1", "booking_id": "b1"},
+            {"guest_id": "g2", "booking_id": "b2"},
+        ]
+
+        _, customer_messages = build_handoff_payloads(event, bookings)
+
+        assert [m["booking_id"] for m in customer_messages] == ["b1", "b2"]
+        assert all(m["disruption_event_id"] == event.event_id for m in customer_messages)
+
+
+class TestWriteHandoffMessages:
+    def test_writes_one_json_line_per_message_and_creates_parent_dirs(self, tmp_path):
+        output_path = tmp_path / "nested" / "handoff.jsonl"
+
+        write_handoff_messages(output_path, [{"a": 1}, {"b": 2}])
+
+        lines = output_path.read_text(encoding="utf-8").splitlines()
+        assert [json.loads(line) for line in lines] == [{"a": 1}, {"b": 2}]
+
+    def test_a_later_write_replaces_earlier_content_entirely(self, tmp_path):
+        output_path = tmp_path / "handoff.jsonl"
+
+        write_handoff_messages(output_path, [{"a": 1}, {"b": 2}])
+        write_handoff_messages(output_path, [{"c": 3}])
+
+        lines = output_path.read_text(encoding="utf-8").splitlines()
+        assert [json.loads(line) for line in lines] == [{"c": 3}]
 
 
 class TestFindAffectedBookings:
@@ -136,20 +201,28 @@ def live_pg_conn():
 
 
 class TestFindAffectedBookingsIntegration:
-    def test_matches_only_non_cancelled_bookings_at_the_targeted_hotel(self, live_pg_conn):
+    def test_matches_only_non_cancelled_bookings_within_radius(self, live_pg_conn):
         with live_pg_conn.cursor() as cur:
             cur.execute("SELECT id, lat, lng FROM hotels ORDER BY name LIMIT 1")
             hotel_id, lat, lng = cur.fetchone()
+
+            # Some seed hotels share exact coordinates (e.g. a test hotel
+            # added at the same spot as a real one), so a tight radius can
+            # still cover more than one hotel_id -- compute the actual set
+            # instead of assuming the picked hotel is alone within 1km.
+            cur.execute("SELECT id, lat, lng FROM hotels")
+            nearby_hotel_ids = [
+                row[0] for row in cur.fetchall() if haversine_km(lat, lng, row[1], row[2]) <= 1
+            ]
             cur.execute(
-                "SELECT count(*) FROM bookings WHERE hotel_id = %(hotel_id)s AND status != 'cancelled'",
-                {"hotel_id": hotel_id},
+                "SELECT count(*) FROM bookings WHERE hotel_id = ANY(%(hotel_ids)s) AND status != 'cancelled'",
+                {"hotel_ids": nearby_hotel_ids},
             )
             expected_count = cur.fetchone()[0]
 
         # Wide window (real hotels' bookings use offsets we don't control
-        # here) + a radius that only reaches this one hotel (the seeded
-        # hotels are hundreds of km apart) -> every non-cancelled booking
-        # at this hotel should match, and nothing from the other hotels.
+        # here) + a radius of 1km -> every non-cancelled booking at a hotel
+        # within that radius should match, and nothing further away.
         now = datetime.now(timezone.utc)
         event = _storm_event(
             geo=Geo(type=GeoType.POINT, center=GeoPoint(lat=lat, lng=lng), radius_km=1),
@@ -159,4 +232,4 @@ class TestFindAffectedBookingsIntegration:
         affected = find_affected_bookings(event, live_pg_conn)
 
         assert len(affected) == expected_count
-        assert all(b["hotel_id"] == hotel_id for b in affected)
+        assert all(b["hotel_id"] in nearby_hotel_ids for b in affected)

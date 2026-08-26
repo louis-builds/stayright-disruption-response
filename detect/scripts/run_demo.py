@@ -6,11 +6,18 @@ Real weather rarely cooperates on demo day, so one designated iteration
 reading for the real Open-Meteo call instead of skipping the API — every
 other iteration still hits the real API and prints whatever it gets back,
 same code path either way (classify() can't tell the difference between
-a real and a mocked reading).
+a real and a mocked reading). The mocked tick also narrows its window to
+exactly MOCK_TARGET_BOOKING_ID's check-in day (instead of the wide
+DEMO_WINDOW_HOURS a real tick uses), so the demo reliably shows one
+specific booking as affected rather than everything within 30 days —
+other bookings that genuinely overlap that same day still show up too,
+flagged as such.
 
-Every detected event is appended to a .jsonl handoff file (one JSON
+Every detected event is written to a .jsonl handoff file (one JSON
 message per line: the disruption_event once, then one affected_customer
-message per matched booking) for another system to read/tail.
+message per matched booking) for another system to read. Each write
+replaces the file's previous contents -- it always holds only the most
+recently detected event, not a growing log.
 
 Usage:
     docker compose up -d
@@ -22,11 +29,11 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import json
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time as time_of_day, timedelta, timezone
 from pathlib import Path
 
+from scripts.simulate_targeted_event import find_target_booking
 from src.detect.open_meteo import (
     DEFAULT_LOCATIONS,
     Location,
@@ -35,6 +42,7 @@ from src.detect.open_meteo import (
     fetch_weather,
 )
 from src.identify.db import get_connection
+from src.identify.handoff import build_handoff_payloads, write_handoff_messages
 from src.identify.matcher import find_affected_bookings
 
 # Comfortably past the storm thresholds in open_meteo.py so classify()
@@ -47,55 +55,13 @@ MOCK_STORM_PAYLOAD = {"current": {"wind_gusts_10m": 150, "precipitation": 0, "sn
 # runs; a real detect run would use open_meteo.py's much narrower default.
 DEMO_WINDOW_HOURS = 24 * 30
 
-
-def _iso_z(dt: datetime) -> str:
-    return dt.astimezone(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
-
-
-def build_handoff_payloads(event, affected_bookings: list[dict]) -> tuple[dict, list[dict]]:
-    """Format for handing a detected event off to the colleague's system:
-    the disruption_event is sent exactly once, not repeated per customer.
-    Each affected customer gets its own lightweight message that just
-    references the event by id, plus its own guest_id/booking_id.
-
-    Returns (disruption_event_message, affected_customer_messages), each
-    meant to be written out as its own line in the .jsonl handoff file.
-    """
-    disruption_event_message = {
-        "disruption_event": {
-            "id": event.event_id,
-            "type": event.source.value,
-            "event_subtype": event.event_type,
-            "severity": event.severity.value,
-            "detected_at": _iso_z(event.detected_at),
-            "affects_window": {
-                "start": _iso_z(event.affects_window.start),
-                "end": _iso_z(event.affects_window.end),
-            },
-            "geo": {
-                "lat": event.geo.center.lat,
-                "lng": event.geo.center.lng,
-                "radius_km": event.geo.radius_km,
-            },
-            "raw_signal": {
-                "wind_gusts_kmh": event.raw_payload.get("wind_gusts_10m", 0),
-                "precipitation_mm": event.raw_payload.get("precipitation", 0),
-                "snowfall_cm": event.raw_payload.get("snowfall", 0),
-            },
-        }
-    }
-    affected_customer_messages = [
-        {
-            "disruption_event_id": event.event_id,
-            # guest_id/booking_id come back from psycopg as UUID objects
-            # (real Postgres uuid columns, not the old TEXT ids) -- stringify
-            # for JSON.
-            "guest_id": str(booking["guest_id"]),
-            "booking_id": str(booking["booking_id"]),
-        }
-        for booking in affected_bookings
-    ]
-    return disruption_event_message, affected_customer_messages
+# The mocked tick narrows its window to exactly this booking's check-in
+# day instead of the wide DEMO_WINDOW_HOURS -- weather affecting the
+# check-in day counts as affecting the booking. Looked up by id (not a
+# hardcoded date) so it stays correct even if the backend gets reseeded on
+# a different day. Currently Test Guest QQ's earliest Auckland booking;
+# change this to target a different one.
+MOCK_TARGET_BOOKING_ID = "9d77e2ec-4436-4369-bb06-6bb332043575"
 
 
 def _find_location(name: str) -> Location:
@@ -106,20 +72,9 @@ def _find_location(name: str) -> Location:
     raise ValueError(f"unknown location {name!r}; choices: {names}")
 
 
-def append_handoff_messages(output_path: Path, messages: list[dict]) -> None:
-    """Append each message as its own line to a .jsonl file (one JSON
-    object per line), so the colleague's side can tail/read it without
-    waiting for the whole run to finish or parsing console output.
-    """
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("a", encoding="utf-8") as f:
-        for message in messages:
-            f.write(json.dumps(message) + "\n")
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--location", default="Queenstown", help="fixed location to poll (default: Queenstown)")
+    parser.add_argument("--location", default="Auckland", help="fixed location to poll (default: Auckland)")
     parser.add_argument("--interval", type=float, default=10.0, help="seconds between polls (default: 10)")
     parser.add_argument(
         "--mock-at", type=int, default=3,
@@ -128,7 +83,7 @@ def main() -> None:
     parser.add_argument("--iterations", type=int, default=0, help="stop after N iterations (default: run forever)")
     parser.add_argument(
         "--output", type=Path, default=Path("output/handoff.jsonl"),
-        help="append handoff JSON messages here, one per line (default: output/handoff.jsonl)",
+        help="write handoff JSON messages here, one per line, replacing prior contents (default: output/handoff.jsonl)",
     )
     args = parser.parse_args()
 
@@ -159,19 +114,28 @@ def main() -> None:
                   f"(risky={classification.is_risky}, severity={classification.severity})")
 
             if classification.is_risky:
-                now = datetime.now(timezone.utc)
-                event = build_disruption_event(
-                    location, classification, now, now + timedelta(hours=DEMO_WINDOW_HOURS), raw_payload["current"]
-                )
+                if is_mocked:
+                    _, target_check_in, *_ = find_target_booking(conn, booking_id=MOCK_TARGET_BOOKING_ID, guest=None)
+                    window_start = datetime.combine(target_check_in, time_of_day.min, tzinfo=timezone.utc)
+                    window_end = datetime.combine(target_check_in, time_of_day.max, tzinfo=timezone.utc)
+                    print(f"  Narrowed to booking {MOCK_TARGET_BOOKING_ID}'s check-in day ({target_check_in})")
+                else:
+                    now = datetime.now(timezone.utc)
+                    window_start, window_end = now, now + timedelta(hours=DEMO_WINDOW_HOURS)
+
+                event = build_disruption_event(location, classification, window_start, window_end, raw_payload["current"])
                 print(f"  DisruptionEvent {event.event_id} -> querying affected bookings...")
                 affected = find_affected_bookings(event, conn)
                 if affected:
                     print(f"  {len(affected)} affected booking(s):")
                     for booking in affected:
+                        note = ""
+                        if is_mocked and str(booking["booking_id"]) != MOCK_TARGET_BOOKING_ID:
+                            note = "  (overlaps the target's check-in day -- genuine overlap, not a bug)"
                         print(f"    - {booking['booking_id']} / guest {booking['guest_id']} "
-                              f"/ {booking['hotel_name']} ({booking['check_in']} -> {booking['check_out']})")
+                              f"/ {booking['hotel_name']} ({booking['check_in']} -> {booking['check_out']}){note}")
                     disruption_event_message, customer_messages = build_handoff_payloads(event, affected)
-                    append_handoff_messages(output_path, [disruption_event_message, *customer_messages])
+                    write_handoff_messages(output_path, [disruption_event_message, *customer_messages])
                     print(f"  Wrote 1 disruption_event + {len(customer_messages)} affected_customer "
                           f"message(s) to {output_path}")
                 else:
