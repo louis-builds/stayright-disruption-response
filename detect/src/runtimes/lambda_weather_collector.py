@@ -26,6 +26,8 @@ from src.detect.open_meteo import (
 from src.detect.models import DisruptionEvent
 
 logger = logging.getLogger(__name__)
+# Lambda python3.12 运行时根 logger 默认 WARNING，不放开 INFO 则 CloudWatch 看不到 done 日志行
+logging.getLogger().setLevel(logging.INFO)
 
 INGEST_TIMEOUT_SECONDS = 10.0
 
