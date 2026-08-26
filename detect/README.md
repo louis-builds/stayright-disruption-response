@@ -98,25 +98,50 @@ rarely cooperates on demo day, one designated iteration (the 3rd, by
 default) substitutes a canned high-severity storm reading for the real
 Open-Meteo call instead of a real API response — everything downstream
 (`classify`, `DisruptionEvent`, `find_affected_bookings`) runs exactly
-the same code path either way.
+the same code path either way. That mocked tick also narrows its window
+to exactly `MOCK_TARGET_BOOKING_ID`'s check-in day (a constant near the
+top of `scripts/run_demo.py`, currently Test Guest QQ's earliest Auckland
+booking) instead of the wide window a real tick uses, so the demo
+reliably shows that one booking as affected — any other booking that
+genuinely overlaps the same day still shows up too, flagged as such.
 
 ```powershell
 .venv\Scripts\python -m scripts.run_demo
 ```
 
-Every detected event is also appended to `output/handoff.jsonl` (one JSON
+Every detected event is written to `output/handoff.jsonl` (one JSON
 message per line: the `disruption_event` once, then one
 `affected_customer` message per matched booking, referencing the event by
 id — see the module docstring in `scripts/run_demo.py` for the exact
-format) for another system to read/tail.
+format) for another system to read. Each write replaces the file's prior
+contents — it always holds only the most recently detected event.
 
 Ctrl+C to stop, or pass `--iterations N` to stop automatically after N
 polls. Useful flags:
 
-- `--location` — which of the 4 fixed locations to poll (default: Queenstown — matches a real seeded hotel)
+- `--location` — which of the 4 fixed locations to poll (default: Auckland — matches real seeded hotels, including the Test Guest QQ scenario)
 - `--interval` — seconds between polls (default: 10)
 - `--mock-at` — which 1-indexed iteration gets the mock storm reading; `0` disables mocking entirely
-- `--output` — where to append the handoff JSON (default: `output/handoff.jsonl`)
+- `--output` — where to write the handoff JSON, replacing prior contents (default: `output/handoff.jsonl`)
+
+## Targeting one specific booking
+
+`scripts/simulate_targeted_event.py` builds a DisruptionEvent narrowed to
+exactly one booking's check-in day (weather affecting the check-in day
+counts as affecting the booking), runs identify, and writes the result to
+the same handoff file. Useful for demoing/testing "what does the JSON
+look like for exactly this one customer" without waiting for real weather
+or wading through a wide-radius/wide-window mock's whole affected list:
+
+```powershell
+.venv\Scripts\python -m scripts.simulate_targeted_event --guest testguestqq@example.com
+.venv\Scripts\python -m scripts.simulate_targeted_event --booking-id <uuid>
+```
+
+If another booking at a hotel within radius genuinely overlaps that same
+day, it's swept in too and reported explicitly (not a bug) — pick a
+different `--booking-id` if you need strict isolation to just one
+booking.
 
 With a live, seeded Postgres running, `pytest` will additionally pick up
 the integration test in `tests/test_identify.py`
