@@ -81,7 +81,125 @@
 .coord-overview-wrap {
   display: flex;
   flex-direction: column;
+  gap: 1.75rem;
+}
+
+.coord-overview-summary {
+  position: relative;
+  overflow: hidden;
+  padding: 1.6rem;
+  border: 1px solid #dceaf3;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 94% 0%, rgba(78, 178, 190, 0.13), transparent 30%),
+    linear-gradient(145deg, #f8fcff 0%, #f3f9fc 100%);
+}
+
+.coord-overview-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 1.5rem;
+  margin-bottom: 1.35rem;
+}
+
+.coord-overview-eyebrow,
+.coord-attention-eyebrow {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: #2e7a8a;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.coord-overview-heading h1 {
+  margin: 0;
+  color: #102c46;
+  font-size: clamp(1.35rem, 2vw, 1.75rem);
+  line-height: 1.2;
+}
+
+.coord-overview-heading > div > p {
+  margin: 0.4rem 0 0;
+  color: #71889a;
+  font-size: 0.82rem;
+}
+
+.coord-attention-section {
+  padding: 1.4rem;
+  border: 1px solid #e4ebf1;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  box-shadow: 0 10px 30px rgba(21, 56, 82, 0.05);
+}
+
+.coord-attention-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.9rem;
+}
+
+.coord-attention-header h2 {
+  margin: 0 0 0.25rem;
+  color: #10243c;
+  font-size: 1.18rem;
+}
+
+.coord-attention-header p {
+  margin: 0;
+  color: #7d93a6;
+  font-size: 0.78rem;
+}
+
+.coord-attention-count {
+  flex-shrink: 0;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid #f2d7bd;
+  border-radius: 999px;
+  background: #fff6e9;
+  color: #a15c1b;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.coord-attention-section .coord-table {
+  gap: 0.7rem;
+}
+
+.coord-attention-section .coord-row {
+  position: relative;
+  overflow: hidden;
+  padding: 0.95rem 1.05rem 0.95rem 1.2rem;
+  border-color: #e2eaf0;
+  background: white;
+}
+
+.coord-attention-section .coord-row::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: #efaa55;
+}
+
+.coord-attention-section .coord-row:hover {
+  border-color: #cfdfe9;
+  box-shadow: 0 7px 18px rgba(21, 56, 82, 0.08);
+  transform: translateY(-1px);
+}
+
+.coord-attention-section .coord-btn-link {
+  padding: 0.42rem 0.7rem;
+  border-radius: 8px;
+  background: #edf6fb;
+}
+
+.coord-attention-section .coord-btn-link:hover {
+  background: #dfeff7;
 }
 
 .coord-sync-indicator {
@@ -91,6 +209,21 @@
   margin: -1rem 0 0.25rem;
   font-size: 0.72rem;
   color: #9fb0bf;
+}
+
+.coord-overview-sync {
+  align-self: flex-start;
+  margin: 0;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid #dce9ef;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  color: #6f8799;
+  white-space: nowrap;
+}
+
+.coord-sync-refresh {
+  color: #9aabb8;
 }
 
 .coord-sync-dot {
@@ -110,6 +243,12 @@
   display: flex;
   flex-wrap: wrap;
   gap: 1rem;
+}
+
+.coord-overview-summary .coord-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.85rem;
 }
 
 .coord-stat-card {
@@ -157,6 +296,314 @@
 .coord-stat-sub {
   font-size: 0.75rem;
   color: #9fb0bf;
+}
+
+.coord-overview-stat {
+  position: relative;
+  min-height: 130px;
+  padding: 1rem;
+  border-color: rgba(209, 225, 235, 0.8);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 6px 18px rgba(30, 69, 95, 0.045);
+}
+
+.coord-overview-stat::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 3px;
+  background: var(--overview-accent, #3f83a7);
+}
+
+.coord-overview-stat-blue { --overview-accent: #3f83a7; }
+.coord-overview-stat-teal { --overview-accent: #3aa69d; }
+.coord-overview-stat-green { --overview-accent: #65a875; }
+.coord-overview-stat-amber { --overview-accent: #e49a43; }
+
+.coord-overview-stat-icon {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--overview-accent, #3f83a7) 12%, white);
+  color: var(--overview-accent, #3f83a7);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.coord-overview-stat .coord-stat-label {
+  max-width: calc(100% - 34px);
+  color: #698297;
+  font-weight: 600;
+}
+
+.coord-overview-stat .coord-stat-value {
+  margin-top: auto;
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.coord-status-breakdown {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem;
+  margin-top: auto;
+}
+
+.coord-status-breakdown span {
+  display: flex;
+  flex-direction: column;
+  color: #8b9dac;
+  font-size: 0.6rem;
+  line-height: 1.25;
+}
+
+.coord-status-breakdown strong {
+  margin-bottom: 0.12rem;
+  color: #17334d;
+  font-size: 1.15rem;
+}
+
+.coord-report-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin-top: 0.85rem;
+}
+
+.coord-report-card {
+  padding: 1rem 1.05rem;
+  border: 1px solid #dce8ef;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 5px 16px rgba(30, 69, 95, 0.035);
+}
+
+.coord-report-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.9rem;
+}
+
+.coord-report-eyebrow {
+  display: block;
+  margin-bottom: 0.18rem;
+  color: #7890a2;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.coord-report-heading h2 {
+  margin: 0;
+  color: #18334c;
+  font-size: 0.92rem;
+}
+
+.coord-report-total {
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  background: #edf5f9;
+  color: #54758b;
+  font-size: 0.65rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.coord-report-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.68rem;
+}
+
+.coord-report-row {
+  display: grid;
+  grid-template-columns: minmax(88px, 0.85fr) minmax(80px, 1.6fr) 24px;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.coord-report-row strong {
+  color: #25445d;
+  font-size: 0.75rem;
+  text-align: right;
+}
+
+.coord-report-label {
+  display: flex;
+  align-items: center;
+  gap: 0.38rem;
+  color: #647d90;
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
+.coord-report-dot {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+
+.coord-report-track {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #edf2f5;
+}
+
+.coord-report-fill {
+  display: block;
+  min-width: 0;
+  height: 100%;
+  border-radius: inherit;
+  transition: width 0.35s ease;
+}
+
+.coord-report-dot-pending,
+.coord-report-fill-pending { background: #e9a24f; }
+.coord-report-dot-progress,
+.coord-report-fill-progress { background: #438bad; }
+.coord-report-dot-closed,
+.coord-report-fill-closed { background: #64aa7b; }
+.coord-report-dot-weather,
+.coord-report-fill-weather { background: #587fb4; }
+.coord-report-dot-flight,
+.coord-report-fill-flight { background: #4aada5; }
+.coord-report-dot-road,
+.coord-report-fill-road { background: #9a78bb; }
+
+.coord-service-performance {
+  margin-top: 0.85rem;
+  padding: 1rem 1.05rem;
+  border: 1px solid #dce8ef;
+  border-radius: 13px;
+  background: linear-gradient(115deg, rgba(255, 255, 255, 0.92), rgba(240, 248, 251, 0.88));
+}
+
+.coord-service-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.9rem;
+}
+
+.coord-service-heading h2 {
+  margin: 0;
+  color: #18334c;
+  font-size: 0.92rem;
+}
+
+.coord-service-caption {
+  color: #8ba0af;
+  font-size: 0.67rem;
+}
+
+.coord-service-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.coord-service-metric {
+  display: flex;
+  min-width: 0;
+  min-height: 94px;
+  flex-direction: column;
+  padding: 0.78rem 0.85rem;
+  border: 1px solid #e4ebf0;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.coord-service-metric > span {
+  overflow: hidden;
+  color: #6b8294;
+  font-size: 0.67rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.coord-service-metric strong {
+  margin-top: auto;
+  color: #173650;
+  font-size: 1.5rem;
+  line-height: 1.05;
+}
+
+.coord-service-metric strong em {
+  margin-left: 0.12rem;
+  color: #6e8799;
+  font-size: 0.75rem;
+  font-style: normal;
+}
+
+.coord-service-metric small {
+  margin-top: 0.25rem;
+  overflow: hidden;
+  color: #97a8b5;
+  font-size: 0.6rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.coord-impact-card {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-top: 0.85rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid #dce8ef;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.coord-impact-icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 11px;
+  background: #e8f2f8;
+  color: #33749a;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.coord-impact-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.12rem;
+}
+
+.coord-impact-copy strong {
+  overflow: hidden;
+  color: #18334c;
+  font-size: 0.95rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.coord-impact-count {
+  flex-shrink: 0;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  background: #edf5f9;
+  color: #4f7188;
+  font-size: 0.7rem;
+  font-weight: 600;
 }
 
 .coord-toolbar {
@@ -530,6 +977,10 @@
 }
 
 @media (max-width: 780px) {
+  .coord-attention-header {
+    flex-direction: column;
+  }
+
   .coord-row {
     flex-direction: column;
     align-items: flex-start;
@@ -904,6 +1355,18 @@
 }
 
 @media (max-width: 900px) {
+  .coord-overview-summary .coord-overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .coord-report-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .coord-service-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .coord-disruptions {
     grid-template-columns: 1fr;
   }
@@ -915,5 +1378,52 @@
   .coord-candidate-guest,
   .coord-candidate-name {
     white-space: normal;
+  }
+}
+
+@media (max-width: 620px) {
+  .coord-panel {
+    padding: 0.85rem;
+  }
+
+  .coord-overview-summary,
+  .coord-attention-section {
+    padding: 1rem;
+    border-radius: 14px;
+  }
+
+  .coord-overview-heading {
+    flex-direction: column;
+    gap: 0.8rem;
+  }
+
+  .coord-overview-summary .coord-overview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .coord-report-row {
+    grid-template-columns: minmax(88px, 1fr) minmax(70px, 1.2fr) 24px;
+  }
+
+  .coord-service-heading {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .coord-service-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .coord-overview-stat {
+    min-height: 118px;
+  }
+
+  .coord-impact-card {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .coord-impact-count {
+    margin-left: 45px;
   }
 }
