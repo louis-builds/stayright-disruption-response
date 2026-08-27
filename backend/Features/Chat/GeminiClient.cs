@@ -1,18 +1,37 @@
 using System.Text;
 using System.Text.Json;
+using Amazon.BedrockRuntime;
+using Amazon.BedrockRuntime.Model;
 
 namespace TravelDisruptionAgent.Api.Features.Chat;
 
-/// <summary>Gemini REST API 的最小封装：一个 HttpClient POST，不引 Google 的 SDK 包（用不上那么多功能）。</summary>
+/// <summary>LLM 生成的最小封装：首选 Gemini REST API（不引 Google SDK），Gemini 未配置或调用失败时
+/// 降级到 AWS Bedrock Converse（凭证走 EC2 实例角色，模型 ID 由 env BEDROCK_MODEL_ID 注入，
+/// 值即 SSM /stayright/dev/BEDROCK_MODEL_ID）。两条路都失败才返回 null 交给上层降级文案。</summary>
 public class GeminiClient(IHttpClientFactory httpClientFactory, ILogger<GeminiClient> logger)
 {
+    // GeminiClient 是 scoped，Bedrock 客户端做成进程级单例避免每次请求重建
+    private static readonly Lazy<IAmazonBedrockRuntime> Bedrock = new(() =>
+        new AmazonBedrockRuntimeClient(new AmazonBedrockRuntimeConfig
+        {
+            RegionEndpoint = Amazon.RegionEndpoint.APSoutheast2,
+            Timeout = TimeSpan.FromSeconds(60),
+        }));
+
     public async Task<string?> GenerateAsync(string prompt, CancellationToken ct = default)
+    {
+        var reply = await GenerateViaGeminiAsync(prompt, ct);
+        reply ??= await GenerateViaBedrockAsync(prompt, ct);
+        return reply;
+    }
+
+    private async Task<string?> GenerateViaGeminiAsync(string prompt, CancellationToken ct)
     {
         var apiKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
         var model = Environment.GetEnvironmentVariable("GEMINI_MODEL") ?? "gemini-2.5-flash";
         if (string.IsNullOrEmpty(apiKey))
         {
-            logger.LogWarning("GEMINI_API_KEY not configured; cannot generate AI reply");
+            logger.LogWarning("GEMINI_API_KEY not configured; trying Bedrock fallback");
             return null;
         }
 
@@ -38,7 +57,8 @@ public class GeminiClient(IHttpClientFactory httpClientFactory, ILogger<GeminiCl
 
             if (!response.IsSuccessStatusCode)
             {
-                logger.LogWarning("Gemini API returned {Status}: {Body}", response.StatusCode, await response.Content.ReadAsStringAsync(ct));
+                logger.LogWarning("Gemini API returned {Status}: {Body}; trying Bedrock fallback",
+                    response.StatusCode, await response.Content.ReadAsStringAsync(ct));
                 return null;
             }
 
@@ -54,7 +74,38 @@ public class GeminiClient(IHttpClientFactory httpClientFactory, ILogger<GeminiCl
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Gemini call failed");
+            logger.LogWarning(ex, "Gemini call failed; trying Bedrock fallback");
+            return null;
+        }
+    }
+
+    private async Task<string?> GenerateViaBedrockAsync(string prompt, CancellationToken ct)
+    {
+        var modelId = Environment.GetEnvironmentVariable("BEDROCK_MODEL_ID");
+        if (string.IsNullOrEmpty(modelId))
+        {
+            logger.LogWarning("BEDROCK_MODEL_ID not configured either; no LLM available");
+            return null;
+        }
+
+        try
+        {
+            var response = await Bedrock.Value.ConverseAsync(new ConverseRequest
+            {
+                ModelId = modelId,
+                Messages =
+                [
+                    new() { Role = ConversationRole.User, Content = [new() { Text = prompt }] },
+                ],
+                InferenceConfig = new() { Temperature = 0.3f, MaxTokens = 512 },
+            }, ct);
+            var text = response.Output?.Message?.Content?.FirstOrDefault(b => !string.IsNullOrEmpty(b.Text))?.Text;
+            if (text is not null) logger.LogInformation("AI reply generated via Bedrock {Model}", modelId);
+            return text;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Bedrock fallback failed for model {Model}", modelId);
             return null;
         }
     }

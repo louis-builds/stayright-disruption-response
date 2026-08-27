@@ -1,0 +1,105 @@
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  StayRight weather-collector — 定时轮询 Open-Meteo 预报，发现风险窗口即
+  POST 到 C# 后端 /api/ingest/disruptions。一个栈建齐 A1/A3/A4/A5 四件事：
+  SSM 参数 API_BASE_URL、Lambda 函数与执行角色、EventBridge Scheduler 定时规则。
+
+Parameters:
+  Stage:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, demo, prod]
+    Description: 对应 SSM/Secrets 的 /stayright/{Stage}/ 前缀
+  ApiBaseUrl:
+    Type: String
+    Default: https://d2y6g16anevc6h.cloudfront.net
+    Description: C# API 的公网基地址（CloudFront 域名），写入 SSM 供 Lambda 运行时读取
+  ScheduleExpression:
+    Type: String
+    Default: rate(15 minutes)
+    Description: 探测频率，演示观察期 15 分钟
+
+Resources:
+  ApiBaseUrlParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /stayright/${Stage}/API_BASE_URL
+      Type: String
+      Value: !Ref ApiBaseUrl
+      Description: weather-collector Lambda POST 探测结果的 API 基地址
+
+  WeatherCollectorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: 轮询 Open-Meteo 预报，风险窗口 POST 到 /api/ingest/disruptions
+      CodeUri: .
+      Handler: src.runtimes.lambda_weather_collector.handler
+      Runtime: python3.12
+      Architectures: [arm64]
+      # 4 个定位点串行，最坏 4 x (10s 取预报 + 10s POST) 再留冷启动余量
+      Timeout: 120
+      MemorySize: 256
+      Environment:
+        Variables:
+          STAGE: !Ref Stage
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Statement:
+            - Sid: ReadStayRightConfig
+              Effect: Allow
+              Action: ssm:GetParameter
+              Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/stayright/${Stage}/*
+            - Sid: ReadStayRightSecrets
+              Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:stayright/${Stage}/*
+
+# 构建命令（--manifest 必须，否则会把完整 requirements.txt 连 pytest/psycopg 一起打包）：
+#   sam build --use-container --manifest requirements-lambda.txt
+#   sam deploy --stack-name stayright-dev-weather-collector \
+#     --s3-bucket stayright-dev-raw-990393187001 --s3-prefix sam/ \
+#     --capabilities CAPABILITY_IAM --region ap-southeast-2 --no-confirm-changeset
+
+  WeatherCollectorScheduleRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              ArnLike:
+                aws:SourceArn: !Sub arn:${AWS::Partition}:scheduler:${AWS::Region}:${AWS::AccountId}:*
+      Policies:
+        - PolicyName: invoke-weather-collector
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt WeatherCollectorFunction.Arn
+
+  WeatherCollectorSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: !Sub stayright-${Stage}-weather-collector
+      Description: 定时触发 weather-collector Lambda 探测天气
+      ScheduleExpression: !Ref ScheduleExpression
+      ScheduleExpressionTimezone: Pacific/Auckland
+      FlexibleTimeWindow:
+        Mode: FLEXIBLE
+        MaximumWindowInMinutes: 5
+      Target:
+        Arn: !GetAtt WeatherCollectorFunction.Arn
+        RoleArn: !GetAtt WeatherCollectorScheduleRole.Arn
+        Input: "{}"
+
+Outputs:
+  WeatherCollectorFunctionName:
+    Description: weather-collector Lambda 的物理函数名（冒烟用 aws lambda invoke）
+    Value: !Ref WeatherCollectorFunction
+  WeatherCollectorFunctionArn:
+    Value: !GetAtt WeatherCollectorFunction.Arn

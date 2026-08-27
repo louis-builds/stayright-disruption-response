@@ -1,0 +1,4 @@
+# Lambda 运行时自带 boto3，这里只列运行时缺的依赖。
+# 打包时用 `sam build`（见 template.yaml 的 Metadata: PythonRequirementsFile）。
+requests>=2.31
+pydantic>=2.6
