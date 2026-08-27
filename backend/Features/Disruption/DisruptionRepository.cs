@@ -51,6 +51,9 @@ public class DisruptionRepository(AppDbContext db) : IDisruptionRepository
     public async Task AddInquiryAsync(Inquiry inquiry, CancellationToken ct = default) =>
         await db.Inquiries.AddAsync(inquiry, ct);
 
+    public async Task AddMessageAsync(Message message, CancellationToken ct = default) =>
+        await db.Messages.AddAsync(message, ct);
+
     public async Task AddNotificationAsync(Notification notification, CancellationToken ct = default) =>
         await db.Notifications.AddAsync(notification, ct);
 

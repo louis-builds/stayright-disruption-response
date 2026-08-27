@@ -16,6 +16,8 @@ export interface InquiryItem {
   respondedAt: string | null;
   rejectReason: string | null;
   finalOutcome: "stayed" | "moved" | null;
+  proposedNewCheckIn: string | null;
+  proposedNewCheckOut: string | null;
 }
 
 export interface SelectedOptionItem {

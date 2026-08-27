@@ -16,6 +16,7 @@ public interface IDisruptionRepository
     Task AddWindowAuditAsync(DisruptionWindowAudit audit, CancellationToken ct = default);
     Task AddCaseAsync(Case caseEntity, CancellationToken ct = default);
     Task AddInquiryAsync(Inquiry inquiry, CancellationToken ct = default);
+    Task AddMessageAsync(Message message, CancellationToken ct = default);
     Task AddNotificationAsync(Notification notification, CancellationToken ct = default);
     Task<Guid?> FindHotelAccountUserIdAsync(Guid hotelId, CancellationToken ct = default);
     Task<string?> FindHotelAccountEmailAsync(Guid hotelId, CancellationToken ct = default);

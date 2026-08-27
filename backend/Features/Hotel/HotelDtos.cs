@@ -5,10 +5,15 @@ namespace TravelDisruptionAgent.Api.Features.HotelPortal;
 // FinalOutcome: 案件结案后，客人最终有没有留在这家酒店("stayed"/"moved")——酒店点了 Accept 之后
 // 案子会继续往下走(客人后续可能选了别的方案换到别家)，H1 这条请求本身的 Status 永远停在
 // accepted 不会变，不看这个字段的话酒店无从知道自己批的方案最终有没有真被用上。还没结案时是 null。
+// ProposedNewCheckIn/Out: 酒店点 Confirm 之前，案子往往还没有真正的 defer 方案草稿——新日期要等
+// 确认之后系统才按固定规则(3 天后入住、保持原住宿晚数，见 OptionsAdminService.BuildDraftOptionsAsync
+// 的 defer 分支)现造出来。这里用同一套规则提前算一遍给酒店预览，不然它是在盲批一个看不到
+// 具体日期的请求。真实生效日期取决于"到底哪天被确认"，这两个字段只是预估，不是锁定值。
 public record InquiryItemDto(
     Guid Id, Guid CaseId, string ConfirmationNo, string GuestNickname, string DisruptionTitle,
     DateOnly CheckIn, DateOnly CheckOut, string RoomTypeName, string Status, DateTimeOffset RequestedAt, TimeSpan WaitTime, bool Overdue,
-    bool IsReturningGuest, bool IsHighValueGuest, DateTimeOffset? RespondedAt, string? RejectReason, string? FinalOutcome);
+    bool IsReturningGuest, bool IsHighValueGuest, DateTimeOffset? RespondedAt, string? RejectReason, string? FinalOutcome,
+    DateOnly? ProposedNewCheckIn, DateOnly? ProposedNewCheckOut);
 
 public record ConfirmInquiryRequest(DateOnly? NewCheckIn, DateOnly? NewCheckOut, string? Note);
 

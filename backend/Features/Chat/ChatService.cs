@@ -28,13 +28,30 @@ public class ChatService(GeminiClient gemini, IRagRepository ragRepository, ISys
     {
         var disruption = caseEntity.Disruption?.Title ?? "a disruption";
         var hotel = caseEntity.Booking?.Hotel?.Name ?? "your hotel";
+        // 客人名下可能不止一单——不点名是哪个确认号，光说"your booking"分不清是哪一条。
+        var confirmationSuffix = caseEntity.Booking?.ConfirmationNo is { } confNo ? $" ({confNo})" : "";
         var status = hotelConfirmed
             ? "The hotel has confirmed availability, so you can pick an option right away."
             : "We're waiting for the hotel to confirm availability — you can still pick an option, but it may take a little longer.";
+
+        // 跟 HotelService.ToDto / DisruptionService.NotifyCandidatesAsync 同一套规则(比原定入住
+        // 日期晚3天、保持原住宿晚数)——客人打开对话第一眼看到的这句话之前完全没提具体日期，
+        // 只说"我们在等酒店确认"，客人不知道到底会改到几号，也不知道能提别的日期。
+        string? deferHint = null;
+        if (caseEntity.Booking is { } booking)
+        {
+            var nights = Math.Max(booking.CheckOut.DayNumber - booking.CheckIn.DayNumber, 1);
+            var proposedCheckIn = booking.CheckIn.AddDays(3);
+            var proposedCheckOut = proposedCheckIn.AddDays(nights);
+            deferHint = language == "zh"
+                ? $"如果选延期方案，预计会改到 {proposedCheckIn:yyyy-MM-dd} → {proposedCheckOut:yyyy-MM-dd}（预估，不满意可以在这里告诉我们别的日期）。"
+                : $"If you go with the deferral option, it's expected to move your stay to {proposedCheckIn:yyyy-MM-dd} → {proposedCheckOut:yyyy-MM-dd} (estimated — let us know here if you'd prefer different dates).";
+        }
+
         return language switch
         {
-            "zh" => $"您好，由于{disruption}，您在{hotel}的预订可能受到影响。{(hotelConfirmed ? "酒店已确认可以安排，您可以直接选择方案。" : "我们正在等待酒店确认，您也可以先选一个方案，稍后会告知结果。")}",
-            _ => $"Hi, due to {disruption}, your booking at {hotel} may be affected. {status}",
+            "zh" => $"您好，由于{disruption}，您在{hotel}的预订{confirmationSuffix}可能受到影响。{(hotelConfirmed ? "酒店已确认可以安排，您可以直接选择方案。" : "我们正在等待酒店确认，您也可以先选一个方案，稍后会告知结果。")}{(deferHint is null ? "" : " " + deferHint)}",
+            _ => $"Hi, due to {disruption}, your booking at {hotel}{confirmationSuffix} may be affected. {status}{(deferHint is null ? "" : " " + deferHint)}",
         };
     }
 

@@ -282,6 +282,14 @@ export function HotelHomePage() {
       // 靠这个字段告诉酒店客人最终有没有真的留下，不然它可能还在按原计划留房。
       finalOutcome:
         i.status === "accepted" && i.finalOutcome === "moved" ? "Guest moved to another hotel" : null,
+      // 案子结案且客人留下了：booking的check-in/check-out已经是真正生效的新日期(执行改订那一步
+      // 直接改的就是这两个字段)——顺带点名客人选了哪个方案，不然酒店只看到日期还得自己猜。
+      // 案子还没结案、只是H1被接受：日期还没真的变，只能给个预计值。
+      dateInfo: i.finalOutcome === "stayed"
+        ? `Guest confirmed the deferral — final dates: ${i.checkIn} → ${i.checkOut}`
+        : i.status === "accepted" && i.proposedNewCheckIn && i.proposedNewCheckOut
+          ? `Proposed dates: ${i.proposedNewCheckIn} → ${i.proposedNewCheckOut} (estimated)`
+          : null,
     })),
     ...doneOptions.map((o) => ({
       id: o.optionId, confirmationNo: o.confirmationNo, guestNickname: o.guestNickname,
@@ -289,6 +297,7 @@ export function HotelHomePage() {
       label: o.optionType, statusTag: o.availability === "available" ? "confirmed" : "declined",
       timestamp: o.selectedSince, reason: o.availability === "unavailable" ? o.unavailableReason : null,
       finalOutcome: null as string | null,
+      dateInfo: null as string | null,
     })),
   ]
     .filter((d) => matchesHotelFilter(taskFilter, d.confirmationNo, d.guestNickname, d.label, d.statusTag))
@@ -435,6 +444,11 @@ export function HotelHomePage() {
                           <p className="coord-row-sub">
                             {d.item.disruptionTitle} · {d.item.roomTypeName} · {d.item.checkIn} → {d.item.checkOut}
                           </p>
+                          {d.item.proposedNewCheckIn && d.item.proposedNewCheckOut && (
+                            <p className="coord-row-meta">
+                              If confirmed, deferred to ~{d.item.proposedNewCheckIn} → {d.item.proposedNewCheckOut} (estimated)
+                            </p>
+                          )}
                           {d.item.overdue && <p className="coord-row-meta">overdue — please respond soon</p>}
                         </div>
                         <div className="coord-row-actions">
@@ -605,6 +619,7 @@ export function HotelHomePage() {
                           {timeAgo(d.timestamp) && <span className="coord-row-meta"> · {timeAgo(d.timestamp)}</span>}
                         </p>
                         {d.reason && <p className="coord-row-meta">Reason: {d.reason}</p>}
+                        {d.dateInfo && <p className="coord-row-meta">{d.dateInfo}</p>}
                         {d.finalOutcome && <p className="coord-row-meta coord-row-meta-warn">{d.finalOutcome}</p>}
                       </div>
                     </div>
