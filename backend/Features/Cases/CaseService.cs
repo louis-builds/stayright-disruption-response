@@ -403,6 +403,86 @@ public class CaseService(
         await cases.SaveChangesAsync(ct);
     }
 
+    public async Task<ProposeDeferDatesResultDto> ProposeDeferDatesAsync(
+        Guid caseId, Guid optionId, DateOnly newCheckIn, DateOnly newCheckOut, Guid userId, string userRole, CancellationToken ct = default)
+    {
+        var c = await LoadAuthorizedCaseAsync(cases, caseId, userId, userRole, ct);
+        if (c.Status == "closed")
+            return new ProposeDeferDatesResultDto(false, "This case has already been resolved — no further changes can be made here.");
+
+        var option = await cases.FindOptionAsync(optionId, caseId, ct) ?? throw new CaseNotFoundException();
+        if (option.OptionType != "defer")
+            return new ProposeDeferDatesResultDto(false, "This isn't a deferral option.");
+
+        var booking = c.Booking!;
+        var now = DateTimeOffset.UtcNow;
+
+        // payload 存的是相对原 check-in 的天数偏移(见 OptionsAdminService.BuildDraftOptionsAsync /
+        // CaseService.ExecuteOptionAsync)，客人提的是绝对日期——换算成同一种表示，执行时那段代码不用改。
+        option.PayloadJson = JsonSerializer.Serialize(new
+        {
+            new_check_in_offset_days = newCheckIn.DayNumber - booking.CheckIn.DayNumber,
+            new_check_out_offset_days = newCheckOut.DayNumber - booking.CheckIn.DayNumber,
+            fee_diff = 0m,
+            currency = booking.Currency,
+        });
+        // 客人换了日期，酒店之前批准/拒绝的是旧方案，不能沿用——重新变成待确认，不管之前是什么状态。
+        option.Availability = "pending";
+        option.UpdatedAt = now;
+
+        var inquiry = await cases.FindDeferInquiryAsync(caseId, ct);
+        if (inquiry is not null && inquiry.Status != "pending")
+        {
+            inquiry.Status = "pending";
+            inquiry.RespondedAt = null;
+            inquiry.RejectReason = null;
+            inquiry.UpdatedAt = now;
+        }
+
+        await cases.AddMessageAsync(new Message
+        {
+            Id = Guid.NewGuid(), CaseId = caseId, SenderRole = "system", Thread = "ai",
+            Content = $"You proposed new dates for the deferral: {newCheckIn:yyyy-MM-dd} → {newCheckOut:yyyy-MM-dd}. We've asked the hotel to reconfirm.",
+            CreatedAt = now, UpdatedAt = now,
+        }, ct);
+
+        await cases.SaveChangesAsync(ct);
+        await NotifyHotelOfProposedDatesAsync(c, booking, newCheckIn, newCheckOut, ct);
+
+        return new ProposeDeferDatesResultDto(true, "We've asked the hotel to reconfirm these dates.");
+    }
+
+    private async Task NotifyHotelOfProposedDatesAsync(Case full, Booking booking, DateOnly newCheckIn, DateOnly newCheckOut, CancellationToken ct)
+    {
+        var hotelUserId = await cases.FindHotelAccountUserIdAsync(booking.HotelId, ct);
+        if (hotelUserId is null) return;
+
+        var now = DateTimeOffset.UtcNow;
+        var body = $"Guest proposed different dates for booking {booking.ConfirmationNo}: {newCheckIn:yyyy-MM-dd} → {newCheckOut:yyyy-MM-dd}. Please reconfirm.";
+        await cases.AddNotificationAsync(new Notification
+        {
+            Id = Guid.NewGuid(), UserId = hotelUserId.Value, Channel = "in_app",
+            Type = "defer_dates_proposed", Title = "Guest proposed different dates",
+            Body = body, CaseId = full.Id, SentAt = now, Success = true, CreatedAt = now, UpdatedAt = now,
+        }, ct);
+
+        var hotelEmail = await cases.FindHotelAccountEmailAsync(booking.HotelId, ct);
+        if (string.IsNullOrWhiteSpace(hotelEmail)) return;
+        var hotelHomeLink = CaseEmailLinks.BuildHotelHomeLink();
+        var htmlBody = EmailTemplate.Build("Guest proposed different dates", $"""
+            <p>{WebUtility.HtmlEncode(body)}</p>
+            {EmailTemplate.Button(hotelHomeLink, "Open your dashboard")}
+            """);
+        try
+        {
+            await email.SendEmailAsync(hotelEmail, "Guest proposed different dates", $"{body}\n\nOpen your dashboard: {hotelHomeLink}", ct, htmlBody);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to send proposed-dates email to {Email}", hotelEmail);
+        }
+    }
+
     public async Task<ConfirmExecutionResultDto> ConfirmExecutionAsync(Guid caseId, Guid optionId, Guid userId, string userRole, CancellationToken ct = default)
     {
         var c = await LoadAuthorizedCaseAsync(cases, caseId, userId, userRole, ct);
@@ -470,8 +550,13 @@ public class CaseService(
             root.TryGetProperty("new_check_in_offset_days", out var ciEl) &&
             root.TryGetProperty("new_check_out_offset_days", out var coEl))
         {
-            booking.CheckIn = DateOnly.FromDateTime(now.UtcDateTime).AddDays(ciEl.GetInt32());
-            booking.CheckOut = DateOnly.FromDateTime(now.UtcDateTime).AddDays(coEl.GetInt32());
+            // offset 是"比原定入住日期晚几天"，基准必须是 booking 原本的 check-in，不是"今天"——
+            // 用执行确认那一刻的日期当基准会导致新日期跟"什么时候点确认"绑定，快到期的订单
+            // 甚至可能算出比原定日期更早的"延期"结果(真实复现过：原定08-29入住，08-26点确认，
+            // "3天后"=08-29，延期形同没延，日期完全没变)。改成相对原 check-in 偏移，语义自洽。
+            var originalCheckIn = booking.CheckIn;
+            booking.CheckIn = originalCheckIn.AddDays(ciEl.GetInt32());
+            booking.CheckOut = originalCheckIn.AddDays(coEl.GetInt32());
         }
         else if (option.OptionType == "alternate" && root.TryGetProperty("hotel", out var hotelNameEl))
         {

@@ -1,5 +1,5 @@
 import { apiGet, apiPost } from "../../shared/api/client";
-import type { CaseMessage, CaseOption, CaseSummary, ConfirmExecutionResult, PolicySummary, Thread } from "./types";
+import type { CaseMessage, CaseOption, CaseSummary, ConfirmExecutionResult, PolicySummary, ProposeDeferDatesResult, Thread } from "./types";
 
 export function fetchMyCases(includeClosed = false) {
   return apiGet<CaseSummary[]>(`/api/cases/mine?includeClosed=${includeClosed}`);
@@ -54,6 +54,13 @@ export function selectOption(caseId: string, optionId: string) {
 
 export function confirmExecution(caseId: string, optionId: string) {
   return apiPost<ConfirmExecutionResult>(`/api/cases/${caseId}/options/${optionId}/confirm-execution`, {});
+}
+
+export function proposeDeferDates(caseId: string, optionId: string, newCheckIn: string, newCheckOut: string) {
+  return apiPost<ProposeDeferDatesResult>(`/api/cases/${caseId}/options/${optionId}/propose-dates`, {
+    newCheckIn,
+    newCheckOut,
+  });
 }
 
 export function fetchPolicy(caseId: string, optionId: string) {

@@ -84,6 +84,9 @@ public class CaseRepository(AppDbContext db) : ICaseRepository
     public async Task AddInquiryAsync(Inquiry inquiry, CancellationToken ct = default) =>
         await db.Inquiries.AddAsync(inquiry, ct);
 
+    public Task<Inquiry?> FindDeferInquiryAsync(Guid caseId, CancellationToken ct = default) =>
+        db.Inquiries.FirstOrDefaultAsync(i => i.CaseId == caseId && i.Type == "defer", ct);
+
     // 只负责清铃铛(站内通知)——消息本身的已读现在按单条来(MarkMessageReadAsync)，靠客人真的
     // 停留在那条消息上3秒才算读过，不是打开线程就瞬间全部已读，这两件事故意拆开。
     public async Task MarkThreadReadAsync(Guid caseId, string thread, string readerRole, Guid readerUserId, CancellationToken ct = default)

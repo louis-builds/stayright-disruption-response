@@ -34,6 +34,7 @@ from datetime import datetime, time as time_of_day, timedelta, timezone
 from pathlib import Path
 
 from scripts.simulate_targeted_event import find_target_booking
+from src.detect.dedup import should_report
 from src.detect.open_meteo import (
     DEFAULT_LOCATIONS,
     Location,
@@ -85,6 +86,12 @@ def main() -> None:
         "--output", type=Path, default=Path("output/handoff.jsonl"),
         help="write handoff JSON messages here, one per line, replacing prior contents (default: output/handoff.jsonl)",
     )
+    parser.add_argument(
+        "--dedup-cooldown-minutes", type=float, default=60.0,
+        help="skip re-reporting the same location+event type within this window unless severity "
+             "escalates; persisted to disk so it survives across separate runs, not just one "
+             "long-lived process (default: 60; 0 disables de-dup entirely)",
+    )
     args = parser.parse_args()
 
     location = _find_location(args.location)
@@ -113,7 +120,13 @@ def main() -> None:
             print(f"  classify -> {classification.event_type} "
                   f"(risky={classification.is_risky}, severity={classification.severity})")
 
-            if classification.is_risky:
+            if classification.is_risky and args.dedup_cooldown_minutes > 0 and not should_report(
+                output_path.parent / ".dedup_state.json", location.name, classification.event_type,
+                classification.severity, args.dedup_cooldown_minutes, datetime.now(timezone.utc),
+            ):
+                print(f"  Skipped -- same {classification.event_type} for {location.name} already reported "
+                      f"within the last {args.dedup_cooldown_minutes:g} min (no severity escalation).")
+            elif classification.is_risky:
                 if is_mocked:
                     _, target_check_in, *_ = find_target_booking(conn, booking_id=MOCK_TARGET_BOOKING_ID, guest=None)
                     window_start = datetime.combine(target_check_in, time_of_day.min, tzinfo=timezone.utc)

@@ -104,7 +104,6 @@ export function CaseConversationPage() {
   const viewerRole = user?.role ?? "guest";
   const { caseInfo, messages, loading, sending, error, sendMessage, vote, markMessageRead } = useCaseConversation(id!, viewerRole, thread);
   const [draft, setDraft] = useState("");
-  const [lastSyncedAt, setLastSyncedAt] = useState(new Date());
   const scrollRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   // 非 guest 角色不能往 ai 线程发消息(AI 从不接协调员的话),这个 tab 对他们是只读的。
@@ -134,11 +133,6 @@ export function CaseConversationPage() {
   useLayoutEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages.length, loading, sending]);
-
-  // 每次消息列表变化(含轮询刷新)就更新一下"最后同步"时间戳，让用户直观感知到这是活的轮询而不是死页面。
-  useEffect(() => {
-    setLastSyncedAt(new Date());
-  }, [messages]);
 
   // sending 从 true 变 false 那一刻，AI 的回复刚落地——只对这一条播打字机效果，
   // 8 秒轮询带回来的历史消息、协调员消息都不算，不然每次轮询都重播一遍。
@@ -390,10 +384,6 @@ export function CaseConversationPage() {
                 <p>This is a direct, human-only conversation with your assigned coordinator — the AI assistant never reads or replies here.</p>
               </>
             )}
-            <p className="case-side-sync">
-              <span className="case-side-sync-dot" aria-hidden="true" />
-              Synced {lastSyncedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · refreshes every 8s
-            </p>
           </div>
         </aside>
       )}

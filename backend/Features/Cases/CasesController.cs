@@ -191,6 +191,26 @@ public class CasesController(ICaseService caseService) : ControllerBase
         }
     }
 
+    [HttpPost("{id:guid}/options/{optionId:guid}/propose-dates")]
+    [Authorize(Roles = "guest")]
+    public async Task<ActionResult<ApiResponse<ProposeDeferDatesResultDto>>> ProposeDeferDates(
+        Guid id, Guid optionId, ProposeDeferDatesRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var result = await caseService.ProposeDeferDatesAsync(id, optionId, request.NewCheckIn, request.NewCheckOut, CurrentUserId, CurrentUserRole, ct);
+            return Ok(ApiResponse<ProposeDeferDatesResultDto>.Ok(result));
+        }
+        catch (CaseNotFoundException)
+        {
+            return NotFound(ApiResponse<object?>.Fail(404, "Option not found"));
+        }
+        catch (CaseAccessDeniedException)
+        {
+            return StatusCode(403, ApiResponse.Forbidden());
+        }
+    }
+
     [HttpPost("{id:guid}/options/{optionId:guid}/confirm-execution")]
     [Authorize(Roles = "guest")]
     public async Task<ActionResult<ApiResponse<ConfirmExecutionResultDto>>> ConfirmExecution(Guid id, Guid optionId, CancellationToken ct)

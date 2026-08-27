@@ -48,3 +48,9 @@ public record PolicySummaryDto(string? Excerpt, string? DocName, int? DocVersion
 /// <summary>P7 确认执行的结果。outcome: success|processing|failed，对应"已完成/等酒店确认/转人工"三态。</summary>
 public record ConfirmExecutionResultDto(
     string Outcome, string Message, string? NewConfirmationNo, DateOnly? NewCheckIn, DateOnly? NewCheckOut);
+
+public record ProposeDeferDatesRequest(DateOnly NewCheckIn, DateOnly NewCheckOut);
+
+/// <summary>客人对默认延期日期不满意时提出别的日期——不管酒店有没有已经批准过默认方案，
+/// 都可以重新提，酒店那边会变回待确认。Success=false 时 Message 说明原因(比如案子已结案)。</summary>
+public record ProposeDeferDatesResultDto(bool Success, string Message);

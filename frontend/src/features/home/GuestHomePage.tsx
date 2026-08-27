@@ -150,7 +150,7 @@ export function GuestHomePage() {
                     {!n.readAt && <span className="notice-dot" aria-label="unread" />}
                   </div>
                   <p className="notice-title">{n.disruptionTitle ?? n.title}</p>
-                  <p className="notice-body">{n.body}</p>
+                  <p className="notice-body" title={n.body}>{n.body}</p>
                   <div className="notice-meta">
                     {n.affectedCheckIn && <span>Affects check-in {n.affectedCheckIn}</span>}
                     <span>{formatDate(n.sentAt)}</span>
