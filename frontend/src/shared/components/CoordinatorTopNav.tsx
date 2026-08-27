@@ -24,18 +24,12 @@ export interface CoordinatorNavGroup {
 export const COORDINATOR_NAV_GROUPS: CoordinatorNavGroup[] = [
   { navLabel: "Dashboard", defaultTab: "overview", tabs: [{ key: "overview", label: "Dashboard" }] },
   { navLabel: "Disruptions", defaultTab: "disruptions", tabs: [{ key: "disruptions", label: "Disruptions" }] },
-  { navLabel: "Escalation queue", defaultTab: "queue", tabs: [{ key: "queue", label: "Escalation queue" }] },
-  { navLabel: "Tasks", defaultTab: "todo", tabs: [
+  { navLabel: "Tasks", defaultTab: "queue", tabs: [
+    { key: "queue", label: "Needs attention" },
     { key: "todo", label: "My to-dos" },
     { key: "in_progress", label: "My in-progress" },
     { key: "closed", label: "Closed" },
     { key: "search", label: "All" },
-  ] },
-  { navLabel: "Admin", defaultTab: "admin", tabs: [
-    { key: "admin", label: "Users" },
-    { key: "kb", label: "Knowledge base" },
-    { key: "bad_cases", label: "Bad cases" },
-    { key: "settings", label: "Settings" },
   ] },
 ];
 
