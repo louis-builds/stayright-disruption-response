@@ -3,6 +3,7 @@ namespace TravelDisruptionAgent.Api.Features.Disruption;
 public interface IDisruptionService
 {
     Task<List<DisruptionListItemDto>> ListAsync(string? type, string? region, CancellationToken ct = default);
+    Task<Guid> IngestAsync(CreateDisruptionRequest request, CancellationToken ct = default);
     Task<DisruptionDetailDto> GetAsync(Guid id, CancellationToken ct = default);
     Task AssignAsync(Guid id, Guid toCoordinatorId, CancellationToken ct = default);
     Task AdjustWindowAsync(Guid id, AdjustWindowRequest request, Guid actorUserId, CancellationToken ct = default);

@@ -2,6 +2,7 @@ using TravelDisruptionAgent.Api.Features.Chat;
 using TravelDisruptionAgent.Api.Features.Coordinator;
 using TravelDisruptionAgent.Api.Infrastructure.Data.Entities;
 using TravelDisruptionAgent.Api.Infrastructure.Email;
+using DisruptionEntity = TravelDisruptionAgent.Api.Infrastructure.Data.Entities.Disruption;
 
 namespace TravelDisruptionAgent.Api.Features.Disruption;
 
@@ -28,6 +29,20 @@ public class DisruptionService(
                 d.Status, affected, d.AssigneeCoordinatorId, Name(d.AssigneeCoordinatorId, names)));
         }
         return result;
+    }
+
+    public async Task<Guid> IngestAsync(CreateDisruptionRequest request, CancellationToken ct = default)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var disruption = new DisruptionEntity
+        {
+            Id = Guid.NewGuid(), Type = request.Type, Title = request.Title, Region = request.Region,
+            StartAt = request.StartAt, EndAtOrWindow = request.EndAtOrWindow, Status = "active",
+            RawSignalText = request.RawSignalText, CreatedAt = now, UpdatedAt = now,
+        };
+        await repo.AddDisruptionAsync(disruption, ct);
+        await repo.SaveChangesAsync(ct);
+        return disruption.Id;
     }
 
     public async Task<DisruptionDetailDto> GetAsync(Guid id, CancellationToken ct = default)

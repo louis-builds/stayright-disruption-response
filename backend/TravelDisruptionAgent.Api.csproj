@@ -21,4 +21,10 @@
     <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
   </ItemGroup>
 
+  <!-- Web SDK 默认只拷 *.json 进发布包；rag 种子的 Markdown 必须显式声明，
+       否则 dotnet publish 产物在 EC2 上首启时 SeedRunner 读不到文件直接崩溃。 -->
+  <ItemGroup>
+    <Content Include="SeedData/rag/**/*.md" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

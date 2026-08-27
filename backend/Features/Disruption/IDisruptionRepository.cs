@@ -7,6 +7,7 @@ public interface IDisruptionRepository
 {
     Task<List<DisruptionEntity>> ListAsync(string? type, string? region, CancellationToken ct = default);
     Task<DisruptionEntity?> FindByIdAsync(Guid id, CancellationToken ct = default);
+    Task AddDisruptionAsync(DisruptionEntity disruption, CancellationToken ct = default);
     Task<int> CountAffectedAsync(Guid disruptionId, CancellationToken ct = default);
     /// <summary>候选预订：酒店地址落在中断影响区域内、离店日期不早于中断开始、入住日期不晚于恢复窗口，
     /// 且还没针对这次中断建过案、也没被人工复核剔除过。</summary>

@@ -25,3 +25,10 @@ public record ExcludeCandidateRequest(Guid BookingId, string Reason);
 public record NotifyCandidatesRequest(List<Guid> BookingIds, string Priority);
 
 public record NotifyCandidatesResultDto(int Notified);
+
+// 探测器（Lambda:weather-collector 等）写入新中断事件用的请求形状，
+// 字段跟 SeedRunner 里的 DisruptionSeed 保持一致，方便探测端和种子数据互相对照。
+public record CreateDisruptionRequest(
+    string Type, string Title, string Region, DateTimeOffset StartAt, DateTimeOffset? EndAtOrWindow, string RawSignalText);
+
+public record CreateDisruptionResultDto(Guid Id);

@@ -18,6 +18,9 @@ public class DisruptionRepository(AppDbContext db) : IDisruptionRepository
     public Task<DisruptionEntity?> FindByIdAsync(Guid id, CancellationToken ct = default) =>
         db.Disruptions.FirstOrDefaultAsync(d => d.Id == id, ct);
 
+    public async Task AddDisruptionAsync(DisruptionEntity disruption, CancellationToken ct = default) =>
+        await db.Disruptions.AddAsync(disruption, ct);
+
     public Task<int> CountAffectedAsync(Guid disruptionId, CancellationToken ct = default) =>
         db.Cases.CountAsync(c => c.DisruptionId == disruptionId, ct);
 
