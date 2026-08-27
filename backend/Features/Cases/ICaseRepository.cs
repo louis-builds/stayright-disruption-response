@@ -18,12 +18,14 @@ public interface ICaseRepository
     Task UnselectOtherOptionsAsync(Guid caseId, Guid keepOptionId, CancellationToken ct = default);
     Task<Hotel?> FindHotelByNameAsync(string name, CancellationToken ct = default);
     Task<Guid?> FindHotelAccountUserIdAsync(Guid hotelId, CancellationToken ct = default);
+    Task<string?> FindHotelAccountEmailAsync(Guid hotelId, CancellationToken ct = default);
     Task<PagedResult<Message>> ListMessagesAsync(Guid caseId, string thread, int page, int pageSize, CancellationToken ct = default);
     Task AddMessageAsync(Message message, CancellationToken ct = default);
     Task AddNotificationAsync(Notification notification, CancellationToken ct = default);
     /// <summary>去重用：这个案件对这家酒店是不是已经有一条待处理的询单了，避免重复打扰酒店。</summary>
     Task<bool> HasPendingInquiryAsync(Guid caseId, Guid hotelId, CancellationToken ct = default);
     Task AddInquiryAsync(Inquiry inquiry, CancellationToken ct = default);
+    Task<Inquiry?> FindDeferInquiryAsync(Guid caseId, CancellationToken ct = default);
     /// <summary>打开对话：把这个案件下发给当前用户的未读通知（铃铛）清零，不碰消息已读——消息已读走 MarkMessageReadAsync。</summary>
     Task MarkThreadReadAsync(Guid caseId, string thread, string readerRole, Guid readerUserId, CancellationToken ct = default);
     /// <summary>单条消息已读：客人在这条消息上停留满3秒后才调用。</summary>

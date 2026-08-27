@@ -16,6 +16,21 @@ public class HotelService(IHotelRepository repo, ICaseService caseService, IOpti
     {
         var now = DateTimeOffset.UtcNow;
         var guestId = i.Case?.Booking?.GuestUserId;
+        var finalOutcome = i.Case?.Status == "closed"
+            ? (i.Case.Booking?.HotelId == i.HotelId ? "stayed" : "moved")
+            : null;
+
+        // 跟 OptionsAdminService.BuildDraftOptionsAsync 的 defer 分支、CaseService.ExecuteOptionAsync
+        // 同一套规则(比原定入住日期晚3天、保持原住宿晚数，基准是原 check-in 不是"今天")——
+        // 三处改动一处记得改另外两处，不然预览和实际生效日期会对不上。
+        DateOnly? proposedCheckIn = null, proposedCheckOut = null;
+        if (i.Case?.Booking is { } booking)
+        {
+            var nights = Math.Max(booking.CheckOut.DayNumber - booking.CheckIn.DayNumber, 1);
+            proposedCheckIn = booking.CheckIn.AddDays(3);
+            proposedCheckOut = proposedCheckIn.Value.AddDays(nights);
+        }
+
         return new InquiryItemDto(
             i.Id, i.CaseId, i.Case?.Booking?.ConfirmationNo ?? "", i.Case?.Booking?.GuestUser?.Nickname ?? "",
             i.Case?.Disruption?.Title ?? "", i.Case?.Booking?.CheckIn ?? default, i.Case?.Booking?.CheckOut ?? default,
@@ -23,7 +38,7 @@ public class HotelService(IHotelRepository repo, ICaseService caseService, IOpti
             i.Status == "pending" && now - i.RequestedAt > OverdueThreshold,
             guestId.HasValue && returningGuestIds.Contains(guestId.Value),
             guestId.HasValue && highValueGuestIds.Contains(guestId.Value),
-            i.RespondedAt, i.RejectReason);
+            i.RespondedAt, i.RejectReason, finalOutcome, proposedCheckIn, proposedCheckOut);
     }
 
     public async Task<List<InquiryItemDto>> ListInquiriesAsync(Guid hotelUserId, string? status, CancellationToken ct = default)
@@ -40,6 +55,7 @@ public class HotelService(IHotelRepository repo, ICaseService caseService, IOpti
     {
         var hotelId = await RequireHotelIdAsync(hotelUserId, ct);
         var inquiry = await repo.FindInquiryAsync(inquiryId, hotelId, ct) ?? throw new HotelItemNotFoundException();
+        if (inquiry.Status != "pending") return;
 
         inquiry.Status = "accepted";
         inquiry.RespondedAt = DateTimeOffset.UtcNow;
@@ -62,6 +78,7 @@ public class HotelService(IHotelRepository repo, ICaseService caseService, IOpti
     {
         var hotelId = await RequireHotelIdAsync(hotelUserId, ct);
         var inquiry = await repo.FindInquiryAsync(inquiryId, hotelId, ct) ?? throw new HotelItemNotFoundException();
+        if (inquiry.Status != "pending") return;
 
         inquiry.Status = "rejected";
         inquiry.RejectReason = request.Reason;

@@ -8,23 +8,28 @@ import { BadCasesPanel } from "./BadCasesPanel";
 import { DisruptionsPanel } from "./DisruptionsPanel";
 import { escalationReasonLabel } from "./escalationLabels";
 import { KnowledgeBasePanel } from "./KnowledgeBasePanel";
-import { OpsPage } from "./OpsPage";
 import { Pagination, usePagination } from "../../shared/components/Pagination";
 import { SystemAdminPanel } from "./SystemAdminPanel";
 import { SettingsPanel } from "./SettingsPanel";
-import type { CaseNote, CaseQueueItem, CoordinatorOption, OverviewDto } from "./types";
+import type { CaseNote, CaseQueueItem, CoordinatorOption, OpsOverview, OverviewDto } from "./types";
 import "./CoordinatorHomePage.css";
 
 type Tab = CoordinatorTab;
 
 const ESCALATION_FILTERS = [
-  { value: "", label: "All reasons" },
+  { value: "", label: "All attention reasons" },
+  { value: "high_priority", label: "High priority" },
   { value: "all_rejected", label: "Guest rejected all options" },
   { value: "must_manual", label: "Must be manual" },
   { value: "ai_stuck", label: "AI stuck" },
   { value: "low_confidence", label: "AI low confidence" },
   { value: "high_risk", label: "High risk" },
 ];
+
+function filterAttentionItems(items: CaseQueueItem[], filter: string) {
+  const attentionItems = items.filter((item) => item.priority === "high" || Boolean(item.escalationReason));
+  return filter === "high_priority" ? attentionItems.filter((item) => item.priority === "high") : attentionItems;
+}
 
 function formatWait(iso: string) {
   // .NET TimeSpan.ToString() switches format once days > 0: "hh:mm:ss[.fff]" becomes
@@ -41,49 +46,162 @@ function formatWait(iso: string) {
   return `${hours}h ${m}m`;
 }
 
-function OverviewPanel({ data, syncedAt }: { data: OverviewDto | null; syncedAt: Date | null }) {
+function OverviewPanel({ data, opsData, syncedAt }: { data: OverviewDto | null; opsData: OpsOverview | null; syncedAt: Date | null }) {
   if (!data) return <p className="coord-empty">Loading…</p>;
+  const caseFlowTotal = Math.max(data.pendingCount + data.inProgressCount + data.closedTodayCount, 1);
+  const disruptionTotal = Math.max(data.activeWeatherCount + data.activeFlightCount + data.activeRoadCount, 1);
   return (
-    <>
-    {syncedAt && (
-      <p className="coord-sync-indicator">
-        <span className="coord-sync-dot" aria-hidden="true" />
-        Synced {syncedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · refreshes every 30s
-      </p>
-    )}
-    <div className="coord-overview-grid">
-      <div className="coord-stat-card">
-        <span className="coord-stat-label">Active disruptions</span>
-        <span className="coord-stat-value">
-          {data.activeWeatherCount + data.activeFlightCount + data.activeRoadCount}
-        </span>
-        <span className="coord-stat-sub">
-          {data.activeWeatherCount} weather · {data.activeFlightCount} flight · {data.activeRoadCount} road
-        </span>
+    <div className="coord-overview-summary">
+      <div className="coord-overview-heading">
+        <div>
+          <span className="coord-overview-eyebrow">Live operations</span>
+          <h1>Coordinator dashboard</h1>
+          <p>Monitor disruptions, customer impact and urgent cases at a glance.</p>
+        </div>
+        {syncedAt && (
+          <p className="coord-sync-indicator coord-overview-sync">
+            <span className="coord-sync-dot" aria-hidden="true" />
+            Synced {syncedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            <span className="coord-sync-refresh">· every 30s</span>
+          </p>
+        )}
       </div>
-      <div className="coord-stat-card">
-        <span className="coord-stat-label">New affected bookings today</span>
-        <span className="coord-stat-value">{data.newAffectedBookingsToday}</span>
+
+      <div className="coord-overview-grid">
+        <div className="coord-stat-card coord-overview-stat coord-overview-stat-blue">
+          <span className="coord-overview-stat-icon" aria-hidden="true">↯</span>
+          <span className="coord-stat-label">Active disruptions</span>
+          <span className="coord-stat-value">
+            {data.activeWeatherCount + data.activeFlightCount + data.activeRoadCount}
+          </span>
+          <span className="coord-stat-sub">
+            {data.activeWeatherCount} weather · {data.activeFlightCount} flight · {data.activeRoadCount} road
+          </span>
+        </div>
+        <div className="coord-stat-card coord-overview-stat coord-overview-stat-teal">
+          <span className="coord-overview-stat-icon" aria-hidden="true">+</span>
+          <span className="coord-stat-label">New affected bookings</span>
+          <span className="coord-stat-value">{data.newAffectedBookingsToday}</span>
+          <span className="coord-stat-sub">Added today</span>
+        </div>
+        <div className="coord-stat-card coord-overview-stat coord-overview-stat-green">
+          <span className="coord-overview-stat-icon" aria-hidden="true">✓</span>
+          <span className="coord-stat-label">Case progress</span>
+          <div className="coord-status-breakdown">
+            <span><strong>{data.pendingCount}</strong>Pending</span>
+            <span><strong>{data.inProgressCount}</strong>In progress</span>
+            <span><strong>{data.closedTodayCount}</strong>Closed today</span>
+          </div>
+        </div>
+        <div className="coord-stat-card coord-overview-stat coord-overview-stat-amber">
+          <span className="coord-overview-stat-icon" aria-hidden="true">!</span>
+          <span className="coord-stat-label">Overdue cases</span>
+          <span className="coord-stat-value">{data.overdueInProgressCount}</span>
+          <span className="coord-stat-sub">In progress for over 24 hours</span>
+        </div>
       </div>
-      <div className="coord-stat-card">
-        <span className="coord-stat-label">Pending / In progress / Closed today</span>
-        <span className="coord-stat-value">
-          {data.pendingCount} / {data.inProgressCount} / {data.closedTodayCount}
-        </span>
+
+      <div className="coord-report-grid">
+        <section className="coord-report-card">
+          <div className="coord-report-heading">
+            <div>
+              <span className="coord-report-eyebrow">Workload</span>
+              <h2>Case flow</h2>
+            </div>
+            <span className="coord-report-total">{data.pendingCount + data.inProgressCount} active</span>
+          </div>
+          <div className="coord-report-bars">
+            <div className="coord-report-row">
+              <span className="coord-report-label"><i className="coord-report-dot coord-report-dot-pending" />Pending</span>
+              <div className="coord-report-track"><span className="coord-report-fill coord-report-fill-pending" style={{ width: `${(data.pendingCount / caseFlowTotal) * 100}%` }} /></div>
+              <strong>{data.pendingCount}</strong>
+            </div>
+            <div className="coord-report-row">
+              <span className="coord-report-label"><i className="coord-report-dot coord-report-dot-progress" />In progress</span>
+              <div className="coord-report-track"><span className="coord-report-fill coord-report-fill-progress" style={{ width: `${(data.inProgressCount / caseFlowTotal) * 100}%` }} /></div>
+              <strong>{data.inProgressCount}</strong>
+            </div>
+            <div className="coord-report-row">
+              <span className="coord-report-label"><i className="coord-report-dot coord-report-dot-closed" />Closed today</span>
+              <div className="coord-report-track"><span className="coord-report-fill coord-report-fill-closed" style={{ width: `${(data.closedTodayCount / caseFlowTotal) * 100}%` }} /></div>
+              <strong>{data.closedTodayCount}</strong>
+            </div>
+          </div>
+        </section>
+
+        <section className="coord-report-card">
+          <div className="coord-report-heading">
+            <div>
+              <span className="coord-report-eyebrow">Live events</span>
+              <h2>Active disruption mix</h2>
+            </div>
+            <span className="coord-report-total">{data.activeWeatherCount + data.activeFlightCount + data.activeRoadCount} total</span>
+          </div>
+          <div className="coord-report-bars">
+            <div className="coord-report-row">
+              <span className="coord-report-label"><i className="coord-report-dot coord-report-dot-weather" />Weather</span>
+              <div className="coord-report-track"><span className="coord-report-fill coord-report-fill-weather" style={{ width: `${(data.activeWeatherCount / disruptionTotal) * 100}%` }} /></div>
+              <strong>{data.activeWeatherCount}</strong>
+            </div>
+            <div className="coord-report-row">
+              <span className="coord-report-label"><i className="coord-report-dot coord-report-dot-flight" />Flight</span>
+              <div className="coord-report-track"><span className="coord-report-fill coord-report-fill-flight" style={{ width: `${(data.activeFlightCount / disruptionTotal) * 100}%` }} /></div>
+              <strong>{data.activeFlightCount}</strong>
+            </div>
+            <div className="coord-report-row">
+              <span className="coord-report-label"><i className="coord-report-dot coord-report-dot-road" />Road</span>
+              <div className="coord-report-track"><span className="coord-report-fill coord-report-fill-road" style={{ width: `${(data.activeRoadCount / disruptionTotal) * 100}%` }} /></div>
+              <strong>{data.activeRoadCount}</strong>
+            </div>
+          </div>
+        </section>
       </div>
-      <div className="coord-stat-card coord-stat-card-warn">
-        <span className="coord-stat-label">Overdue in-progress cases</span>
-        <span className="coord-stat-value">{data.overdueInProgressCount}</span>
-      </div>
+
+      {opsData && (
+        <section className="coord-service-performance">
+          <div className="coord-service-heading">
+            <div>
+              <span className="coord-report-eyebrow">Customer operations</span>
+              <h2>Today&apos;s service performance</h2>
+            </div>
+            <span className="coord-service-caption">Live operational KPIs</span>
+          </div>
+          <div className="coord-service-grid">
+            <div className="coord-service-metric">
+              <span>First notification within 15 min</span>
+              <strong>{opsData.todayKpi.firstNotifyRatePercent}%</strong>
+              <small>{opsData.todayKpi.firstNotifyNumerator} of {opsData.todayKpi.firstNotifyDenominator} eligible cases</small>
+            </div>
+            <div className="coord-service-metric">
+              <span>Average resolution time</span>
+              <strong>{opsData.todayKpi.avgResolutionHours ?? "—"}<em>{opsData.todayKpi.avgResolutionHours === null ? "" : "h"}</em></strong>
+              <small>Median {opsData.todayKpi.medianResolutionHours ?? "—"} hours</small>
+            </div>
+            <div className="coord-service-metric">
+              <span>Rebooking retention</span>
+              <strong>{opsData.todayKpi.rebookingRetentionPercent}%</strong>
+              <small>{opsData.todayKpi.rebookingNumerator} of {opsData.todayKpi.rebookingDenominator} resolved cases</small>
+            </div>
+            <div className="coord-service-metric">
+              <span>Notification success</span>
+              <strong>{opsData.emailSuccessRatePercent}%</strong>
+              <small>Email · {opsData.inAppSuccessRatePercent}% in-app</small>
+            </div>
+          </div>
+        </section>
+      )}
+
       {data.biggestImpactDisruptionTitle && (
-        <div className="coord-stat-card coord-stat-card-wide">
-          <span className="coord-stat-label">Biggest impact event</span>
-          <span className="coord-stat-value coord-stat-value-sm">{data.biggestImpactDisruptionTitle}</span>
-          <span className="coord-stat-sub">{data.biggestImpactAffectedCount} affected cases</span>
+        <div className="coord-impact-card">
+          <span className="coord-impact-icon" aria-hidden="true">◎</span>
+          <div className="coord-impact-copy">
+            <span className="coord-stat-label">Highest-impact event</span>
+            <strong>{data.biggestImpactDisruptionTitle}</strong>
+          </div>
+          <span className="coord-impact-count">{data.biggestImpactAffectedCount} affected cases</span>
         </div>
       )}
     </div>
-    </>
   );
 }
 
@@ -316,6 +434,7 @@ export function CoordinatorHomePage() {
   const initialTab = (location.state as { tab?: Tab } | null)?.tab;
   const [tab, setTab] = useState<Tab>(initialTab ?? "overview");
   const [overview, setOverview] = useState<OverviewDto | null>(null);
+  const [opsOverview, setOpsOverview] = useState<OpsOverview | null>(null);
   const [overviewSyncedAt, setOverviewSyncedAt] = useState<Date | null>(null);
   const [items, setItems] = useState<CaseQueueItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -341,15 +460,16 @@ export function CoordinatorHomePage() {
     setLoading(true);
     const requestId = ++latestRequestIdRef.current;
     if (tab === "overview") {
-      const res = await api.fetchOverview();
-      if (requestId === latestRequestIdRef.current && res.code === 0) {
-        setOverview(res.data);
-        setOverviewSyncedAt(new Date());
+      const [overviewRes, opsRes] = await Promise.all([api.fetchOverview(), api.fetchOpsOverview()]);
+      if (requestId === latestRequestIdRef.current) {
+        if (overviewRes.code === 0) setOverview(overviewRes.data);
+        if (opsRes.code === 0) setOpsOverview(opsRes.data);
+        if (overviewRes.code === 0 || opsRes.code === 0) setOverviewSyncedAt(new Date());
       }
     } else if (tab === "queue") {
       const res = await api.fetchQueue(escalationFilter || undefined);
       if (requestId === latestRequestIdRef.current && res.code === 0) {
-        setItems(res.data);
+        setItems(filterAttentionItems(res.data, escalationFilter));
         setQueueSyncedAt(new Date());
       }
     } else if (tab === "todo") {
@@ -388,10 +508,11 @@ export function CoordinatorHomePage() {
     if (tab !== "overview") return;
     const timer = window.setInterval(() => {
       const requestId = ++latestRequestIdRef.current;
-      void api.fetchOverview().then((res) => {
-        if (requestId === latestRequestIdRef.current && res.code === 0) {
-          setOverview(res.data);
-          setOverviewSyncedAt(new Date());
+      void Promise.all([api.fetchOverview(), api.fetchOpsOverview()]).then(([overviewRes, opsRes]) => {
+        if (requestId === latestRequestIdRef.current) {
+          if (overviewRes.code === 0) setOverview(overviewRes.data);
+          if (opsRes.code === 0) setOpsOverview(opsRes.data);
+          if (overviewRes.code === 0 || opsRes.code === 0) setOverviewSyncedAt(new Date());
         }
       });
     }, 30_000);
@@ -405,7 +526,7 @@ export function CoordinatorHomePage() {
       const requestId = ++latestRequestIdRef.current;
       void api.fetchQueue(escalationFilter || undefined).then((res) => {
         if (requestId === latestRequestIdRef.current && res.code === 0) {
-          setItems(res.data);
+          setItems(filterAttentionItems(res.data, escalationFilter));
           setQueueSyncedAt(new Date());
         }
       });
@@ -475,10 +596,8 @@ export function CoordinatorHomePage() {
     let overdueCount = 0;
     let highValueCount = 0;
     for (const it of items) {
-      if (it.escalationReason) {
-        const label = escalationReasonLabel(it.escalationReason);
-        byReason.set(label, (byReason.get(label) ?? 0) + 1);
-      }
+      const label = it.escalationReason ? escalationReasonLabel(it.escalationReason) : "High priority";
+      byReason.set(label, (byReason.get(label) ?? 0) + 1);
       if (it.overdue) overdueCount++;
       if (it.isHighValueGuest) highValueCount++;
     }
@@ -559,8 +678,7 @@ export function CoordinatorHomePage() {
         <div className="coord-panel">
           {tab === "overview" && (
             <div className="coord-overview-wrap">
-              <OverviewPanel data={overview} syncedAt={overviewSyncedAt} />
-              <OpsPage />
+              <OverviewPanel data={overview} opsData={opsOverview} syncedAt={overviewSyncedAt} />
             </div>
           )}
 
@@ -590,7 +708,7 @@ export function CoordinatorHomePage() {
                   <span className="coord-stat-value">{queueStats.highValueCount}</span>
                 </div>
                 <div className="coord-stat-card coord-stat-card-wide coord-queue-reason-card">
-                  <span className="coord-stat-label">By reason</span>
+                  <span className="coord-stat-label">By attention reason</span>
                   {queueStats.byReason.length === 0 ? (
                     <span className="coord-stat-sub">No reasons recorded.</span>
                   ) : (

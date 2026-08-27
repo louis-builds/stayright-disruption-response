@@ -34,9 +34,18 @@ public class CaseRepository(AppDbContext db) : ICaseRepository
     public Task<Message?> FindMessageAsync(Guid messageId, Guid caseId, CancellationToken ct = default) =>
         db.Messages.FirstOrDefaultAsync(m => m.Id == messageId && m.CaseId == caseId, ct);
 
+    private static readonly Dictionary<string, int> OptionTypeOrder = new() { ["defer"] = 0, ["alternate"] = 1, ["cancel"] = 2, ["custom"] = 3 };
+
     // 已删/不可用的选项不展示给客人（Task 14 协调员端的 unavailable 标记）。
-    public Task<List<Option>> ListOptionsAsync(Guid caseId, CancellationToken ct = default) =>
-        db.Options.Where(o => o.CaseId == caseId && o.Availability != "unavailable").OrderBy(o => o.CreatedAt).ToListAsync(ct);
+    // BuildDraftOptionsAsync 生成三选项草稿时共用同一个 now 做 CreatedAt，纯按 CreatedAt 排序在
+    // 这种全相同值的情况下没有 tie-breaker，Postgres 返回顺序不保证稳定——客人选中一个选项后
+    // 那一行被 UPDATE，下次查询顺序就可能跟着变，页面上的卡片跟着跳位置。改成按方案类型的
+    // 固定语义顺序排(内存排，选项数量小，性能无所谓)，天然稳定，顺带比原始乱序更符合阅读直觉。
+    public async Task<List<Option>> ListOptionsAsync(Guid caseId, CancellationToken ct = default)
+    {
+        var options = await db.Options.Where(o => o.CaseId == caseId && o.Availability != "unavailable").ToListAsync(ct);
+        return [.. options.OrderBy(o => OptionTypeOrder.GetValueOrDefault(o.OptionType, 99)).ThenBy(o => o.CreatedAt)];
+    }
 
     public Task<Option?> FindOptionAsync(Guid optionId, Guid caseId, CancellationToken ct = default) =>
         db.Options.FirstOrDefaultAsync(o => o.Id == optionId && o.CaseId == caseId, ct);
@@ -57,6 +66,9 @@ public class CaseRepository(AppDbContext db) : ICaseRepository
     public Task<Guid?> FindHotelAccountUserIdAsync(Guid hotelId, CancellationToken ct = default) =>
         db.Users.Where(u => u.Role == "hotel" && u.HotelId == hotelId).Select(u => (Guid?)u.Id).FirstOrDefaultAsync(ct);
 
+    public Task<string?> FindHotelAccountEmailAsync(Guid hotelId, CancellationToken ct = default) =>
+        db.Users.Where(u => u.Role == "hotel" && u.HotelId == hotelId).Select(u => u.Email).FirstOrDefaultAsync(ct);
+
     public Task<PagedResult<Message>> ListMessagesAsync(Guid caseId, string thread, int page, int pageSize, CancellationToken ct = default) =>
         db.Messages.Where(m => m.CaseId == caseId && m.Thread == thread).OrderBy(m => m.CreatedAt).ToPagedResultAsync(page, pageSize, ct);
 
@@ -71,6 +83,9 @@ public class CaseRepository(AppDbContext db) : ICaseRepository
 
     public async Task AddInquiryAsync(Inquiry inquiry, CancellationToken ct = default) =>
         await db.Inquiries.AddAsync(inquiry, ct);
+
+    public Task<Inquiry?> FindDeferInquiryAsync(Guid caseId, CancellationToken ct = default) =>
+        db.Inquiries.FirstOrDefaultAsync(i => i.CaseId == caseId && i.Type == "defer", ct);
 
     // 只负责清铃铛(站内通知)——消息本身的已读现在按单条来(MarkMessageReadAsync)，靠客人真的
     // 停留在那条消息上3秒才算读过，不是打开线程就瞬间全部已读，这两件事故意拆开。

@@ -285,11 +285,16 @@ public class CaseService(
             {
                 try
                 {
+                    var caseLink = CaseEmailLinks.BuildCaseLink(caseId);
+                    var htmlBody = EmailTemplate.Build("Your refund has been confirmed", $"""
+                        <p>Your refund of {amount:F2} {c.Booking.Currency} has been confirmed by our team. Reason: {WebUtility.HtmlEncode(reason)}</p>
+                        {EmailTemplate.Button(caseLink, "View this case")}
+                        """);
                     await email.SendEmailAsync(
                         guest.Email,
                         "Your refund has been confirmed",
-                        $"Your refund of {amount:F2} {c.Booking.Currency} has been confirmed by our team. Reason: {reason}\n\nView this case: {CaseEmailLinks.BuildCaseLink(caseId)}",
-                        ct);
+                        $"Your refund of {amount:F2} {c.Booking.Currency} has been confirmed by our team. Reason: {reason}\n\nView this case: {caseLink}",
+                        ct, htmlBody);
                 }
                 catch (Exception ex)
                 {
@@ -398,6 +403,86 @@ public class CaseService(
         await cases.SaveChangesAsync(ct);
     }
 
+    public async Task<ProposeDeferDatesResultDto> ProposeDeferDatesAsync(
+        Guid caseId, Guid optionId, DateOnly newCheckIn, DateOnly newCheckOut, Guid userId, string userRole, CancellationToken ct = default)
+    {
+        var c = await LoadAuthorizedCaseAsync(cases, caseId, userId, userRole, ct);
+        if (c.Status == "closed")
+            return new ProposeDeferDatesResultDto(false, "This case has already been resolved — no further changes can be made here.");
+
+        var option = await cases.FindOptionAsync(optionId, caseId, ct) ?? throw new CaseNotFoundException();
+        if (option.OptionType != "defer")
+            return new ProposeDeferDatesResultDto(false, "This isn't a deferral option.");
+
+        var booking = c.Booking!;
+        var now = DateTimeOffset.UtcNow;
+
+        // payload 存的是相对原 check-in 的天数偏移(见 OptionsAdminService.BuildDraftOptionsAsync /
+        // CaseService.ExecuteOptionAsync)，客人提的是绝对日期——换算成同一种表示，执行时那段代码不用改。
+        option.PayloadJson = JsonSerializer.Serialize(new
+        {
+            new_check_in_offset_days = newCheckIn.DayNumber - booking.CheckIn.DayNumber,
+            new_check_out_offset_days = newCheckOut.DayNumber - booking.CheckIn.DayNumber,
+            fee_diff = 0m,
+            currency = booking.Currency,
+        });
+        // 客人换了日期，酒店之前批准/拒绝的是旧方案，不能沿用——重新变成待确认，不管之前是什么状态。
+        option.Availability = "pending";
+        option.UpdatedAt = now;
+
+        var inquiry = await cases.FindDeferInquiryAsync(caseId, ct);
+        if (inquiry is not null && inquiry.Status != "pending")
+        {
+            inquiry.Status = "pending";
+            inquiry.RespondedAt = null;
+            inquiry.RejectReason = null;
+            inquiry.UpdatedAt = now;
+        }
+
+        await cases.AddMessageAsync(new Message
+        {
+            Id = Guid.NewGuid(), CaseId = caseId, SenderRole = "system", Thread = "ai",
+            Content = $"You proposed new dates for the deferral: {newCheckIn:yyyy-MM-dd} → {newCheckOut:yyyy-MM-dd}. We've asked the hotel to reconfirm.",
+            CreatedAt = now, UpdatedAt = now,
+        }, ct);
+
+        await cases.SaveChangesAsync(ct);
+        await NotifyHotelOfProposedDatesAsync(c, booking, newCheckIn, newCheckOut, ct);
+
+        return new ProposeDeferDatesResultDto(true, "We've asked the hotel to reconfirm these dates.");
+    }
+
+    private async Task NotifyHotelOfProposedDatesAsync(Case full, Booking booking, DateOnly newCheckIn, DateOnly newCheckOut, CancellationToken ct)
+    {
+        var hotelUserId = await cases.FindHotelAccountUserIdAsync(booking.HotelId, ct);
+        if (hotelUserId is null) return;
+
+        var now = DateTimeOffset.UtcNow;
+        var body = $"Guest proposed different dates for booking {booking.ConfirmationNo}: {newCheckIn:yyyy-MM-dd} → {newCheckOut:yyyy-MM-dd}. Please reconfirm.";
+        await cases.AddNotificationAsync(new Notification
+        {
+            Id = Guid.NewGuid(), UserId = hotelUserId.Value, Channel = "in_app",
+            Type = "defer_dates_proposed", Title = "Guest proposed different dates",
+            Body = body, CaseId = full.Id, SentAt = now, Success = true, CreatedAt = now, UpdatedAt = now,
+        }, ct);
+
+        var hotelEmail = await cases.FindHotelAccountEmailAsync(booking.HotelId, ct);
+        if (string.IsNullOrWhiteSpace(hotelEmail)) return;
+        var hotelHomeLink = CaseEmailLinks.BuildHotelHomeLink();
+        var htmlBody = EmailTemplate.Build("Guest proposed different dates", $"""
+            <p>{WebUtility.HtmlEncode(body)}</p>
+            {EmailTemplate.Button(hotelHomeLink, "Open your dashboard")}
+            """);
+        try
+        {
+            await email.SendEmailAsync(hotelEmail, "Guest proposed different dates", $"{body}\n\nOpen your dashboard: {hotelHomeLink}", ct, htmlBody);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to send proposed-dates email to {Email}", hotelEmail);
+        }
+    }
+
     public async Task<ConfirmExecutionResultDto> ConfirmExecutionAsync(Guid caseId, Guid optionId, Guid userId, string userRole, CancellationToken ct = default)
     {
         var c = await LoadAuthorizedCaseAsync(cases, caseId, userId, userRole, ct);
@@ -442,6 +527,7 @@ public class CaseService(
             option.ExecutionRequestedAt = now;
             await NotifyHotelAsync(full, option, ct);
             await cases.SaveChangesAsync(ct);
+            await NotifyGuestSelectionSubmittedAsync(full, option, ct);
             return new ConfirmExecutionResultDto("processing", "Submitted — we're waiting for the hotel to confirm. We'll update you as soon as we hear back.", null, null, null);
         }
 
@@ -458,13 +544,19 @@ public class CaseService(
         using var payload = JsonDocument.Parse(option.PayloadJson);
         var root = payload.RootElement;
         var booking = full.Booking!;
+        var originalHotelId = booking.HotelId;
 
         if (option.OptionType == "defer" &&
             root.TryGetProperty("new_check_in_offset_days", out var ciEl) &&
             root.TryGetProperty("new_check_out_offset_days", out var coEl))
         {
-            booking.CheckIn = DateOnly.FromDateTime(now.UtcDateTime).AddDays(ciEl.GetInt32());
-            booking.CheckOut = DateOnly.FromDateTime(now.UtcDateTime).AddDays(coEl.GetInt32());
+            // offset 是"比原定入住日期晚几天"，基准必须是 booking 原本的 check-in，不是"今天"——
+            // 用执行确认那一刻的日期当基准会导致新日期跟"什么时候点确认"绑定，快到期的订单
+            // 甚至可能算出比原定日期更早的"延期"结果(真实复现过：原定08-29入住，08-26点确认，
+            // "3天后"=08-29，延期形同没延，日期完全没变)。改成相对原 check-in 偏移，语义自洽。
+            var originalCheckIn = booking.CheckIn;
+            booking.CheckIn = originalCheckIn.AddDays(ciEl.GetInt32());
+            booking.CheckOut = originalCheckIn.AddDays(coEl.GetInt32());
         }
         else if (option.OptionType == "alternate" && root.TryGetProperty("hotel", out var hotelNameEl))
         {
@@ -486,7 +578,21 @@ public class CaseService(
         full.ClosedAt = now;
         full.UpdatedAt = now;
 
+        // 案件状态变了、邮件也发了，但对话记录本身从没跟着写过一句——客人回到对话框看到的
+        // 还是"等酒店确认"那几条旧消息，跟侧栏"已完成"状态对不上。补一条系统消息。
+        await cases.AddMessageAsync(new Message
+        {
+            Id = Guid.NewGuid(), CaseId = full.Id, SenderRole = "system",
+            Content = $"Good news — your booking has been updated. New confirmation: {booking.ConfirmationNo}, " +
+                $"check-in {booking.CheckIn:yyyy-MM-dd} → check-out {booking.CheckOut:yyyy-MM-dd}.",
+            CreatedAt = now, UpdatedAt = now,
+        }, ct);
+
         await NotifyHotelAsync(full, option, ct);
+        // 客人换去了别家：原酒店只在 H1 那次"能不能延期"被问过一次,之后再没收到任何后续消息——
+        // 它可能还在按"这客人要延期"给这间房留着。改订生效时如果最终酒店跟原酒店不是同一家,
+        // 得单独告诉原酒店这单已经不用它了。
+        if (originalHotelId != booking.HotelId) await NotifyOriginalHotelReleasedAsync(full, originalHotelId, booking, ct);
         await cases.SaveChangesAsync(ct);
 
         var guest = await users.FindByIdAsync(booking.GuestUserId, ct);
@@ -494,8 +600,14 @@ public class CaseService(
         {
             try
             {
+                var caseLink = CaseEmailLinks.BuildCaseLink(full.Id);
+                var htmlBody = EmailTemplate.Build("Your booking has been updated", $"""
+                    <p>Your new confirmation number is <strong>{WebUtility.HtmlEncode(booking.ConfirmationNo)}</strong>.</p>
+                    <p>Check-in {booking.CheckIn:yyyy-MM-dd}, check-out {booking.CheckOut:yyyy-MM-dd}.</p>
+                    {EmailTemplate.Button(caseLink, "View this case")}
+                    """);
                 await email.SendEmailAsync(guest.Email, "Your booking has been updated",
-                    $"Your new confirmation number is {booking.ConfirmationNo}. Check-in {booking.CheckIn:yyyy-MM-dd}, check-out {booking.CheckOut:yyyy-MM-dd}.\n\nView this case: {CaseEmailLinks.BuildCaseLink(full.Id)}", ct);
+                    $"Your new confirmation number is {booking.ConfirmationNo}. Check-in {booking.CheckIn:yyyy-MM-dd}, check-out {booking.CheckOut:yyyy-MM-dd}.\n\nView this case: {caseLink}", ct, htmlBody);
             }
             catch (Exception ex)
             {
@@ -512,6 +624,11 @@ public class CaseService(
     {
         var option = await cases.FindOptionAsync(optionId, caseId, ct) ?? throw new CaseNotFoundException();
         var full = await cases.FindFullAsync(caseId, ct) ?? throw new CaseNotFoundException();
+
+        // 幂等保护:酒店端"Confirm deferral"/"Confirm"按钮连点两次(或网络重试)时，这个方法
+        // 会被同一个已经 available 的选项调用第二次——不加这道guard的话，客人已选定的分支会
+        // 重新跑一次 ExecuteOptionAsync，生成第二个改订确认号、案件被二次"关闭"，数据直接错乱。
+        if (option.Availability == "available") return null;
 
         option.Availability = "available";
         option.UpdatedAt = DateTimeOffset.UtcNow;
@@ -590,8 +707,14 @@ public class CaseService(
 
         try
         {
+            var caseLink = CaseEmailLinks.BuildCaseLink(full.Id);
+            var listItems = string.Concat(lines.Select(l => $"<li>{WebUtility.HtmlEncode(l)}</li>"));
+            var htmlBody = EmailTemplate.Build("The hotel confirmed your option", $"""
+                <ul style="padding-left:20px;margin:0 0 16px;">{listItems}</ul>
+                {EmailTemplate.Button(caseLink, "Open your options")}
+                """);
             await email.SendEmailAsync(guest.Email, "The hotel confirmed your option",
-                $"{OptionTitle(confirmed)} is now available for your booking {full.Booking.ConfirmationNo}. Sign in to compare and confirm.\n\nView this case: {CaseEmailLinks.BuildCaseLink(full.Id)}", ct);
+                $"{OptionTitle(confirmed)} is now available for your booking {full.Booking.ConfirmationNo}. Sign in to compare and confirm.\n\nView this case: {caseLink}", ct, htmlBody);
         }
         catch (Exception ex)
         {
@@ -638,19 +761,19 @@ public class CaseService(
             var token = actionTokens.Create(new CaseActionPayload(caseId, singleOption.Id, guest.Id));
             var actionLink = CaseEmailLinks.BuildCaseActionLink(token);
             plainBody = $"{systemText}\n\nConfirm — {OptionTitle(singleOption)}: {actionLink}\n\nOr view all options: {caseLink}";
-            htmlBody = $"""
+            htmlBody = EmailTemplate.Build("The hotel confirmed your request", $"""
                 <p>{WebUtility.HtmlEncode(systemText)}</p>
-                <p><a href="{actionLink}" style="display:inline-block;padding:10px 18px;background:#2e6f96;color:#ffffff;border-radius:6px;text-decoration:none;font-weight:600;">Confirm — {WebUtility.HtmlEncode(OptionTitle(singleOption))}</a></p>
-                <p><a href="{caseLink}">View all options</a></p>
-                """;
+                {EmailTemplate.Button(actionLink, $"Confirm — {OptionTitle(singleOption)}")}
+                <p><a href="{caseLink}">Or view all options</a></p>
+                """);
         }
         else
         {
             plainBody = $"{systemText}\n\nView this case: {caseLink}";
-            htmlBody = $"""
+            htmlBody = EmailTemplate.Build(accepted ? "The hotel confirmed your request" : "Update on your request", $"""
                 <p>{WebUtility.HtmlEncode(systemText)}</p>
-                <p><a href="{caseLink}">View this case</a></p>
-                """;
+                {EmailTemplate.Button(caseLink, "View this case")}
+                """);
         }
 
         await cases.SaveChangesAsync(ct);
@@ -689,13 +812,89 @@ public class CaseService(
         if (hotelUserId is null) return;
 
         var now = DateTimeOffset.UtcNow;
+        var perksSuffix = option.PerkNames.Count > 0 ? $" Includes: {string.Join(", ", option.PerkNames)}." : "";
+        var body = $"A guest has confirmed {OptionTitle(option)} for booking {full.Booking!.ConfirmationNo}.{perksSuffix}";
         await cases.AddNotificationAsync(new Notification
         {
             Id = Guid.NewGuid(), UserId = hotelUserId.Value, Channel = "in_app",
             Type = "guest_selection", Title = "Guest selected a rebooking option",
-            Body = $"A guest has confirmed a change for booking {full.Booking!.ConfirmationNo}.",
+            Body = body,
             CaseId = full.Id, SentAt = now, Success = true, CreatedAt = now, UpdatedAt = now,
         }, ct);
+
+        var hotelEmail = await cases.FindHotelAccountEmailAsync(hotelId.Value, ct);
+        if (string.IsNullOrWhiteSpace(hotelEmail)) return;
+        // 酒店账号没有案件对话页可看——把结果直接写进邮件正文，链接指回酒店自己的待办首页，
+        // 不指望点"查看"才能知道客人选了什么(见 CaseEmailLinks.BuildHotelHomeLink 的注释)。
+        var hotelHomeLink = CaseEmailLinks.BuildHotelHomeLink();
+        var htmlBody = EmailTemplate.Build("Guest selected a rebooking option", $"""
+            <p>{WebUtility.HtmlEncode(body)}</p>
+            {EmailTemplate.Button(hotelHomeLink, "Open your dashboard")}
+            """);
+        try
+        {
+            await email.SendEmailAsync(hotelEmail, "Guest selected a rebooking option", $"{body}\n\nOpen your dashboard: {hotelHomeLink}", ct, htmlBody);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to send guest-selection email to {Email}", hotelEmail);
+        }
+    }
+
+    /// <summary>改订生效后如果客人最终去了别家，原酒店(H1 那次被问过延期、之后再没收到任何消息的那家)
+    /// 得单独告诉一声"这单不用你了"，不然它可能还在按原计划给这间房留位。</summary>
+    private async Task NotifyOriginalHotelReleasedAsync(Case full, Guid originalHotelId, Booking booking, CancellationToken ct)
+    {
+        var hotelUserId = await cases.FindHotelAccountUserIdAsync(originalHotelId, ct);
+        if (hotelUserId is null) return;
+
+        var now = DateTimeOffset.UtcNow;
+        var body = $"The guest for booking {booking.ConfirmationNo} has moved to another hotel — you no longer need to hold this room.";
+        await cases.AddNotificationAsync(new Notification
+        {
+            Id = Guid.NewGuid(), UserId = hotelUserId.Value, Channel = "in_app",
+            Type = "booking_released", Title = "Booking moved to another hotel",
+            Body = body, CaseId = full.Id, SentAt = now, Success = true, CreatedAt = now, UpdatedAt = now,
+        }, ct);
+
+        var hotelEmail = await cases.FindHotelAccountEmailAsync(originalHotelId, ct);
+        if (string.IsNullOrWhiteSpace(hotelEmail)) return;
+        var hotelHomeLink = CaseEmailLinks.BuildHotelHomeLink();
+        var htmlBody = EmailTemplate.Build("Booking moved to another hotel", $"""
+            <p>{WebUtility.HtmlEncode(body)}</p>
+            {EmailTemplate.Button(hotelHomeLink, "Open your dashboard")}
+            """);
+        try
+        {
+            await email.SendEmailAsync(hotelEmail, "Booking moved to another hotel", $"{body}\n\nOpen your dashboard: {hotelHomeLink}", ct, htmlBody);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to send booking-released email to {Email}", hotelEmail);
+        }
+    }
+
+    /// <summary>客人自己点 P7 确认、方案还没生效(等酒店确认)时的回执邮件——之前只通知了酒店，
+    /// 客人这边只在页面上看一眼提交结果，关掉页面就没有任何留痕。</summary>
+    private async Task NotifyGuestSelectionSubmittedAsync(Case full, Option option, CancellationToken ct)
+    {
+        var guest = await users.FindByIdAsync(full.Booking!.GuestUserId, ct);
+        if (guest is null) return;
+
+        var body = $"We've submitted your selection ({OptionTitle(option)}) for booking {full.Booking.ConfirmationNo} to the hotel. We'll update you as soon as they confirm.";
+        var caseLink = CaseEmailLinks.BuildCaseLink(full.Id);
+        var htmlBody = EmailTemplate.Build("Your selection has been submitted", $"""
+            <p>{WebUtility.HtmlEncode(body)}</p>
+            {EmailTemplate.Button(caseLink, "View this case")}
+            """);
+        try
+        {
+            await email.SendEmailAsync(guest.Email, "Your selection has been submitted", $"{body}\n\nView this case: {caseLink}", ct, htmlBody);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to send selection-submitted email to {Email}", guest.Email);
+        }
     }
 
     private async Task EscalateAsync(Case full, string reason, CancellationToken ct)

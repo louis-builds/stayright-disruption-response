@@ -61,3 +61,8 @@ export interface ConfirmExecutionResult {
   newCheckIn: string | null;
   newCheckOut: string | null;
 }
+
+export interface ProposeDeferDatesResult {
+  success: boolean;
+  message: string;
+}

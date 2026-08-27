@@ -16,8 +16,10 @@ public interface IDisruptionRepository
     Task AddWindowAuditAsync(DisruptionWindowAudit audit, CancellationToken ct = default);
     Task AddCaseAsync(Case caseEntity, CancellationToken ct = default);
     Task AddInquiryAsync(Inquiry inquiry, CancellationToken ct = default);
+    Task AddMessageAsync(Message message, CancellationToken ct = default);
     Task AddNotificationAsync(Notification notification, CancellationToken ct = default);
     Task<Guid?> FindHotelAccountUserIdAsync(Guid hotelId, CancellationToken ct = default);
+    Task<string?> FindHotelAccountEmailAsync(Guid hotelId, CancellationToken ct = default);
     /// <summary>"高价值客人"：2 次及以上非取消预订(回头客)，跟协调员队列用的同一套口径。</summary>
     Task<HashSet<Guid>> GetHighValueGuestIdsAsync(IEnumerable<Guid> guestUserIds, CancellationToken ct = default);
     Task SaveChangesAsync(CancellationToken ct = default);

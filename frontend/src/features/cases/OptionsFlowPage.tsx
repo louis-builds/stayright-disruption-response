@@ -6,6 +6,7 @@ import { useAuth } from "../auth";
 import * as api from "./api";
 import type { CaseOption, CaseSummary, ConfirmExecutionResult, OptionType, PolicySummary } from "./types";
 import "./OptionsFlowPage.css";
+import "../coordinator/CoordinatorHomePage.css";
 
 interface OptionPayload {
   hotel?: string;
@@ -26,6 +27,51 @@ function parsePayload(json: string): OptionPayload {
   } catch {
     return {};
   }
+}
+
+function addDaysToDate(dateStr: string, days: number): string {
+  // 不能用 new Date(dateStr + "T00:00:00").toISOString() 这套——那是本地时区午夜，
+  // toISOString() 转 UTC 时在 UTC+ 时区(比如新西兰)会跨天减一天，日期整体偏移。
+  // 全程用 Date.UTC 构造，不经过本地时区换算。
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
+function ProposeDatesModal({ defaultCheckIn, defaultCheckOut, onCancel, onConfirm }: {
+  defaultCheckIn: string; defaultCheckOut: string; onCancel: () => void; onConfirm: (checkIn: string, checkOut: string) => void;
+}) {
+  const [checkIn, setCheckIn] = useState(defaultCheckIn);
+  const [checkOut, setCheckOut] = useState(defaultCheckOut);
+
+  return (
+    <div className="coord-modal-backdrop">
+      <div className="coord-modal">
+        <h3>Propose different dates</h3>
+        <p className="flow-hint">Not happy with the dates we suggested? Propose your own — we'll ask the hotel to reconfirm.</p>
+        <label className="coord-field">
+          <span>New check-in</span>
+          <input type="date" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} />
+        </label>
+        <label className="coord-field">
+          <span>New check-out</span>
+          <input type="date" value={checkOut} min={checkIn} onChange={(e) => setCheckOut(e.target.value)} />
+        </label>
+        <div className="coord-modal-actions">
+          <button type="button" className="coord-btn-secondary" onClick={onCancel}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="coord-btn-primary"
+            disabled={!checkIn || !checkOut || checkOut <= checkIn}
+            onClick={() => onConfirm(checkIn, checkOut)}
+          >
+            Send to hotel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 const OPTION_TITLES: Record<Exclude<OptionType, "custom">, string> = {
@@ -89,6 +135,7 @@ export function OptionsFlowPage() {
   const [result, setResult] = useState<ConfirmExecutionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [proposeDatesTarget, setProposeDatesTarget] = useState<CaseOption | null>(null);
 
   const refresh = useCallback(async () => {
     const [optionsRes, caseRes] = await Promise.all([api.fetchOptions(caseId), api.fetchCase(caseId)]);
@@ -111,6 +158,21 @@ export function OptionsFlowPage() {
       setError(res.message);
       return;
     }
+    await refresh();
+  }
+
+  async function handleProposeDates(optionId: string, newCheckIn: string, newCheckOut: string) {
+    setError(null);
+    const res = await api.proposeDeferDates(caseId, optionId, newCheckIn, newCheckOut);
+    if (res.code !== 0) {
+      setError(res.message);
+      return;
+    }
+    if (!res.data.success) {
+      setError(res.data.message);
+      return;
+    }
+    setProposeDatesTarget(null);
     await refresh();
   }
 
@@ -290,12 +352,26 @@ export function OptionsFlowPage() {
                         </p>
                       )}
                       {payload.eta_business_days !== undefined && <p className="option-line">ETA: {payload.eta_business_days} business days</p>}
+                      {o.optionType === "defer" &&
+                        payload.new_check_in_offset_days !== undefined &&
+                        payload.new_check_out_offset_days !== undefined &&
+                        caseInfo?.checkIn && (
+                          <p className="option-line">
+                            New dates: {addDaysToDate(caseInfo.checkIn, payload.new_check_in_offset_days)} →{" "}
+                            {addDaysToDate(caseInfo.checkIn, payload.new_check_out_offset_days)}
+                          </p>
+                        )}
                       {disabled && <p className="option-reason">This option is no longer available.</p>}
 
                       <div className="option-actions">
                         <button type="button" className="option-link-btn" onClick={() => void openPolicy(o.id)}>
                           View policy &amp; fees
                         </button>
+                        {o.optionType === "defer" && (
+                          <button type="button" className="option-link-btn" onClick={() => setProposeDatesTarget(o)}>
+                            Propose different dates
+                          </button>
+                        )}
                         <button
                           type="button"
                           className={o.selected ? "option-select-btn option-select-btn-selected" : "option-select-btn"}
@@ -480,6 +556,24 @@ export function OptionsFlowPage() {
           </div>
         )}
       </div>
+
+      {proposeDatesTarget &&
+        caseInfo?.checkIn &&
+        (() => {
+          const payload = parsePayload(proposeDatesTarget.payloadJson);
+          const defaultCheckIn =
+            payload.new_check_in_offset_days !== undefined ? addDaysToDate(caseInfo.checkIn, payload.new_check_in_offset_days) : "";
+          const defaultCheckOut =
+            payload.new_check_out_offset_days !== undefined ? addDaysToDate(caseInfo.checkIn, payload.new_check_out_offset_days) : "";
+          return (
+            <ProposeDatesModal
+              defaultCheckIn={defaultCheckIn}
+              defaultCheckOut={defaultCheckOut}
+              onCancel={() => setProposeDatesTarget(null)}
+              onConfirm={(ci, co) => void handleProposeDates(proposeDatesTarget.id, ci, co)}
+            />
+          );
+        })()}
     </AppShell>
   );
 }

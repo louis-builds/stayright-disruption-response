@@ -51,11 +51,17 @@ public class DisruptionRepository(AppDbContext db) : IDisruptionRepository
     public async Task AddInquiryAsync(Inquiry inquiry, CancellationToken ct = default) =>
         await db.Inquiries.AddAsync(inquiry, ct);
 
+    public async Task AddMessageAsync(Message message, CancellationToken ct = default) =>
+        await db.Messages.AddAsync(message, ct);
+
     public async Task AddNotificationAsync(Notification notification, CancellationToken ct = default) =>
         await db.Notifications.AddAsync(notification, ct);
 
     public Task<Guid?> FindHotelAccountUserIdAsync(Guid hotelId, CancellationToken ct = default) =>
         db.Users.Where(u => u.Role == "hotel" && u.HotelId == hotelId).Select(u => (Guid?)u.Id).FirstOrDefaultAsync(ct);
+
+    public Task<string?> FindHotelAccountEmailAsync(Guid hotelId, CancellationToken ct = default) =>
+        db.Users.Where(u => u.Role == "hotel" && u.HotelId == hotelId).Select(u => u.Email).FirstOrDefaultAsync(ct);
 
     // 平台口径的高价值客人：近12个月内下单≥2次且累计消费≥NZD 1000，不分酒店——跟 HotelRepository
     // 的"这家酒店的回头客"是两个不同概念，见 CoordinatorRepository 里同名方法的注释。

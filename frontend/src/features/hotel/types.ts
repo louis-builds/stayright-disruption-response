@@ -15,6 +15,9 @@ export interface InquiryItem {
   isHighValueGuest: boolean;
   respondedAt: string | null;
   rejectReason: string | null;
+  finalOutcome: "stayed" | "moved" | null;
+  proposedNewCheckIn: string | null;
+  proposedNewCheckOut: string | null;
 }
 
 export interface SelectedOptionItem {
