@@ -26,6 +26,8 @@ public interface ICaseRepository
     Task<bool> HasPendingInquiryAsync(Guid caseId, Guid hotelId, CancellationToken ct = default);
     Task AddInquiryAsync(Inquiry inquiry, CancellationToken ct = default);
     Task<Inquiry?> FindDeferInquiryAsync(Guid caseId, CancellationToken ct = default);
+    /// <summary>改订生效或 H2 卡被酒店处理时，把同一案件还停在 pending 的 H1 询单一并闭环（保底联动）。</summary>
+    Task<List<Inquiry>> ListPendingInquiriesAsync(Guid caseId, CancellationToken ct = default);
     /// <summary>打开对话：把这个案件下发给当前用户的未读通知（铃铛）清零，不碰消息已读——消息已读走 MarkMessageReadAsync。</summary>
     Task MarkThreadReadAsync(Guid caseId, string thread, string readerRole, Guid readerUserId, CancellationToken ct = default);
     /// <summary>单条消息已读：客人在这条消息上停留满3秒后才调用。</summary>

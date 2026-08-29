@@ -9,11 +9,14 @@ namespace TravelDisruptionAgent.Api.Features.HotelPortal;
 // 确认之后系统才按固定规则(3 天后入住、保持原住宿晚数，见 OptionsAdminService.BuildDraftOptionsAsync
 // 的 defer 分支)现造出来。这里用同一套规则提前算一遍给酒店预览，不然它是在盲批一个看不到
 // 具体日期的请求。真实生效日期取决于"到底哪天被确认"，这两个字段只是预估，不是锁定值。
+// GuestCommitted: 客人已对这个 case 的 defer 方案点过 P7 确认(ExecutionRequestedAt!=null)。pending 的
+// H1 卡靠它把"请确认方案是否可行"升级成"客人已拍板，等你核实空房"——这正是 defer 不再另发 H2 卡
+// 之后(见 HotelRepository.ListSelectedPendingOptionsAsync 的过滤)酒店感知客人承诺的唯一通道。
 public record InquiryItemDto(
     Guid Id, Guid CaseId, string ConfirmationNo, string GuestNickname, string DisruptionTitle,
     DateOnly CheckIn, DateOnly CheckOut, string RoomTypeName, string Status, DateTimeOffset RequestedAt, TimeSpan WaitTime, bool Overdue,
     bool IsReturningGuest, bool IsHighValueGuest, DateTimeOffset? RespondedAt, string? RejectReason, string? FinalOutcome,
-    DateOnly? ProposedNewCheckIn, DateOnly? ProposedNewCheckOut);
+    DateOnly? ProposedNewCheckIn, DateOnly? ProposedNewCheckOut, bool GuestCommitted);
 
 public record ConfirmInquiryRequest(DateOnly? NewCheckIn, DateOnly? NewCheckOut, string? Note);
 
