@@ -29,6 +29,7 @@ AWS-Deployment-History.md
 .aws-sam/
 dist/
 build/
+publish/
 *.tar.gz
 
 # 前端
