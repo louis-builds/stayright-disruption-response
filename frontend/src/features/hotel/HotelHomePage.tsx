@@ -263,6 +263,10 @@ export function HotelHomePage() {
       const aOverdue = a.kind === "inquiry" && a.item.overdue;
       const bOverdue = b.kind === "inquiry" && b.item.overdue;
       if (aOverdue !== bOverdue) return aOverdue ? -1 : 1;
+      // 客人已拍板的 H1 卡比普通请求紧急——客人在等回话，酒店处理完这张卡改订就生效。
+      const aCommitted = a.kind === "inquiry" && a.item.guestCommitted;
+      const bCommitted = b.kind === "inquiry" && b.item.guestCommitted;
+      if (aCommitted !== bCommitted) return aCommitted ? -1 : 1;
       if (a.item.isReturningGuest !== b.item.isReturningGuest) return a.item.isReturningGuest ? -1 : 1;
       const aTime = a.kind === "inquiry" ? a.item.requestedAt : a.item.selectedSince;
       const bTime = b.kind === "inquiry" ? b.item.requestedAt : b.item.selectedSince;
@@ -438,6 +442,7 @@ export function HotelHomePage() {
                           <p className="coord-row-title">
                             <span className="coord-row-conf">{d.item.confirmationNo}</span>
                             <span className="coord-row-conf">{d.item.guestNickname}</span>
+                            {d.item.guestCommitted && <span className="tag tag-status-warn">guest confirmed</span>}
                             {d.item.isReturningGuest && <span className="tag tag-status-returning">returning</span>}
                             {d.item.isHighValueGuest && <span className="tag tag-status-vip">high value</span>}
                           </p>
@@ -446,7 +451,9 @@ export function HotelHomePage() {
                           </p>
                           {d.item.proposedNewCheckIn && d.item.proposedNewCheckOut && (
                             <p className="coord-row-meta">
-                              If confirmed, deferred to ~{d.item.proposedNewCheckIn} → {d.item.proposedNewCheckOut} (estimated)
+                              {d.item.guestCommitted
+                                ? `Guest confirmed this deferral — on your approval it moves to ~${d.item.proposedNewCheckIn} → ${d.item.proposedNewCheckOut} (estimated)`
+                                : `If confirmed, deferred to ~${d.item.proposedNewCheckIn} → ${d.item.proposedNewCheckOut} (estimated)`}
                             </p>
                           )}
                           {d.item.overdue && <p className="coord-row-meta">overdue — please respond soon</p>}

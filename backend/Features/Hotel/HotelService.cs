@@ -12,7 +12,7 @@ public class HotelService(IHotelRepository repo, ICaseService caseService, IOpti
     private async Task<Guid> RequireHotelIdAsync(Guid hotelUserId, CancellationToken ct) =>
         await repo.FindHotelIdForUserAsync(hotelUserId, ct) ?? throw new HotelNotFoundException();
 
-    private static InquiryItemDto ToDto(Inquiry i, HashSet<Guid> returningGuestIds, HashSet<Guid> highValueGuestIds)
+    private static InquiryItemDto ToDto(Inquiry i, HashSet<Guid> returningGuestIds, HashSet<Guid> highValueGuestIds, bool guestCommitted)
     {
         var now = DateTimeOffset.UtcNow;
         var guestId = i.Case?.Booking?.GuestUserId;
@@ -38,7 +38,7 @@ public class HotelService(IHotelRepository repo, ICaseService caseService, IOpti
             i.Status == "pending" && now - i.RequestedAt > OverdueThreshold,
             guestId.HasValue && returningGuestIds.Contains(guestId.Value),
             guestId.HasValue && highValueGuestIds.Contains(guestId.Value),
-            i.RespondedAt, i.RejectReason, finalOutcome, proposedCheckIn, proposedCheckOut);
+            i.RespondedAt, i.RejectReason, finalOutcome, proposedCheckIn, proposedCheckOut, guestCommitted);
     }
 
     public async Task<List<InquiryItemDto>> ListInquiriesAsync(Guid hotelUserId, string? status, CancellationToken ct = default)
@@ -48,7 +48,8 @@ public class HotelService(IHotelRepository repo, ICaseService caseService, IOpti
         var guestIds = list.Where(i => i.Case?.Booking is not null).Select(i => i.Case!.Booking!.GuestUserId);
         var returning = await repo.GetReturningGuestIdsAsync(guestIds, hotelId, ct);
         var highValue = await repo.GetPlatformHighValueGuestIdsAsync(guestIds, ct);
-        return [.. list.Select(i => ToDto(i, returning, highValue))];
+        var committed = await repo.GetCaseIdsWithCommittedDeferAsync(list.Select(i => i.CaseId), ct);
+        return [.. list.Select(i => ToDto(i, returning, highValue, committed.Contains(i.CaseId)))];
     }
 
     public async Task ConfirmInquiryAsync(Guid hotelUserId, Guid inquiryId, ConfirmInquiryRequest request, CancellationToken ct = default)
@@ -149,6 +150,9 @@ public class HotelService(IHotelRepository repo, ICaseService caseService, IOpti
 
         await optionsAdmin.GetOptionsAsync(option.CaseId, ct);
         await caseService.ResolveOptionAvailableAsync(option.CaseId, optionId, ct);
+        // 方案真的执行了的话，ExecuteOptionAsync 里面已经闭环过 pending 询单；这里兜的是"解锁但
+        // 没执行"的分支(客人还没点 P7 确认)——酒店已经点头，同一件事的 H1 询单也该一并落定。
+        await ClosePendingInquiriesAsync(option.CaseId, "accepted", null, ct);
     }
 
     public async Task RejectOptionAsync(Guid hotelUserId, Guid optionId, RejectInquiryRequest request, CancellationToken ct = default)
@@ -160,6 +164,23 @@ public class HotelService(IHotelRepository repo, ICaseService caseService, IOpti
 
         await optionsAdmin.GetOptionsAsync(option.CaseId, ct);
         await optionsAdmin.MarkUnavailableAsync(option.CaseId, optionId, $"Hotel declined: {request.Reason}", ct);
+        await ClosePendingInquiriesAsync(option.CaseId, "rejected", $"Hotel declined: {request.Reason}", ct);
+    }
+
+    // H2 卡(客人已选方案)被酒店确认/拒绝后，同一件事的 H1 询单若还停在 pending 跟着落定。正常情况
+    // 下这张 H2 卡能出现就不该再有 pending 的 H1(见 HotelRepository.ListSelectedPendingOptionsAsync 的
+    // 过滤)，这段是对旧数据/并发窗口的保底——不让待办里留下客人早就处理完、却永远关不掉的卡。
+    private async Task ClosePendingInquiriesAsync(Guid caseId, string status, string? rejectReason, CancellationToken ct)
+    {
+        var now = DateTimeOffset.UtcNow;
+        foreach (var inquiry in await repo.ListPendingInquiriesAsync(caseId, ct))
+        {
+            inquiry.Status = status;
+            inquiry.RejectReason = rejectReason;
+            inquiry.RespondedAt = now;
+            inquiry.UpdatedAt = now;
+        }
+        await repo.SaveChangesAsync(ct);
     }
 
     public async Task<HotelProfileDto> GetProfileAsync(Guid hotelUserId, CancellationToken ct = default)

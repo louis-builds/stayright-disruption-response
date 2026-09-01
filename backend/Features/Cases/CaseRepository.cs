@@ -56,6 +56,9 @@ public class CaseRepository(AppDbContext db) : ICaseRepository
         foreach (var o in others)
         {
             o.Selected = false;
+            // 跟 SelectOptionAsync 的反悔分支同因：换选另一个方案时，旧方案的执行确认也要撤掉，
+            // 不然酒店确认旧方案时会执行一个客人已经放弃的改订。
+            o.ExecutionRequestedAt = null;
             o.UpdatedAt = DateTimeOffset.UtcNow;
         }
     }
@@ -86,6 +89,9 @@ public class CaseRepository(AppDbContext db) : ICaseRepository
 
     public Task<Inquiry?> FindDeferInquiryAsync(Guid caseId, CancellationToken ct = default) =>
         db.Inquiries.FirstOrDefaultAsync(i => i.CaseId == caseId && i.Type == "defer", ct);
+
+    public Task<List<Inquiry>> ListPendingInquiriesAsync(Guid caseId, CancellationToken ct = default) =>
+        db.Inquiries.Where(i => i.CaseId == caseId && i.Status == "pending").ToListAsync(ct);
 
     // 只负责清铃铛(站内通知)——消息本身的已读现在按单条来(MarkMessageReadAsync)，靠客人真的
     // 停留在那条消息上3秒才算读过，不是打开线程就瞬间全部已读，这两件事故意拆开。

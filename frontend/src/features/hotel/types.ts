@@ -18,6 +18,9 @@ export interface InquiryItem {
   finalOutcome: "stayed" | "moved" | null;
   proposedNewCheckIn: string | null;
   proposedNewCheckOut: string | null;
+  // 客人已对该 case 的 defer 方案点过 P7 确认(后端 ExecutionRequestedAt!=null)。defer 不再另发
+  // H2 卡后，pending 的 H1 卡靠它升级成"客人已拍板，等你核实空房"。
+  guestCommitted: boolean;
 }
 
 export interface SelectedOptionItem {
