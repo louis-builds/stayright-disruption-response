@@ -26,6 +26,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<DisruptionExclusion> DisruptionExclusions => Set<DisruptionExclusion>();
     public DbSet<DisruptionWindowAudit> DisruptionWindowAudits => Set<DisruptionWindowAudit>();
     public DbSet<OptionLockAudit> OptionLockAudits => Set<OptionLockAudit>();
+    public DbSet<AlternateOfferAudit> AlternateOfferAudits => Set<AlternateOfferAudit>();
     public DbSet<UserStatusAudit> UserStatusAudits => Set<UserStatusAudit>();
     public DbSet<AlertAcknowledgement> AlertAcknowledgements => Set<AlertAcknowledgement>();
     public DbSet<RagDocumentChunk> RagDocumentChunks => Set<RagDocumentChunk>();
@@ -218,6 +219,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<OptionLockAudit>(e =>
         {
             e.HasIndex(x => x.OptionId);
+        });
+
+        modelBuilder.Entity<AlternateOfferAudit>(e =>
+        {
+            e.HasIndex(x => x.CaseId);
         });
 
         modelBuilder.Entity<UserStatusAudit>(e =>
