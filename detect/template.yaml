@@ -98,9 +98,10 @@ Resources:
 
 # 构建命令（--manifest 必须，否则会把完整 requirements.txt 连 pytest/psycopg 一起打包）：
 #   sam build --use-container --manifest requirements-lambda.txt
-#   sam deploy --stack-name stayright-dev-detect-collectors \
+#   sam deploy --stack-name stayright-dev-weather-collector \
 #     --s3-bucket stayright-dev-raw-990393187001 --s3-prefix sam/ \
 #     --capabilities CAPABILITY_IAM --region ap-southeast-2 --no-confirm-changeset
+# 沿用现有栈名（原本只建了 weather-collector，本次同栈原地新增另外 3 个采集器）。
 
   CollectorScheduleRole:
     Type: AWS::IAM::Role
