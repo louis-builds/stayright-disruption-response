@@ -27,7 +27,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CSPROJ="$REPO_ROOT/backend/TravelDisruptionAgent.Api.csproj"
 
 STAMP="$(date +%Y%m%d-%H%M%S)"
-OUT_DIR="$REPO_ROOT/backend/publish-out"
+OUT_DIR="$REPO_ROOT/backend/publish"
 TARBALL="/tmp/stayright-api-$STAMP.tar.gz"
 S3_KEY="deploy/stayright-api-$STAMP.tar.gz"
 
@@ -64,7 +64,7 @@ sudo systemctl start stayright-api
 sleep 6
 systemctl is-active stayright-api
 curl -s -o /dev/null -w "local /api/auth/me -> %{http_code} (403=ok)\n" http://localhost:$API_PORT/api/auth/me
-sudo journalctl -u stayright-api --since "1 min ago" --no-pager | grep -iE "migrat|Now listening|Application started|error" | tail -15
+sudo journalctl -u stayright-api --since "1 min ago" --no-pager | grep -iE "migrat|Now listening|Application started|error" | tail -15 || true
 rm -f /tmp/api-$STAMP.tar.gz
 REMOTE_EOF
 )
