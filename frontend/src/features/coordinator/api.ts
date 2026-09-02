@@ -2,7 +2,7 @@ import { apiGet, apiPost, apiPut } from "../../shared/api/client";
 import type {
   AdminOption, AdminUser, BadCaseListItem, BadCaseReplay, CandidateBooking, CaseNote, CaseNotification, CaseQueueItem,
   CoordinatorOption, DisruptionDetail, DisruptionListItem, GoldenTest, GoldenTestRun, KnowledgeDashboard, KpiMetrics,
-  OpsOverview, OverviewDto, RagDocument, RefundStatus, SystemSettings,
+  OpsOverview, OverviewDto, RagDocument, RefundStatus, SevenDayTrendPoint, SystemSettings,
 } from "./types";
 
 export function fetchOverview() {
@@ -139,6 +139,10 @@ export function fetchBadCaseReplay(messageId: string) {
 
 export function fetchOpsOverview() {
   return apiGet<OpsOverview>("/api/coordinator/ops/overview");
+}
+
+export function fetchSevenDayTrend() {
+  return apiGet<SevenDayTrendPoint[]>("/api/coordinator/ops/seven-day-trend");
 }
 
 export function fetchKpi(day?: string, disruptionId?: string) {
