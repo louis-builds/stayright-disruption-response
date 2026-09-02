@@ -14,6 +14,8 @@ interface AppShellProps {
    * 用在"上一页到底是哪不好说、但这页该回哪个列表是确定的"这种页面(比如方案后台该固定回 Tasks 列表，
    * 不该看用户是从会话页还是列表点进来的、历史不一样就回到不同地方)。 */
   showBack?: boolean | (() => void);
+  /** Optional layout class for pages that need a wider content canvas. */
+  contentClassName?: string;
   children: ReactNode;
 }
 
@@ -21,7 +23,7 @@ interface AppShellProps {
  * showBack: 从列表点进来的详情/表单页传 true，白色内容区顶部会出现一个"← Back"，点了就 navigate(-1) 回列表——
  * 故意不放进深色导航条里，导航条不管有没有 back 都长一个样，不会跟着页面变。
  * centerContent: 页面自己有一组内部 tab（不是路由）需要跟顶部导航合并展示时传这个，见 CoordinatorHomePage。 */
-export function AppShell({ title, navLinks, centerContent, showBack, children }: AppShellProps) {
+export function AppShell({ title, navLinks, centerContent, showBack, contentClassName, children }: AppShellProps) {
   const navigate = useNavigate();
   return (
     <div className="app-shell">
@@ -36,7 +38,7 @@ export function AppShell({ title, navLinks, centerContent, showBack, children }:
           </>
         }
       />
-      <main className="app-shell-content">
+      <main className={`app-shell-content${contentClassName ? ` ${contentClassName}` : ""}`}>
         {showBack && (
           <button
             type="button"

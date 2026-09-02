@@ -17,6 +17,8 @@ public interface IOpsRepository
     Task<List<Case>> ListCasesForKpiAsync(DateOnly? day, Guid? disruptionId, CancellationToken ct = default);
     Task<List<Notification>> ListFirstNotificationsForCasesAsync(List<Guid> caseIds, CancellationToken ct = default);
     Task<int> CountInProgressAsync(CancellationToken ct = default);
+    Task<List<CaseWorkflowStateHistory>> ListWorkflowHistoryAsync(DateTimeOffset start, DateTimeOffset end, CancellationToken ct = default);
+    Task<List<Case>> ListCasesCreatedOrClosedSinceAsync(DateTimeOffset start, CancellationToken ct = default);
 
     Task SaveChangesAsync(CancellationToken ct = default);
 }

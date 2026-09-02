@@ -74,5 +74,17 @@ public class OpsRepository(AppDbContext db) : IOpsRepository
     public Task<int> CountInProgressAsync(CancellationToken ct = default) =>
         db.Cases.CountAsync(c => c.Status == "in_progress", ct);
 
+    public Task<List<CaseWorkflowStateHistory>> ListWorkflowHistoryAsync(DateTimeOffset start, DateTimeOffset end, CancellationToken ct = default) =>
+        db.CaseWorkflowStateHistories
+            .Where(h => h.StartedAt < end && (h.EndedAt == null || h.EndedAt > start))
+            .AsNoTracking()
+            .ToListAsync(ct);
+
+    public Task<List<Case>> ListCasesCreatedOrClosedSinceAsync(DateTimeOffset start, CancellationToken ct = default) =>
+        db.Cases
+            .Where(c => c.CreatedAt >= start || (c.ClosedAt != null && c.ClosedAt >= start))
+            .AsNoTracking()
+            .ToListAsync(ct);
+
     public Task SaveChangesAsync(CancellationToken ct = default) => db.SaveChangesAsync(ct);
 }

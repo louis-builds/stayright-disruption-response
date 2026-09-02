@@ -11,6 +11,9 @@ import { KnowledgeBasePanel } from "./KnowledgeBasePanel";
 import { Pagination, usePagination } from "../../shared/components/Pagination";
 import { SystemAdminPanel } from "./SystemAdminPanel";
 import { SettingsPanel } from "./SettingsPanel";
+import { CoordinatorDashboard, DisruptionOperationsDashboard } from "./CoordinatorDashboard";
+import { CoordinatorDashboardShell } from "./CoordinatorDashboardShell";
+import { CoordinatorCasesPage } from "./CoordinatorCasesPage";
 import type { CaseNote, CaseQueueItem, CoordinatorOption, OpsOverview, OverviewDto } from "./types";
 import "./CoordinatorHomePage.css";
 
@@ -46,7 +49,8 @@ function formatWait(iso: string) {
   return `${hours}h ${m}m`;
 }
 
-function OverviewPanel({ data, opsData, syncedAt }: { data: OverviewDto | null; opsData: OpsOverview | null; syncedAt: Date | null }) {
+/** Legacy dashboard retained for an easy rollback. The active dashboard is CoordinatorDashboard. */
+export function LegacyOverviewPanel({ data, opsData, syncedAt }: { data: OverviewDto | null; opsData: OpsOverview | null; syncedAt: Date | null }) {
   if (!data) return <p className="coord-empty">Loading…</p>;
   const caseFlowTotal = Math.max(data.pendingCount + data.inProgressCount + data.closedTodayCount, 1);
   const disruptionTotal = Math.max(data.activeWeatherCount + data.activeFlightCount + data.activeRoadCount, 1);
@@ -652,8 +656,44 @@ export function CoordinatorHomePage() {
 
   if (!user) return null;
 
+  if (tab === "overview") {
+    return (
+      <CoordinatorDashboardShell user={user} active="dashboard" onNavigate={setTab} onSearch={(query) => { setSearchQuery(query); setTab("search"); }}>
+        <CoordinatorDashboard
+          data={overview} opsData={opsOverview} syncedAt={overviewSyncedAt} coordinators={coordinators}
+          onOpenCases={() => setTab("queue")} onOpenDisruptions={() => setTab("disruptions")}
+          onOpenCase={(id) => navigate(`/cases/${id}`)}
+        />
+      </CoordinatorDashboardShell>
+    );
+  }
+
+  // The active disruptions experience is the map-led operations dashboard.
+  // The original DisruptionsPanel remains intact below as an unused rollback.
+  if (tab === "disruptions") {
+    return (
+      <CoordinatorDashboardShell user={user} active="cases" onNavigate={setTab} onSearch={(query) => { setSearchQuery(query); setTab("search"); }}>
+        <DisruptionOperationsDashboard
+          data={overview} opsData={opsOverview} syncedAt={overviewSyncedAt} coordinators={coordinators}
+          onOpenCases={() => setTab("queue")} onOpenDisruptions={() => setTab("disruptions")}
+          onOpenCase={(id) => navigate(`/cases/${id}`)}
+        />
+      </CoordinatorDashboardShell>
+    );
+  }
+
+  // New consolidated case records page. The original AppShell case/search
+  // sections remain below as an inactive rollback path.
+  if (tab === "search") {
+    return (
+      <CoordinatorDashboardShell user={user} active="reports" onNavigate={setTab} onSearch={(query) => setSearchQuery(query)}>
+        <CoordinatorCasesPage initialQuery={searchQuery} onOpenCase={(id) => navigate(`/cases/${id}`)} />
+      </CoordinatorDashboardShell>
+    );
+  }
+
   const showActions = tab === "todo" || tab === "in_progress";
-  const showAssignee = tab === "queue" || tab === "closed" || tab === "search";
+  const showAssignee = tab === "queue" || tab === "closed";
 
   const activeGroup = coordinatorGroupForTab(tab);
 
@@ -676,13 +716,9 @@ export function CoordinatorHomePage() {
         )}
 
         <div className="coord-panel">
-          {tab === "overview" && (
-            <div className="coord-overview-wrap">
-              <OverviewPanel data={overview} opsData={opsOverview} syncedAt={overviewSyncedAt} />
-            </div>
-          )}
 
-          {tab === "disruptions" && <DisruptionsPanel coordinators={coordinators} />}
+          {/* Legacy Disruptions presentation retained for rollback, but unused. */}
+          {false && <DisruptionsPanel coordinators={coordinators} />}
 
           {tab === "admin" && <SystemAdminPanel />}
 
@@ -761,7 +797,7 @@ export function CoordinatorHomePage() {
             </>
           )}
 
-          {tab === "search" && (
+          {false && (
             <>
               <div className="coord-queue-stats">
                 <div className="coord-stat-card">

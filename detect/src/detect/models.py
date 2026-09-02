@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 class EventSource(str, Enum):
     WEATHER = "weather"
+    VOLCANO = "volcano"
     FLIGHT = "flight"
     ROAD = "road"
 

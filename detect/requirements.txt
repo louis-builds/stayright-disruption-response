@@ -3,6 +3,7 @@ requests>=2.31
 psycopg[binary]>=3.1
 python-dotenv>=1.0
 boto3>=1.34
+tzdata>=2024.1  # zoneinfo needs this on Windows (Pacific/Auckland for airport-local time)
 
 pytest>=8.0
 pytest-mock>=3.12

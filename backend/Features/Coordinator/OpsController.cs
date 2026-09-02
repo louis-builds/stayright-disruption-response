@@ -20,6 +20,10 @@ public class OpsController(IOpsService opsService) : ControllerBase
     public async Task<ActionResult<ApiResponse<KpiMetricsDto>>> GetKpi([FromQuery] DateOnly? day, [FromQuery] Guid? disruptionId, CancellationToken ct) =>
         Ok(ApiResponse<KpiMetricsDto>.Ok(await opsService.GetKpiAsync(day, disruptionId, ct)));
 
+    [HttpGet("seven-day-trend")]
+    public async Task<ActionResult<ApiResponse<List<SevenDayTrendPointDto>>>> GetSevenDayTrend(CancellationToken ct) =>
+        Ok(ApiResponse<List<SevenDayTrendPointDto>>.Ok(await opsService.GetSevenDayTrendAsync(ct)));
+
     [HttpPost("alerts/acknowledge")]
     public async Task<ActionResult<ApiResponse<object?>>> Acknowledge([FromBody] AcknowledgeAlertRequest request, CancellationToken ct)
     {
