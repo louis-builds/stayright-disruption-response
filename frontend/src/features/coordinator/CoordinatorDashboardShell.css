@@ -12,9 +12,9 @@
 .tg-shell-stage>footer{border-color:#e5e8ef;background:#fff;color:#85899b}
 
 /* Slim navigation and a little more room for the operational canvas. */
-.tg-shell{grid-template-columns:185px minmax(0,1fr)}
-.tg-shell-sidebar{padding:18px 10px 15px}.tg-shell-brand{padding-bottom:24px}
-.tg-shell-sidebar button{border-radius:8px;padding:11px 9px}.tg-shell-topbar{height:60px;padding-inline:24px}
+.tg-shell{grid-template-columns:220px minmax(0,1fr)}
+.tg-shell-sidebar{padding:22px 13px 16px}.tg-shell-brand{padding:0 9px 30px}.tg-shell-brand>span{width:41px;height:41px;border-radius:11px}.tg-shell-brand strong{font-size:18px}.tg-shell-brand small{font-size:9px}
+.tg-shell-sidebar nav{gap:8px}.tg-shell-sidebar button{border-radius:9px;padding:13px 11px;font-size:13px}.tg-shell-sidebar button i{font-size:16px}.tg-shell-topbar{height:60px;padding-inline:24px}
 .tg-shell-context{display:flex;flex-direction:column;gap:2px}.tg-shell-context small{color:#969aaa;font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase}.tg-shell-context strong{color:#202438;font-size:14px}.tg-shell-topbar>form{height:36px;border-radius:18px;padding-inline:14px}.tg-shell-actions{padding-left:18px;border-left:1px solid #eceef3}
 .tg-shell-online{color:#12a982;font-size:10px;font-weight:600;white-space:nowrap}
 @media(max-width:900px){.tg-shell{grid-template-columns:70px minmax(0,1fr)}}@media(max-width:640px){.tg-shell{grid-template-columns:1fr}}

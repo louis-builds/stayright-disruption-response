@@ -21,7 +21,7 @@ export function CoordinatorDashboardShell({ active, children, onNavigate, onSear
   const currentSection = ITEMS.find((item) => item.key === active)?.label ?? "Workspace";
   return <div className="tg-shell">
     <aside className="tg-shell-sidebar">
-      <div className="tg-shell-brand"><span>◎</span><div><strong>TravelGuard</strong><small>COORDINATOR</small></div></div>
+      <div className="tg-shell-brand"><span>◎</span><div><strong>StayRight NZ</strong><small>COORDINATOR</small></div></div>
       <nav>{ITEMS.map((item) => <button key={item.key} className={active === item.key ? "active" : ""} onClick={() => onNavigate(item.tab)}><i>{item.icon}</i><em>{item.label}</em><b>›</b></button>)}</nav>
       <div className="tg-shell-bottom"><button onClick={() => onNavigate("settings")}><i>⚙</i><em>Settings</em></button><button><i>?</i><em>Help</em></button></div>
     </aside>
