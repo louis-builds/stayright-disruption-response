@@ -83,6 +83,38 @@ class TestHandler:
         mock_detect.assert_not_called()
         mock_ingest.assert_not_called()
 
+    def test_skips_when_provider_rejects_the_key(self, mocker):
+        import requests
+
+        mocker.patch("src.runtimes.lambda_flight_collector.secret", return_value="oag-key")
+        response = mocker.Mock(status_code=403)
+        mocker.patch(
+            "src.runtimes.lambda_flight_collector.detect_flight_events",
+            side_effect=requests.HTTPError(response=response),
+        )
+        mock_ingest = mocker.patch("src.runtimes.lambda_flight_collector.ingest_disruption")
+
+        result = handler({}, None)
+
+        assert result == {"ingested": 0, "skipped": True}
+        mock_ingest.assert_not_called()
+
+    def test_propagates_non_auth_http_errors(self, mocker):
+        import requests
+
+        mocker.patch("src.runtimes.lambda_flight_collector.secret", return_value="oag-key")
+        response = mocker.Mock(status_code=500)
+        mocker.patch(
+            "src.runtimes.lambda_flight_collector.detect_flight_events",
+            side_effect=requests.HTTPError(response=response),
+        )
+
+        try:
+            handler({}, None)
+            assert False, "expected non-auth HTTPError to propagate"
+        except requests.HTTPError:
+            pass
+
     def test_skips_when_no_airport_is_disrupted(self, mocker):
         mocker.patch("src.runtimes.lambda_flight_collector.secret", return_value="oag-key")
         mocker.patch("src.runtimes.lambda_flight_collector.detect_flight_events", return_value=[])

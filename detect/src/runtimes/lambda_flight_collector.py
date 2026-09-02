@@ -33,7 +33,19 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         logger.warning('{"evt": "flight_collector.skipped", "reason": "oag/api-key is empty"}')
         return {"ingested": 0, "skipped": True}
 
-    events = detect_flight_events(api_key=api_key)
+    try:
+        events = detect_flight_events(api_key=api_key)
+    except requests.HTTPError as exc:
+        status = exc.response.status_code if exc.response is not None else None
+        if status in (401, 403):
+            # oag/api-key 当前对航班 FIDS 端点无效（占位值，或 endpoint 还没切到 OAG）。
+            # 这不是"这次轮询失败"，是配置未就绪——跳过而不是让函数报错。
+            logger.warning(
+                '{"evt": "flight_collector.skipped", "reason": "provider auth failed (%s)"}', status
+            )
+            return {"ingested": 0, "skipped": True}
+        raise
+
     for disruption_event in events:
         ingest_disruption(disruption_event)
 
