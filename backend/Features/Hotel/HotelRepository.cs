@@ -59,6 +59,23 @@ public class HotelRepository(AppDbContext db) : IHotelRepository
     public Task<Inquiry?> FindInquiryAsync(Guid inquiryId, Guid hotelId, CancellationToken ct = default) =>
         WithIncludes(db.Inquiries).FirstOrDefaultAsync(i => i.Id == inquiryId && i.HotelId == hotelId, ct);
 
+    // H1 卡的"客人已拍板"状态来源：case 的 defer 方案被客人点过 P7 确认(ExecutionRequestedAt!=null)。
+    // pending 的 H1 卡靠它把"请确认方案是否可行"升级成"客人已确认，等你核实空房"——同一件事
+    // 不再另发 H2 卡(见 ListSelectedPendingOptionsAsync 的过滤)，这是那张卡唯一的升级通道。
+    public async Task<HashSet<Guid>> GetCaseIdsWithCommittedDeferAsync(IEnumerable<Guid> caseIds, CancellationToken ct = default)
+    {
+        var ids = caseIds.Distinct().ToList();
+        if (ids.Count == 0) return [];
+        return [.. await db.Options
+            .Where(o => ids.Contains(o.CaseId) && o.OptionType == "defer" && o.ExecutionRequestedAt != null)
+            .Select(o => o.CaseId)
+            .ToListAsync(ct)];
+    }
+
+    // H2 卡被酒店确认/拒绝后回写 H1 询单用(见 HotelService.ClosePendingInquiriesAsync)。
+    public Task<List<Inquiry>> ListPendingInquiriesAsync(Guid caseId, CancellationToken ct = default) =>
+        db.Inquiries.Where(i => i.CaseId == caseId && i.Status == "pending").ToListAsync(ct);
+
     public Task<List<Option>> ListSelectedPendingOptionsAsync(CancellationToken ct = default) =>
         db.Options
             .Include(o => o.Case).ThenInclude(c => c!.Disruption)
@@ -68,7 +85,13 @@ public class HotelRepository(AppDbContext db) : IHotelRepository
             // 但从没被酒店确认/拒绝过的选项就成了孤儿——不能再当"待处理"推给酒店，
             // 不然酒店确认/拒绝一个早已结案案件的选项，还会误发一条通知给客人。
             .Where(o => o.ExecutionRequestedAt != null && o.Availability == "pending" &&
-                (o.OptionType == "defer" || o.OptionType == "alternate") && o.Case!.Status != "closed")
+                (o.OptionType == "defer" || o.OptionType == "alternate") && o.Case!.Status != "closed" &&
+                // defer 的 H2 卡和 H1 询单问的是同一件事(原酒店能不能接这单延期)：H1 还在 pending 时
+                // 不再为 defer 出第二张卡，酒店只在 H1 卡上看到"客人已确认"状态(见 InquiryItemDto.GuestCommitted)。
+                // alternate 不受影响——候补酒店从来没有 H1，H2 就是它唯一的待办。
+                !(o.OptionType == "defer" &&
+                  db.Inquiries.Any(i => i.CaseId == o.CaseId && i.Status == "pending" &&
+                      i.HotelId == o.Case!.Booking!.HotelId)))
             .ToListAsync(ct);
 
     public Task<List<Option>> ListResolvedOptionsForHotelHistoryAsync(Guid hotelId, CancellationToken ct = default) =>

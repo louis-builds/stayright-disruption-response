@@ -16,15 +16,8 @@ from typing import Any, NamedTuple
 
 import requests
 
-from src.detect.models import (
-    DisruptionEvent,
-    EventSource,
-    Geo,
-    GeoPoint,
-    GeoType,
-    Severity,
-    TimeWindow,
-)
+from src.detect.events import Classification, build_event
+from src.detect.models import DisruptionEvent, EventSource, Severity
 
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 
@@ -90,12 +83,6 @@ def fetch_forecast(lat: float, lng: float, *, forecast_days: int = DEFAULT_FOREC
     response = requests.get(OPEN_METEO_URL, params=params, timeout=timeout)
     response.raise_for_status()
     return response.json()
-
-
-class Classification(NamedTuple):
-    is_risky: bool
-    event_type: str
-    severity: Severity
 
 
 def classify(raw_payload: dict[str, Any]) -> Classification:
@@ -177,19 +164,23 @@ def build_disruption_event(
     *,
     detected_at: datetime | None = None,
 ) -> DisruptionEvent:
-    """Normalise a classified reading + its risky window into a DisruptionEvent."""
-    return DisruptionEvent(
+    """Normalise a classified reading + its risky window into a DisruptionEvent.
+
+    Thin weather-flavoured wrapper over `events.build_event`: unpacks the
+    Location and folds the location name into raw_payload, then hands the
+    generic (window, circle, severity) assembly to the shared factory.
+    """
+    return build_event(
         source=EventSource.WEATHER,
         event_type=classification.event_type,
         severity=classification.severity,
-        detected_at=detected_at or datetime.now(timezone.utc),
-        affects_window=TimeWindow(start=start, end=end),
-        geo=Geo(
-            type=GeoType.POINT,
-            center=GeoPoint(lat=location.lat, lng=location.lng),
-            radius_km=location.radius_km,
-        ),
+        window_start=start,
+        window_end=end,
+        center_lat=location.lat,
+        center_lng=location.lng,
+        radius_km=location.radius_km,
         raw_payload={"location": location.name, **raw_reading},
+        detected_at=detected_at,
     )
 
 

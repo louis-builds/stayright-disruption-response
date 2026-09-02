@@ -15,9 +15,15 @@ public interface IHotelRepository
 
     Task<List<Inquiry>> ListInquiriesAsync(Guid hotelId, string? status, CancellationToken ct = default);
     Task<Inquiry?> FindInquiryAsync(Guid inquiryId, Guid hotelId, CancellationToken ct = default);
+    /// <summary>H1 卡"客人已拍板"状态来源：这些 case 的 defer 方案被客人点过 P7 确认(ExecutionRequestedAt!=null)。</summary>
+    Task<HashSet<Guid>> GetCaseIdsWithCommittedDeferAsync(IEnumerable<Guid> caseIds, CancellationToken ct = default);
+    /// <summary>H2 卡被酒店处理后的 H1 回写用（见 HotelService.ClosePendingInquiriesAsync）。</summary>
+    Task<List<Inquiry>> ListPendingInquiriesAsync(Guid caseId, CancellationToken ct = default);
 
-    /// <summary>候选:所有 Selected=true 且 Availability=pending 的选项,连同 Case/Booking/Hotel 一起加载,
-    /// 目标酒店由调用方在内存里按 option_type 解析后过滤(alternate 解析 payload.hotel,defer 用原酒店)。</summary>
+    /// <summary>候选:所有被客人点过 P7 确认执行(ExecutionRequestedAt!=null)且 Availability=pending 的选项,
+    /// 连同 Case/Booking/Hotel 一起加载,目标酒店由调用方在内存里按 option_type 解析后过滤
+    /// (alternate 解析 payload.hotel,defer 用原酒店)。defer 在 H1 询单还 pending 时会被排除——
+    /// 同一件事只保留 H1 一张卡,详见 HotelRepository.ListSelectedPendingOptionsAsync 的过滤注释。</summary>
     Task<List<Option>> ListSelectedPendingOptionsAsync(CancellationToken ct = default);
     Task<List<Option>> ListResolvedOptionsForHotelHistoryAsync(Guid hotelId, CancellationToken ct = default);
     Task<Option?> FindOptionAsync(Guid optionId, CancellationToken ct = default);

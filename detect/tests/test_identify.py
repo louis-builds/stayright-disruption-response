@@ -58,7 +58,9 @@ class TestFilterByDistance:
 
 class TestBuildHandoffPayloads:
     def test_disruption_event_message_shape(self):
-        event = _storm_event(raw_payload={"wind_gusts_10m": 150, "precipitation": 0, "snowfall": 0})
+        event = _storm_event(
+            raw_payload={"location": "Queenstown", "wind_gusts_10m": 150, "precipitation": 0, "snowfall": 0}
+        )
 
         disruption_event_message, customer_messages = build_handoff_payloads(event, [])
 
@@ -68,8 +70,35 @@ class TestBuildHandoffPayloads:
         assert de["event_subtype"] == "storm"
         assert de["severity"] == "high"
         assert de["geo"] == {"lat": QUEENSTOWN.lat, "lng": QUEENSTOWN.lng, "radius_km": 30}
-        assert de["raw_signal"] == {"wind_gusts_kmh": 150, "precipitation_mm": 0, "snowfall_cm": 0}
+        # raw_signal passes the source's own payload through, minus the
+        # weather-only "location" label.
+        assert de["raw_signal"] == {"wind_gusts_10m": 150, "precipitation": 0, "snowfall": 0}
         assert customer_messages == []
+
+    def test_raw_signal_passes_through_non_weather_source_fields(self):
+        event = _storm_event(
+            source=EventSource.VOLCANO,
+            event_type="volcanic_eruption",
+            raw_payload={
+                "source_api": "geonet/volcano/val",
+                "volcano_id": "ruapehu",
+                "alert_level": 3,
+                "aviation_colour_code": "Orange",
+            },
+        )
+
+        disruption_event_message, _ = build_handoff_payloads(event, [])
+
+        de = disruption_event_message["disruption_event"]
+        assert de["type"] == "volcano"
+        assert de["event_subtype"] == "volcanic_eruption"
+        assert de["raw_signal"] == {
+            "source_api": "geonet/volcano/val",
+            "volcano_id": "ruapehu",
+            "alert_level": 3,
+            "aviation_colour_code": "Orange",
+        }
+        assert "wind_gusts_kmh" not in de["raw_signal"]
 
     def test_affected_customer_messages_reference_event_and_stringify_uuids(self):
         event = _storm_event()

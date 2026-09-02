@@ -102,6 +102,12 @@ public class CoordinatorService(ICoordinatorRepository repo, IEmailService email
         var c = await repo.FindByIdAsync(caseId, ct) ?? throw new CaseNotFoundException();
         var from = c.AssigneeCoordinatorId;
         c.AssigneeCoordinatorId = toCoordinatorId;
+        // Assignment means a coordinator has started handling the case.
+        // Keep closed cases closed, but move newly assigned pending cases into the active workflow.
+        if (c.Status == "pending")
+        {
+            c.Status = "in_progress";
+        }
         c.UpdatedAt = DateTimeOffset.UtcNow;
 
         await repo.AddAssignmentAsync(new CaseAssignment

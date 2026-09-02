@@ -393,6 +393,10 @@ public class CaseService(
         if (option.Selected)
         {
             option.Selected = false;
+            // 反悔(取消选中)必须连同 P7 的执行确认一起撤：ExecutionRequestedAt 是酒店 H2 卡和 H1 卡
+            // "客人已拍板"状态的判定依据，只清 Selected 不清它的话，酒店一确认就会把客人已经
+            // 反悔的改订强行执行掉。
+            option.ExecutionRequestedAt = null;
         }
         else
         {
@@ -525,7 +529,15 @@ public class CaseService(
             // 仅在这里(客人真正点了P7确认)才算"客人已选定方案"，酒店的H2待办才能出现这条——
             // 光是P5选中(Selected=true)不够，不能在客人还没确认时就去打扰酒店。
             option.ExecutionRequestedAt = now;
-            await NotifyHotelAsync(full, option, ct);
+            // defer 问的还是原酒店"能不能接这单延期"：如果 H1 询单还停在 pending，同一件事已经有
+            // 一张待响应的卡了，不能再按"客人已选方案"通知一遍——那在酒店端看起来像第二件待办。
+            // 只提醒酒店尽快响应已有请求，H1 卡靠 InquiryItemDto.GuestCommitted 展示"客人已拍板"。
+            // alternate 不走这支：候补酒店从来没有 H1，H2 就是它唯一的待办。
+            if (option.OptionType == "defer" && full.Booking is not null &&
+                await cases.HasPendingInquiryAsync(caseId, full.Booking.HotelId, ct))
+                await NotifyHotelOfGuestCommitmentAsync(full, option, ct);
+            else
+                await NotifyHotelAsync(full, option, ct);
             await cases.SaveChangesAsync(ct);
             await NotifyGuestSelectionSubmittedAsync(full, option, ct);
             return new ConfirmExecutionResultDto("processing", "Submitted — we're waiting for the hotel to confirm. We'll update you as soon as we hear back.", null, null, null);
@@ -593,6 +605,16 @@ public class CaseService(
         // 它可能还在按"这客人要延期"给这间房留着。改订生效时如果最终酒店跟原酒店不是同一家,
         // 得单独告诉原酒店这单已经不用它了。
         if (originalHotelId != booking.HotelId) await NotifyOriginalHotelReleasedAsync(full, originalHotelId, booking, ct);
+
+        // 改订生效即视为"原酒店请求"已有结论：还停在 pending 的 H1 询单一并闭环。正常路径走到这里
+        // 时 H1 早已被酒店自己点掉，这段是给旧数据/并发窗口兜底——不然酒店待办里会留下客人早已
+        // 改订完、却永远处理不完的卡。跟其它字段一起在下面这次 SaveChanges 原子落库。
+        foreach (var inquiry in await cases.ListPendingInquiriesAsync(full.Id, ct))
+        {
+            inquiry.Status = "accepted";
+            inquiry.RespondedAt = now;
+            inquiry.UpdatedAt = now;
+        }
         await cases.SaveChangesAsync(ct);
 
         var guest = await users.FindByIdAsync(booking.GuestUserId, ct);
@@ -618,8 +640,10 @@ public class CaseService(
         return new ConfirmExecutionResultDto("success", "Your booking has been updated.", booking.ConfirmationNo, booking.CheckIn, booking.CheckOut);
     }
 
-    /// <summary>酒店在 H1/H2 确认后调用：把选项标为可用，如果客人已经选了这个选项(之前卡在 pending)
-    /// 就直接执行改订生效；否则只是解锁选项，等客人在 P5 自己确认。</summary>
+    /// <summary>酒店在 H1/H2 确认后调用：把选项标为可用，如果客人已经点过 P7 确认执行
+    /// (ExecutionRequestedAt 非空，之前卡在 pending 等酒店回复)就直接执行改订生效；否则只是解锁选项、
+    /// 通知客人自己来确认。判断必须看 ExecutionRequestedAt 而不是 Selected——客人仅在 P5 选中还没
+    /// 确认执行时，酒店这边确认可用不能代客改订。</summary>
     public async Task<ConfirmExecutionResultDto?> ResolveOptionAvailableAsync(Guid caseId, Guid optionId, CancellationToken ct = default)
     {
         var option = await cases.FindOptionAsync(optionId, caseId, ct) ?? throw new CaseNotFoundException();
@@ -633,7 +657,7 @@ public class CaseService(
         option.Availability = "available";
         option.UpdatedAt = DateTimeOffset.UtcNow;
 
-        if (!option.Selected)
+        if (option.ExecutionRequestedAt is null)
         {
             await cases.SaveChangesAsync(ct);
             await NotifyGuestOptionConfirmedAsync(full, option, ct);
@@ -838,6 +862,43 @@ public class CaseService(
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Failed to send guest-selection email to {Email}", hotelEmail);
+        }
+    }
+
+    /// <summary>客人对还在 pending 的 defer 方案点了 P7 确认、而原酒店的 H1 询单也还在 pending 时用这条：
+    /// 提醒酒店"客人已经拍板，请尽快响应你待办里的那条请求"。跟 NotifyHotelAsync 分开维护——
+    /// 那条的文案读起来像一件新的待办(酒店端 H2 卡)，这条明确指向已有请求，不再制造第二张卡。</summary>
+    private async Task NotifyHotelOfGuestCommitmentAsync(Case full, Option option, CancellationToken ct)
+    {
+        var hotelId = await ResolveTargetHotelIdAsync(full, option, ct);
+        if (hotelId is null) return;
+        var hotelUserId = await cases.FindHotelAccountUserIdAsync(hotelId.Value, ct);
+        if (hotelUserId is null) return;
+
+        var now = DateTimeOffset.UtcNow;
+        var title = "Guest confirmed the deferral — awaiting your response";
+        var body = $"The guest has confirmed the deferral for booking {full.Booking!.ConfirmationNo}. Please respond to the pending request in your to-dos.";
+        await cases.AddNotificationAsync(new Notification
+        {
+            Id = Guid.NewGuid(), UserId = hotelUserId.Value, Channel = "in_app",
+            Type = "guest_selection", Title = title, Body = body,
+            CaseId = full.Id, SentAt = now, Success = true, CreatedAt = now, UpdatedAt = now,
+        }, ct);
+
+        var hotelEmail = await cases.FindHotelAccountEmailAsync(hotelId.Value, ct);
+        if (string.IsNullOrWhiteSpace(hotelEmail)) return;
+        var hotelHomeLink = CaseEmailLinks.BuildHotelHomeLink();
+        var htmlBody = EmailTemplate.Build(title, $"""
+            <p>{WebUtility.HtmlEncode(body)}</p>
+            {EmailTemplate.Button(hotelHomeLink, "Open your dashboard")}
+            """);
+        try
+        {
+            await email.SendEmailAsync(hotelEmail, title, $"{body}\n\nOpen your dashboard: {hotelHomeLink}", ct, htmlBody);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to send guest-commitment email to {Email}", hotelEmail);
         }
     }
 

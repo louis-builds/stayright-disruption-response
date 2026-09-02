@@ -18,3 +18,6 @@ public record OpsOverviewDto(
     List<AlertDto> Alerts, KpiMetricsDto TodayKpi);
 
 public record AcknowledgeAlertRequest(string AlertKey);
+
+public record SevenDayTrendPointDto(
+    DateOnly Date, int NewCases, int InProgress, int AwaitingGuest, int AwaitingHotel, int Closed);
