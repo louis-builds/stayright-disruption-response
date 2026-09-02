@@ -1,8 +1,9 @@
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  StayRight weather-collector — 定时轮询 Open-Meteo 预报，发现风险窗口即
-  POST 到 C# 后端 /api/ingest/disruptions。一个栈建齐 A1/A3/A4/A5 四件事：
-  SSM 参数 API_BASE_URL、Lambda 函数与执行角色、EventBridge Scheduler 定时规则。
+  StayRight detect collectors — 4 个定时采集器 Lambda（weather / volcano /
+  flight / road）。每个定时轮询各自的外部信号源，发现区域级扰动即 POST 到
+  C# 后端 /api/ingest/disruptions。一个栈建齐：SSM 参数 API_BASE_URL、4 个
+  Lambda 函数与执行角色、4 条 EventBridge Scheduler 定时规则。
 
 Parameters:
   Stage:
@@ -19,6 +20,17 @@ Parameters:
     Default: rate(15 minutes)
     Description: 探测频率，演示观察期 15 分钟
 
+Globals:
+  Function:
+    Runtime: python3.12
+    Architectures: [arm64]
+    # weather 最坏 4 个定位点串行 4 x (10s 取预报 + 10s POST)，其余源更快；统一留冷启动余量
+    Timeout: 120
+    MemorySize: 256
+    Environment:
+      Variables:
+        STAGE: !Ref Stage
+
 Resources:
   ApiBaseUrlParameter:
     Type: AWS::SSM::Parameter
@@ -26,7 +38,23 @@ Resources:
       Name: !Sub /stayright/${Stage}/API_BASE_URL
       Type: String
       Value: !Ref ApiBaseUrl
-      Description: weather-collector Lambda POST 探测结果的 API 基地址
+      Description: 采集器 Lambda POST 探测结果的 API 基地址
+
+  CollectorPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: 采集器 Lambda 读 SSM 参数与 Secrets Manager 密钥
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: ReadStayRightConfig
+            Effect: Allow
+            Action: ssm:GetParameter
+            Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/stayright/${Stage}/*
+          - Sid: ReadStayRightSecrets
+            Effect: Allow
+            Action: secretsmanager:GetSecretValue
+            Resource: !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:stayright/${Stage}/*
 
   WeatherCollectorFunction:
     Type: AWS::Serverless::Function
@@ -34,33 +62,47 @@ Resources:
       Description: 轮询 Open-Meteo 预报，风险窗口 POST 到 /api/ingest/disruptions
       CodeUri: .
       Handler: src.runtimes.lambda_weather_collector.handler
-      Runtime: python3.12
-      Architectures: [arm64]
-      # 4 个定位点串行，最坏 4 x (10s 取预报 + 10s POST) 再留冷启动余量
-      Timeout: 120
-      MemorySize: 256
-      Environment:
-        Variables:
-          STAGE: !Ref Stage
       Policies:
         - AWSLambdaBasicExecutionRole
-        - Statement:
-            - Sid: ReadStayRightConfig
-              Effect: Allow
-              Action: ssm:GetParameter
-              Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/stayright/${Stage}/*
-            - Sid: ReadStayRightSecrets
-              Effect: Allow
-              Action: secretsmanager:GetSecretValue
-              Resource: !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:stayright/${Stage}/*
+        - !Ref CollectorPolicy
+
+  VolcanoCollectorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: 轮询 GeoNet 火山警戒级别，VAL>=3 或航空 Orange/Red 即 POST 到 /api/ingest/disruptions
+      CodeUri: .
+      Handler: src.runtimes.lambda_volcano_collector.handler
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - !Ref CollectorPolicy
+
+  FlightCollectorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: 轮询机场 FIDS，大面积航班取消即 POST 到 /api/ingest/disruptions（key 从 secret oag/api-key 读，未填则跳过）
+      CodeUri: .
+      Handler: src.runtimes.lambda_flight_collector.handler
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - !Ref CollectorPolicy
+
+  RoadCollectorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: 轮询 NZTA 路网事件，切断某镇的国道全封闭即 POST 到 /api/ingest/disruptions
+      CodeUri: .
+      Handler: src.runtimes.lambda_road_collector.handler
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - !Ref CollectorPolicy
 
 # 构建命令（--manifest 必须，否则会把完整 requirements.txt 连 pytest/psycopg 一起打包）：
 #   sam build --use-container --manifest requirements-lambda.txt
-#   sam deploy --stack-name stayright-dev-weather-collector \
+#   sam deploy --stack-name stayright-dev-detect-collectors \
 #     --s3-bucket stayright-dev-raw-990393187001 --s3-prefix sam/ \
 #     --capabilities CAPABILITY_IAM --region ap-southeast-2 --no-confirm-changeset
 
-  WeatherCollectorScheduleRole:
+  CollectorScheduleRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -74,13 +116,17 @@ Resources:
               ArnLike:
                 aws:SourceArn: !Sub arn:${AWS::Partition}:scheduler:${AWS::Region}:${AWS::AccountId}:*
       Policies:
-        - PolicyName: invoke-weather-collector
+        - PolicyName: invoke-detect-collectors
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action: lambda:InvokeFunction
-                Resource: !GetAtt WeatherCollectorFunction.Arn
+                Resource:
+                  - !GetAtt WeatherCollectorFunction.Arn
+                  - !GetAtt VolcanoCollectorFunction.Arn
+                  - !GetAtt FlightCollectorFunction.Arn
+                  - !GetAtt RoadCollectorFunction.Arn
 
   WeatherCollectorSchedule:
     Type: AWS::Scheduler::Schedule
@@ -94,7 +140,52 @@ Resources:
         MaximumWindowInMinutes: 5
       Target:
         Arn: !GetAtt WeatherCollectorFunction.Arn
-        RoleArn: !GetAtt WeatherCollectorScheduleRole.Arn
+        RoleArn: !GetAtt CollectorScheduleRole.Arn
+        Input: "{}"
+
+  VolcanoCollectorSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: !Sub stayright-${Stage}-volcano-collector
+      Description: 定时触发 volcano-collector Lambda 探测火山警戒级别
+      ScheduleExpression: !Ref ScheduleExpression
+      ScheduleExpressionTimezone: Pacific/Auckland
+      FlexibleTimeWindow:
+        Mode: FLEXIBLE
+        MaximumWindowInMinutes: 5
+      Target:
+        Arn: !GetAtt VolcanoCollectorFunction.Arn
+        RoleArn: !GetAtt CollectorScheduleRole.Arn
+        Input: "{}"
+
+  FlightCollectorSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: !Sub stayright-${Stage}-flight-collector
+      Description: 定时触发 flight-collector Lambda 探测机场级航班取消
+      ScheduleExpression: !Ref ScheduleExpression
+      ScheduleExpressionTimezone: Pacific/Auckland
+      FlexibleTimeWindow:
+        Mode: FLEXIBLE
+        MaximumWindowInMinutes: 5
+      Target:
+        Arn: !GetAtt FlightCollectorFunction.Arn
+        RoleArn: !GetAtt CollectorScheduleRole.Arn
+        Input: "{}"
+
+  RoadCollectorSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: !Sub stayright-${Stage}-road-collector
+      Description: 定时触发 road-collector Lambda 探测国道全封闭
+      ScheduleExpression: !Ref ScheduleExpression
+      ScheduleExpressionTimezone: Pacific/Auckland
+      FlexibleTimeWindow:
+        Mode: FLEXIBLE
+        MaximumWindowInMinutes: 5
+      Target:
+        Arn: !GetAtt RoadCollectorFunction.Arn
+        RoleArn: !GetAtt CollectorScheduleRole.Arn
         Input: "{}"
 
 Outputs:
@@ -103,3 +194,18 @@ Outputs:
     Value: !Ref WeatherCollectorFunction
   WeatherCollectorFunctionArn:
     Value: !GetAtt WeatherCollectorFunction.Arn
+  VolcanoCollectorFunctionName:
+    Description: volcano-collector Lambda 的物理函数名（冒烟用 aws lambda invoke）
+    Value: !Ref VolcanoCollectorFunction
+  VolcanoCollectorFunctionArn:
+    Value: !GetAtt VolcanoCollectorFunction.Arn
+  FlightCollectorFunctionName:
+    Description: flight-collector Lambda 的物理函数名（冒烟用 aws lambda invoke）
+    Value: !Ref FlightCollectorFunction
+  FlightCollectorFunctionArn:
+    Value: !GetAtt FlightCollectorFunction.Arn
+  RoadCollectorFunctionName:
+    Description: road-collector Lambda 的物理函数名（冒烟用 aws lambda invoke）
+    Value: !Ref RoadCollectorFunction
+  RoadCollectorFunctionArn:
+    Value: !GetAtt RoadCollectorFunction.Arn
