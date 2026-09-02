@@ -1,6 +1,7 @@
 using System.Text.Json;
 using TravelDisruptionAgent.Api.Features.Bookings;
 using TravelDisruptionAgent.Api.Features.Cases;
+using TravelDisruptionAgent.Api.Features.HotelPortal;
 using TravelDisruptionAgent.Api.Infrastructure.Data.Entities;
 using TravelDisruptionAgent.Api.Infrastructure.Email;
 
@@ -9,7 +10,7 @@ namespace TravelDisruptionAgent.Api.Features.Coordinator;
 // ponytail: 三选项的金额一律从酒店/房型表规则计算,不接 Gemini 生成数字(政策要求"不用文档搜索来查价",
 // 延伸到不用 AI 编数字);AI 预填目前体现为"自动生成结构化字段草稿,协调员改表单"这一步,
 // 真正调用 Gemini 润色话术留作后续增强,不在本任务强绑定,避免把金额正确性绑定到网络可用性上。
-public class OptionsAdminService(IOptionsAdminRepository repo, IBookingRepository bookingRepo, IEmailService email)
+public class OptionsAdminService(IOptionsAdminRepository repo, IBookingRepository bookingRepo, IEmailService email, IHotelRepository hotelRepo)
     : IOptionsAdminService
 {
     private static readonly string[] CanonicalTypes = ["defer", "alternate", "cancel"];
@@ -115,8 +116,9 @@ public class OptionsAdminService(IOptionsAdminRepository repo, IBookingRepositor
 
         if (types.Contains("cancel"))
         {
-            var cancellationFee = Math.Round(booking.TotalAmount * 0.1m, 2);
-            var refundAmount = booking.TotalAmount - cancellationFee;
+            var policy = await hotelRepo.GetActiveRefundPolicyAsync(booking.HotelId, ct);
+            var rules = RefundPolicyParser.Parse(policy?.StructuredRulesJson);
+            var (cancellationFee, refundAmount) = RefundPolicyParser.CalculateRefund(booking.TotalAmount, rules);
             var cancelPayload = JsonSerializer.Serialize(new
             {
                 refund_amount = refundAmount,
