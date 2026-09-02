@@ -1,8 +1,12 @@
 # Kakapo — StayRight NZ Disruption Agent (MVP: Detect + Identify)
 
-Given a weather anomaly, automatically produce the list of bookings it
-affects — no human in the loop. See [../CLAUDE.md](../CLAUDE.md) for the
-full spec and scope boundaries; this README is just "how do I run it."
+Given a regional-scale disruption signal — a weather anomaly, a volcanic
+alert, an airport-wide flight cancellation, or a state-highway closure
+that cuts off a town — automatically produce the list of bookings it
+affects, with no human in the loop. Signals that only hit individual
+travellers are deliberately filtered out at the detect stage. See
+[../CLAUDE.md](../CLAUDE.md) for the full spec and scope boundaries; this
+README is just "how do I run it."
 
 This is the Python sub-project, a sibling of [../backend/](../backend/)
 (C#) and [../frontend/](../frontend/) (React). Everything below assumes
@@ -25,8 +29,12 @@ Postgres" below.
 ```
 src/
   detect/
-    models.py      # DisruptionEvent pydantic schema (the contract every source normalises to)
-    open_meteo.py   # polls Open-Meteo, classifies risk, builds DisruptionEvents
+    models.py         # DisruptionEvent pydantic schema (the contract every source normalises to)
+    events.py         # build_event(): the one place a DisruptionEvent is assembled, shared by every source
+    open_meteo.py     # weather: polls Open-Meteo, classifies risk, builds DisruptionEvents
+    geonet_volcano.py  # volcano: GeoNet Volcanic Alert Level -> event when VAL >= 3 or aviation Orange/Red
+    flight_status.py   # flight: airport FIDS (AeroDataBox now, OAG later) -> event on airport-wide mass cancellation (not single flights)
+    nzta_road.py       # road: NZTA traffic feed -> event on a full state-highway closure that isolates a town
   identify/
     geo.py          # haversine distance (pure Python, no DB)
     db.py            # Postgres connection helper (direct connect, no RDS Proxy yet)
@@ -35,6 +43,7 @@ tests/
   test_detect.py    # schema validation + classify()/detect_events() unit tests
   test_identify.py  # geo + matcher unit tests (mocked DB); optional live-Postgres integration test
 scripts/
+  run_detect.py     # detect only, no DB: print each source's raw API response + the DisruptionEvent(s) it produces
   run_local_e2e.py  # manual detect -> identify run against real Open-Meteo + local Postgres
   run_demo.py       # continuous demo: polls real weather every N seconds, injects one mock storm reading, writes handoff JSON
 output/             # scripts/run_demo.py's .jsonl handoff file lands here (gitignored)
@@ -52,6 +61,32 @@ Requires Python 3.12 per CLAUDE.md; this environment only has 3.13
 available, which the code was developed and tested against — install
 3.12 if you need to match the pinned version exactly.
 
+### API keys — almost nothing to configure
+
+| Source | Key needed? |
+|---|---|
+| Weather (Open-Meteo) | No |
+| Volcano (GeoNet) | No |
+| Road (NZTA TREIS) | No |
+| Flight (AeroDataBox) | One free key, and only for **live** flight data |
+
+So three of the four sources work the moment `pip install` finishes.
+With no flight key the flight source just prints `skipped` and the run
+continues — nothing breaks.
+
+For live flight data, either use `--simulate` (canned sample, no key), or
+get a key. **Everyone subscribes their own — don't share one key.** The
+AeroDataBox free tier's call quota is per RapidAPI account, so a shared
+key runs out and then fails for the whole team.
+
+1. Sign up at [rapidapi.com](https://rapidapi.com).
+2. Open the **AeroDataBox** API → **Subscribe** → **Basic** (free) plan.
+3. Copy your `X-RapidAPI-Key`.
+4. `copy ..\.env.example ..\.env` (once), then set `RAPIDAPI_KEY=<your key>` in that `..\.env`.
+
+`scripts/run_detect.py` and the identify scripts both load `../.env`
+automatically, so that is the only step — no `$env:` exporting needed.
+
 ## Running the test suite
 
 No network access or live database required — `open_meteo.py` is tested
@@ -61,6 +96,28 @@ mocked DB connection.
 ```powershell
 .venv\Scripts\python -m pytest
 ```
+
+## Seeing what each source produces (no database)
+
+`scripts/run_detect.py` polls the sources and prints, per source, the
+raw API response and the `DisruptionEvent`(s) it normalises to. No
+Postgres, no identify step.
+
+```powershell
+.venv\Scripts\python -m scripts.run_detect                     # all four, live
+.venv\Scripts\python -m scripts.run_detect --source volcano    # live GeoNet, no key
+.venv\Scripts\python -m scripts.run_detect --simulate          # canned "disrupted" readings for every source, no network
+$env:RAPIDAPI_KEY = "..."                                       # for --source flight only
+.venv\Scripts\python -m scripts.run_detect --source flight
+```
+
+Weather (Open-Meteo), volcano (GeoNet) and road (NZTA TREIS) need no key.
+Flight uses AeroDataBox via RapidAPI — set `RAPIDAPI_KEY`; production is
+meant to swap to OAG (`oag/api-key`), and only `fetch_flight_status`
+changes. `--simulate` shows a full event for all four with no network
+call. The flight/road field mappings are best-effort against the live
+docs — verify against a real response and tighten if a provider shifts
+its schema.
 
 ## Running against a real local Postgres
 
@@ -152,6 +209,10 @@ database is reachable or the backend hasn't seeded it yet.
 
 ## Status
 
-MVP scope only: detect (weather anomalies -> `DisruptionEvent`) and
-identify (affected bookings). No agent reasoning, no notifications, no
-AWS deployment yet — see ../CLAUDE.md's "不要做的事" section.
+MVP scope only: detect (weather / volcano / flight / road signals ->
+`DisruptionEvent`) and identify (affected bookings). No agent reasoning,
+no notifications, no AWS deployment yet — see ../CLAUDE.md's "不要做的事"
+section. The flight source needs a `RAPIDAPI_KEY` in the environment to
+poll live (AeroDataBox); weather, volcano and road are keyless. The
+`fetch_*` functions are the only place a key is read, and every test
+stubs them out.

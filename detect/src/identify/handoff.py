@@ -41,11 +41,12 @@ def build_handoff_payloads(event: Any, affected_bookings: list[dict]) -> tuple[d
                 "lng": event.geo.center.lng,
                 "radius_km": event.geo.radius_km,
             },
-            "raw_signal": {
-                "wind_gusts_kmh": event.raw_payload.get("wind_gusts_10m", 0),
-                "precipitation_mm": event.raw_payload.get("precipitation", 0),
-                "snowfall_cm": event.raw_payload.get("snowfall", 0),
-            },
+            # Pass the source's own signal fields straight through -- each
+            # detect adapter (weather, volcano, flight, road) puts its own
+            # evidence in raw_payload, and the C# side stores raw_signal as
+            # opaque JSON, so nothing here should be weather-specific. The
+            # "location" key is a weather-only label, not a signal value.
+            "raw_signal": {k: v for k, v in event.raw_payload.items() if k != "location"},
         }
     }
     affected_customer_messages = [
