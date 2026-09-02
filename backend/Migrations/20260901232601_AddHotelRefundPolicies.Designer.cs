@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TravelDisruptionAgent.Api.Infrastructure.Data;
@@ -12,9 +13,11 @@ using TravelDisruptionAgent.Api.Infrastructure.Data;
 namespace TravelDisruptionAgent.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260901232601_AddHotelRefundPolicies")]
+    partial class AddHotelRefundPolicies
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -281,42 +284,6 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .HasDatabaseName("ix_case_notes_case_id");
 
                     b.ToTable("case_notes", (string)null);
-                });
-
-            modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.CaseWorkflowStateHistory", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<Guid>("CaseId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("case_id");
-
-                    b.Property<DateTimeOffset?>("EndedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("ended_at");
-
-                    b.Property<DateTimeOffset>("StartedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("started_at");
-
-                    b.Property<string>("State")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("state");
-
-                    b.HasKey("Id")
-                        .HasName("pk_case_workflow_state_histories");
-
-                    b.HasIndex("CaseId", "StartedAt")
-                        .HasDatabaseName("ix_case_workflow_state_histories_case_id_started_at");
-
-                    b.HasIndex("State", "StartedAt", "EndedAt")
-                        .HasDatabaseName("ix_case_workflow_state_histories_state_started_at_ended_at");
-
-                    b.ToTable("case_workflow_state_histories", (string)null);
                 });
 
             modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.Disruption", b =>
@@ -650,11 +617,6 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .HasColumnType("text")
                         .HasColumnName("google_place_id");
 
-                    b.PrimitiveCollection<List<string>>("ImageUrls")
-                        .IsRequired()
-                        .HasColumnType("text[]")
-                        .HasColumnName("image_urls");
-
                     b.Property<double>("Lat")
                         .HasColumnType("double precision")
                         .HasColumnName("lat");
@@ -667,10 +629,6 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("name");
-
-                    b.Property<int>("PrimaryImageIndex")
-                        .HasColumnType("integer")
-                        .HasColumnName("primary_image_index");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -1520,18 +1478,6 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .HasConstraintName("fk_case_notes_cases_case_id");
 
                     b.Navigation("Author");
-
-                    b.Navigation("Case");
-                });
-
-            modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.CaseWorkflowStateHistory", b =>
-                {
-                    b.HasOne("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.Case", "Case")
-                        .WithMany()
-                        .HasForeignKey("CaseId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_case_workflow_state_histories_cases_case_id");
 
                     b.Navigation("Case");
                 });

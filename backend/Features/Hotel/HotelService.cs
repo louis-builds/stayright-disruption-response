@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http;
 using TravelDisruptionAgent.Api.Features.Cases;
 using TravelDisruptionAgent.Api.Features.Coordinator;
 using TravelDisruptionAgent.Api.Infrastructure.Data.Entities;
@@ -192,7 +193,7 @@ public class HotelService(IHotelRepository repo, ICaseService caseService, IOpti
     }
 
     private static HotelProfileDto ToProfileDto(TravelDisruptionAgent.Api.Infrastructure.Data.Entities.Hotel h, List<HotelPerk> perks) => new(
-        h.Id, h.Name, h.Address, h.Lat, h.Lng,
+        h.Id, h.Name, h.Address, h.Lat, h.Lng, h.ImageUrls, h.PrimaryImageIndex,
         [.. h.RoomTypes.Select(r => new RoomTypeDto(r.Id, r.Name, r.Description, r.Amenities, r.Capacity, r.PriceAmount, r.Currency, r.ImageUrls))],
         [.. perks.Select(p => new HotelPerkDto(p.Id, p.Name))]);
 
@@ -204,6 +205,8 @@ public class HotelService(IHotelRepository repo, ICaseService caseService, IOpti
         hotel.Address = request.Address;
         hotel.Lat = request.Lat;
         hotel.Lng = request.Lng;
+        hotel.ImageUrls = request.ImageUrls;
+        hotel.PrimaryImageIndex = request.PrimaryImageIndex;
         hotel.UpdatedAt = DateTimeOffset.UtcNow;
         await repo.SaveChangesAsync(ct);
     }
@@ -254,6 +257,38 @@ public class HotelService(IHotelRepository repo, ICaseService caseService, IOpti
         await repo.SaveChangesAsync(ct);
         return new HotelPerkDto(perk.Id, perk.Name);
     }
+
+    public async Task<HotelRefundPolicyDto?> GetRefundPolicyAsync(Guid hotelUserId, CancellationToken ct = default)
+    {
+        var hotelId = await RequireHotelIdAsync(hotelUserId, ct);
+        var policy = await repo.GetActiveRefundPolicyAsync(hotelId, ct);
+        return policy is null ? null : ToRefundPolicyDto(policy);
+    }
+
+    public async Task<HotelRefundPolicyDto> UpsertRefundPolicyAsync(Guid hotelUserId, UpsertHotelRefundPolicyRequest request, CancellationToken ct = default)
+    {
+        var hotelId = await RequireHotelIdAsync(hotelUserId, ct);
+        RefundPolicyParser.Validate(request.StructuredRulesJson);
+        var policy = await repo.UpsertRefundPolicyAsync(hotelId, request, ct);
+        return ToRefundPolicyDto(policy);
+    }
+
+    public async Task<HotelRefundPolicyDto> UploadRefundPolicyFileAsync(Guid hotelUserId, IFormFile file, UploadRefundPolicyFileRequest request, CancellationToken ct = default)
+    {
+        var hotelId = await RequireHotelIdAsync(hotelUserId, ct);
+        RefundPolicyParser.Validate(request.StructuredRulesJson);
+
+        await using var stream = file.OpenReadStream();
+        var content = PolicyDocumentExtractor.Extract(stream, file.FileName, file.Length);
+
+        var upsertRequest = new UpsertHotelRefundPolicyRequest(
+            content, request.StructuredRulesJson, request.EffectiveFrom, request.EffectiveUntil, true);
+        var policy = await repo.UpsertRefundPolicyAsync(hotelId, upsertRequest, ct);
+        return ToRefundPolicyDto(policy);
+    }
+
+    private static HotelRefundPolicyDto ToRefundPolicyDto(HotelRefundPolicy p) => new(
+        p.Id, p.Content, p.StructuredRulesJson, p.EffectiveFrom, p.EffectiveUntil, p.IsActive, p.UpdatedAt);
 
     public async Task DeletePerkAsync(Guid hotelUserId, Guid perkId, CancellationToken ct = default)
     {

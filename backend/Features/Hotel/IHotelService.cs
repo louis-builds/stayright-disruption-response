@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Http;
+
 namespace TravelDisruptionAgent.Api.Features.HotelPortal;
 
 public interface IHotelService
@@ -19,6 +21,10 @@ public interface IHotelService
 
     Task<HotelPerkDto> AddPerkAsync(Guid hotelUserId, AddHotelPerkRequest request, CancellationToken ct = default);
     Task DeletePerkAsync(Guid hotelUserId, Guid perkId, CancellationToken ct = default);
+
+    Task<HotelRefundPolicyDto?> GetRefundPolicyAsync(Guid hotelUserId, CancellationToken ct = default);
+    Task<HotelRefundPolicyDto> UpsertRefundPolicyAsync(Guid hotelUserId, UpsertHotelRefundPolicyRequest request, CancellationToken ct = default);
+    Task<HotelRefundPolicyDto> UploadRefundPolicyFileAsync(Guid hotelUserId, IFormFile file, UploadRefundPolicyFileRequest request, CancellationToken ct = default);
 
     /// <summary>给这家酒店自己名下的方案(defer 或目标是自己的 alternate)附加/替换权益快照。</summary>
     Task SetOptionPerksAsync(Guid hotelUserId, Guid optionId, SetOptionPerksRequest request, CancellationToken ct = default);
