@@ -158,5 +158,40 @@ public class HotelRepository(AppDbContext db) : IHotelRepository
     public async Task AddOptionAsync(Option option, CancellationToken ct = default) =>
         await db.Options.AddAsync(option, ct);
 
+    public Task<HotelRefundPolicy?> GetActiveRefundPolicyAsync(Guid hotelId, CancellationToken ct = default) =>
+        db.HotelRefundPolicies
+            .Where(p => p.HotelId == hotelId && p.IsActive)
+            .OrderByDescending(p => p.CreatedAt)
+            .FirstOrDefaultAsync(ct);
+
+    public async Task<HotelRefundPolicy> UpsertRefundPolicyAsync(Guid hotelId, UpsertHotelRefundPolicyRequest request, CancellationToken ct = default)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var existing = await db.HotelRefundPolicies
+            .Where(p => p.HotelId == hotelId && p.IsActive)
+            .ToListAsync(ct);
+        foreach (var p in existing)
+        {
+            p.IsActive = false;
+            p.UpdatedAt = now;
+        }
+
+        var policy = new HotelRefundPolicy
+        {
+            Id = Guid.NewGuid(),
+            HotelId = hotelId,
+            Content = request.Content,
+            StructuredRulesJson = request.StructuredRulesJson,
+            IsActive = request.IsActive,
+            EffectiveFrom = request.EffectiveFrom,
+            EffectiveUntil = request.EffectiveUntil,
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+        await db.HotelRefundPolicies.AddAsync(policy, ct);
+        await db.SaveChangesAsync(ct);
+        return policy;
+    }
+
     public Task SaveChangesAsync(CancellationToken ct = default) => db.SaveChangesAsync(ct);
 }

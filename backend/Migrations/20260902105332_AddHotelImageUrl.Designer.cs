@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TravelDisruptionAgent.Api.Infrastructure.Data;
@@ -12,9 +13,11 @@ using TravelDisruptionAgent.Api.Infrastructure.Data;
 namespace TravelDisruptionAgent.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260902105332_AddHotelImageUrl")]
+    partial class AddHotelImageUrl
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -614,10 +617,9 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .HasColumnType("text")
                         .HasColumnName("google_place_id");
 
-                    b.PrimitiveCollection<List<string>>("ImageUrls")
-                        .IsRequired()
-                        .HasColumnType("text[]")
-                        .HasColumnName("image_urls");
+                    b.Property<string>("ImageUrl")
+                        .HasColumnType("text")
+                        .HasColumnName("image_url");
 
                     b.Property<double>("Lat")
                         .HasColumnType("double precision")
@@ -631,10 +633,6 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("name");
-
-                    b.Property<int>("PrimaryImageIndex")
-                        .HasColumnType("integer")
-                        .HasColumnName("primary_image_index");
 
                     b.Property<string>("Status")
                         .IsRequired()

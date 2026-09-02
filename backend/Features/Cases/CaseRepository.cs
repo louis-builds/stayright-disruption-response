@@ -8,7 +8,9 @@ namespace TravelDisruptionAgent.Api.Features.Cases;
 public class CaseRepository(AppDbContext db) : ICaseRepository
 {
     public Task<Case?> FindWithBookingAsync(Guid caseId, CancellationToken ct = default) =>
-        db.Cases.Include(c => c.Booking).FirstOrDefaultAsync(c => c.Id == caseId, ct);
+        db.Cases
+            .Include(c => c.Booking).ThenInclude(b => b!.Hotel)
+            .FirstOrDefaultAsync(c => c.Id == caseId, ct);
 
     public Task<List<Case>> ListForGuestAsync(Guid guestUserId, bool includeClosed, CancellationToken ct = default)
     {
