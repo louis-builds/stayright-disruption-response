@@ -5,6 +5,8 @@ namespace TravelDisruptionAgent.Api.Infrastructure.Data;
 
 public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
+    private bool recordingWorkflowHistory;
+
     public DbSet<User> Users => Set<User>();
     public DbSet<Hotel> Hotels => Set<Hotel>();
     public DbSet<RoomType> RoomTypes => Set<RoomType>();
@@ -32,6 +34,66 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<UserDocumentVersion> UserDocumentVersions => Set<UserDocumentVersion>();
     public DbSet<SystemSettings> SystemSettings => Set<SystemSettings>();
     public DbSet<FaqQuestion> FaqQuestions => Set<FaqQuestion>();
+    public DbSet<CaseWorkflowStateHistory> CaseWorkflowStateHistories => Set<CaseWorkflowStateHistory>();
+
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        if (recordingWorkflowHistory) return await base.SaveChangesAsync(cancellationToken);
+
+        var affectedCaseIds = ChangeTracker.Entries()
+            .Where(entry => entry.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
+            .Select(entry => entry.Entity switch
+            {
+                Case c => c.Id,
+                Inquiry i => i.CaseId,
+                Option o => o.CaseId,
+                _ => Guid.Empty,
+            })
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .ToList();
+
+        var changed = await base.SaveChangesAsync(cancellationToken);
+        if (affectedCaseIds.Count == 0) return changed;
+
+        recordingWorkflowHistory = true;
+        try
+        {
+            var now = DateTimeOffset.UtcNow;
+            foreach (var caseId in affectedCaseIds)
+            {
+                var state = await DeriveWorkflowStateAsync(caseId, cancellationToken);
+                if (state is null) continue;
+
+                var current = await CaseWorkflowStateHistories
+                    .Where(x => x.CaseId == caseId && x.EndedAt == null)
+                    .OrderByDescending(x => x.StartedAt)
+                    .FirstOrDefaultAsync(cancellationToken);
+                if (current?.State == state) continue;
+                if (current is not null) current.EndedAt = now;
+                CaseWorkflowStateHistories.Add(new CaseWorkflowStateHistory
+                {
+                    Id = Guid.NewGuid(), CaseId = caseId, State = state, StartedAt = now,
+                });
+            }
+            changed += await base.SaveChangesAsync(cancellationToken);
+        }
+        finally
+        {
+            recordingWorkflowHistory = false;
+        }
+        return changed;
+    }
+
+    private async Task<string?> DeriveWorkflowStateAsync(Guid caseId, CancellationToken ct)
+    {
+        var status = await Cases.Where(c => c.Id == caseId).Select(c => c.Status).FirstOrDefaultAsync(ct);
+        if (status is null) return null;
+        if (status == "closed") return "closed";
+        if (await Inquiries.AnyAsync(i => i.CaseId == caseId && i.Status == "pending", ct)) return "awaiting_hotel";
+        if (await Options.AnyAsync(o => o.CaseId == caseId && o.Availability != "pending", ct)) return "awaiting_guest";
+        return status == "in_progress" ? "in_progress" : "new";
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -80,6 +142,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasIndex(x => x.AssigneeCoordinatorId);
             e.HasOne(x => x.Booking).WithMany().HasForeignKey(x => x.BookingId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.Disruption).WithMany().HasForeignKey(x => x.DisruptionId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<CaseWorkflowStateHistory>(e =>
+        {
+            e.HasIndex(x => new { x.CaseId, x.StartedAt });
+            e.HasIndex(x => new { x.State, x.StartedAt, x.EndedAt });
+            e.HasOne(x => x.Case).WithMany().HasForeignKey(x => x.CaseId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<Message>(e =>

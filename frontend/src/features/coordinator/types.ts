@@ -135,6 +135,15 @@ export interface OpsOverview {
   todayKpi: KpiMetrics;
 }
 
+export interface SevenDayTrendPoint {
+  date: string;
+  newCases: number;
+  inProgress: number;
+  awaitingGuest: number;
+  awaitingHotel: number;
+  closed: number;
+}
+
 export interface AdminUser {
   id: string;
   nickname: string;

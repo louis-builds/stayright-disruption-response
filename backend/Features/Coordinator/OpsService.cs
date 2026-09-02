@@ -96,4 +96,36 @@ public class OpsService(IOpsRepository repo) : IOpsService
             concurrentInProgress, notifyDenominator, closedCases.Count,
             escalationDepth, escalationOverdue);
     }
+
+    public async Task<List<SevenDayTrendPointDto>> GetSevenDayTrendAsync(CancellationToken ct = default)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var firstDay = today.AddDays(-6);
+        var rangeStart = new DateTimeOffset(firstDay.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+        var rangeEnd = rangeStart.AddDays(7);
+        var histories = await repo.ListWorkflowHistoryAsync(rangeStart, rangeEnd, ct);
+        var cases = await repo.ListCasesCreatedOrClosedSinceAsync(rangeStart, ct);
+
+        int Occupied(string state, DateTimeOffset start, DateTimeOffset end) => histories
+            .Where(h => h.State == state && h.StartedAt < end && (h.EndedAt == null || h.EndedAt > start))
+            .Select(h => h.CaseId)
+            .Distinct()
+            .Count();
+
+        var result = new List<SevenDayTrendPointDto>();
+        for (var offset = 0; offset < 7; offset++)
+        {
+            var date = firstDay.AddDays(offset);
+            var start = new DateTimeOffset(date.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+            var end = start.AddDays(1);
+            result.Add(new SevenDayTrendPointDto(
+                date,
+                cases.Count(c => c.CreatedAt >= start && c.CreatedAt < end),
+                Occupied("in_progress", start, end),
+                Occupied("awaiting_guest", start, end),
+                Occupied("awaiting_hotel", start, end),
+                cases.Count(c => c.ClosedAt >= start && c.ClosedAt < end)));
+        }
+        return result;
+    }
 }
