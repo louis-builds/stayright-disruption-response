@@ -15,6 +15,15 @@ export interface CaseSummary {
   escalated: boolean;
   unreadAiCount: number;
   unreadCoordinatorCount: number;
+  disruptionId: string | null;
+  disruptionDescription: string | null;
+  confirmationNo: string | null;
+  guestNickname: string | null;
+  guestAvatarUrl: string | null;
+  guestEmail: string | null;
+  guestPhone: string | null;
+  assigneeCoordinatorId: string | null;
+  assigneeNickname: string | null;
 }
 
 export type SenderRole = "system" | "ai" | "guest" | "coordinator";

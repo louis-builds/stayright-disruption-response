@@ -1,9 +1,140 @@
 /* 卡片网格本身用 auto-fit 已经比较会用宽度了，但整页缺一个"这个案件现在什么状态、
    聊天在哪"的入口——加个侧栏，跟其它页面已经用过的 side-panel 视觉语言保持一致。 */
+.options-workspace {
+  padding: 28px;
+  color: #101a34;
+}
+
+.options-workspace-back {
+  margin: 0 0 14px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #6f38ed;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.options-workspace-hero {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  overflow: hidden;
+  padding: 25px 28px;
+  border: 1px solid #e3e7f0;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(28, 38, 65, 0.04);
+}
+
+.options-workspace-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 4px;
+  background: linear-gradient(90deg, #7c2cf3, #a661f5 58%, #12bba6);
+}
+
+.options-workspace-hero small,
+.options-case-strip small {
+  display: block;
+  color: #8a93aa;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.options-workspace-hero > div:first-child > small { color: #7434ed; }
+
+.options-workspace-title-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 5px;
+}
+
+.options-workspace-title-row h1 {
+  margin: 0;
+  font-size: clamp(25px, 2vw, 32px);
+  line-height: 1.2;
+}
+
+.options-workspace-title-row span {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #f1eafe;
+  color: #7135e8;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.options-workspace-hero p {
+  margin: 8px 0 0;
+  color: #7f89a1;
+  font-size: 14px;
+}
+
+.options-workspace-sync {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 9px 13px;
+  border-radius: 999px;
+  background: #ecfaf7;
+  color: #078d78;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.options-workspace-sync i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #12bfa4;
+}
+
+.options-case-strip {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr 1.3fr .7fr;
+  gap: 0;
+  margin: 18px 0;
+  padding: 20px 24px;
+  border: 1px solid #e3e7f0;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.options-case-strip > div {
+  min-width: 0;
+  padding: 0 22px;
+  border-left: 1px solid #edf0f5;
+}
+
+.options-case-strip > div:first-child { padding-left: 0; border-left: 0; }
+.options-case-strip > div:last-child { padding-right: 0; }
+
+.options-case-strip strong,
+.options-case-strip span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.options-case-strip strong { margin-top: 7px; font-size: 16px; }
+.options-case-strip span { margin-top: 4px; color: #8b94aa; font-size: 12px; }
+.options-case-strip .options-count { color: #7434ed; font-size: 24px; line-height: 1; }
+
 .options-admin-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 260px;
-  gap: 1.25rem;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 18px;
   align-items: start;
 }
 
@@ -25,14 +156,14 @@
 .options-admin-side-card {
   background: white;
   border: 1px solid #e6edf3;
-  border-radius: 10px;
-  padding: 1rem 1.1rem;
+  border-radius: 16px;
+  padding: 20px;
   animation: coord-fade-in 0.2s ease;
 }
 
 .options-admin-side-card h3 {
   margin: 0 0 0.7rem;
-  font-size: 0.85rem;
+  font-size: 18px;
   color: #10243c;
 }
 
@@ -128,7 +259,7 @@
 .option-admin-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1rem;
+  gap: 14px;
   align-items: stretch;
 }
 
@@ -149,8 +280,8 @@
 .option-admin-card {
   background: white;
   border: 1px solid #e6edf3;
-  border-radius: 12px;
-  padding: 1.1rem 1.25rem;
+  border-radius: 16px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 0.8rem;
@@ -175,7 +306,7 @@
 
 .option-admin-header h3 {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: 17px;
   color: #10243c;
 }
 
@@ -238,8 +369,8 @@
 .option-admin-fields input {
   border: 1px solid #dde6ee;
   border-radius: 8px;
-  padding: 0.4rem 0.6rem;
-  font-size: 0.82rem;
+  padding: 10px 12px;
+  font-size: 14px;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -264,3 +395,84 @@
   flex-wrap: wrap;
   align-items: center;
 }
+
+.options-section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  padding: 2px 2px 4px;
+}
+
+.options-section-heading h2 { margin: 0; font-size: 21px; }
+.options-section-heading p { margin: 5px 0 0; color: #8791a8; font-size: 13px; }
+.options-section-heading .coord-toolbar { margin: 0; flex: 0 0 auto; }
+
+@media (max-width: 1100px) {
+  .options-case-strip { grid-template-columns: 1fr 1fr; row-gap: 22px; }
+  .options-case-strip > div:nth-child(3) { padding-left: 0; border-left: 0; }
+}
+
+@media (max-width: 720px) {
+  .options-workspace { padding: 18px; }
+  .options-workspace-hero, .options-section-heading { align-items: flex-start; flex-direction: column; }
+  .options-case-strip { grid-template-columns: 1fr; }
+  .options-case-strip > div { padding: 14px 0; border-left: 0; border-top: 1px solid #edf0f5; }
+  .options-case-strip > div:first-child { padding-top: 0; border-top: 0; }
+  .options-section-heading .coord-toolbar { width: 100%; }
+}
+
+/* Compact review workspace, matching the approved coordinator mock-up. */
+.options-workspace-topline{display:flex;align-items:center;justify-content:space-between;gap:18px;margin:0 2px 16px}
+.options-workspace-topline .options-workspace-back{margin:0;color:#727a90;font-size:12px}
+.options-workspace-topline .options-workspace-sync{padding:0;background:transparent;font-size:11px}
+.options-workspace .options-case-strip{margin:0 0 18px;border-radius:14px;box-shadow:0 4px 16px rgba(28,38,65,.025)}
+.options-side-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:13px;border-bottom:1px solid #eceef3}
+.options-side-heading h3{margin:0}.options-side-heading span{color:#9aa1b3;font-size:10px;font-weight:700}
+.options-admin-side-list{padding-top:12px}
+.options-admin-chat-btn{border-color:#e0e3eb;border-radius:10px;color:#252a3d}
+.options-admin-chat-btn:hover{border-color:#7b34e8;background:#f7f3fe;color:#6f2bdc}
+.option-admin-title{display:flex;align-items:flex-start;gap:9px;min-width:0}
+.option-admin-title>i{display:grid;place-items:center;flex:0 0 auto;width:24px;height:24px;border-radius:7px;background:#f1e9fe;color:#7931e8;font-style:normal;font-weight:800}
+.option-admin-title p{margin:5px 0 0;color:#9299aa;font-size:11px;line-height:1.4}
+.options-section-heading h2::before{content:"☷";margin-right:9px;color:#7b32eb;font-size:20px}
+.options-review-guide{padding:19px 20px;border:1px solid #e6e9f0;border-radius:16px;background:#fff}
+.options-review-guide h3{display:flex;align-items:center;gap:8px;margin:0 0 14px;color:#20263b;font-size:15px}
+.options-review-guide h3 span{color:#0c9c87}.options-review-guide ul{display:grid;gap:10px;margin:0;padding:0;list-style:none}
+.options-review-guide li{position:relative;padding-left:18px;color:#7f879b;font-size:11px;line-height:1.5}
+.options-review-guide li::before{content:"✓";position:absolute;left:0;color:#10a98f;font-weight:900}
+@media(max-width:720px){.options-workspace-topline{align-items:flex-start;flex-direction:column}}
+
+.options-summary-icon{display:inline!important;margin:0 7px 0 0!important;color:#7a32e8;font-style:normal;font-size:14px}
+.options-summary-icon.warning{color:#f29a25}.options-summary-priority{color:#dd3159!important;text-transform:lowercase}
+.options-workspace .coord-btn-primary{border-color:#7932e8;background:#7932e8;color:#fff;box-shadow:none}
+.options-workspace .coord-btn-primary:hover:not(:disabled){border-color:#6924d7;background:#6924d7}
+.options-workspace .coord-btn-secondary{border-color:#e1e4eb;border-radius:10px;background:#fff;color:#3f465a}
+.options-workspace .coord-btn-secondary:hover:not(:disabled){border-color:#ad87ef;background:#f8f4ff;color:#6f2bdc}
+.options-workspace .option-admin-visibility-btn-active{border-color:#7a32e8;background:#7a32e8;color:#fff}
+.options-workspace .tag-status-normal{border-color:#b9eddf;background:#e9faf5;color:#098875}
+.options-workspace .tag-status-warn{border-color:#f7d5ae;background:#fff4e8;color:#bb670c}
+.options-workspace .tag-status-overdue{border-color:#f3c8cf;background:#fff0f3;color:#cf3452}
+.options-workspace .options-admin-priority{position:relative;padding-left:12px;font-weight:700;text-transform:capitalize}
+.options-workspace .options-admin-priority::before{content:"";position:absolute;left:0;top:50%;width:6px;height:6px;border-radius:50%;background:#e8325e;transform:translateY(-50%)}
+.options-workspace .option-admin-actions .coord-btn-danger{color:#cf3452}
+
+/* Options are one business group; case context sits beneath them. */
+.options-workspace .options-admin-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+.options-workspace .options-admin{display:contents}
+.options-workspace .options-section-heading,
+.options-workspace .options-admin-alert,
+.options-workspace .options-admin-closed-note,
+.options-workspace .options-admin-push-result,
+.options-workspace .coord-empty,
+.options-workspace .option-admin-grid,
+.options-workspace .options-admin-side{grid-column:1/-1}
+.options-workspace .option-admin-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:stretch}
+.options-workspace .option-admin-grid .option-admin-card{grid-column:auto;min-width:0}
+.options-workspace .option-admin-grid .option-admin-card:nth-last-child(1):nth-child(odd){grid-column:auto}
+.options-workspace .option-admin-grid .option-admin-card:nth-last-child(1):nth-child(odd) .option-admin-fields{display:flex;grid-template-columns:none}
+.options-workspace .options-admin-side{position:static;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:stretch}
+.options-workspace .options-admin-side-card,
+.options-workspace .options-review-guide{height:100%;box-sizing:border-box}
+@media(max-width:1150px){.options-workspace .option-admin-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.options-workspace .option-admin-grid .option-admin-card:last-child{grid-column:1/-1}.options-workspace .option-admin-grid .option-admin-card:last-child .option-admin-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:.5rem 1rem}}
+@media(max-width:760px){.options-workspace .option-admin-grid,.options-workspace .options-admin-side{grid-template-columns:1fr}.options-workspace .option-admin-grid .option-admin-card:last-child{grid-column:auto}.options-workspace .option-admin-grid .option-admin-card:last-child .option-admin-fields{display:flex}}

@@ -447,6 +447,8 @@ export function CoordinatorHomePage() {
   const [queueSyncedAt, setQueueSyncedAt] = useState<Date | null>(null);
   const [tasksSyncedAt, setTasksSyncedAt] = useState<Date | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [caseInitialView, setCaseInitialView] = useState<"active" | "mine">("active");
+  const [caseDisruptionFilter, setCaseDisruptionFilter] = useState<{ id: string; title: string } | null>(null);
   const [taskFilter, setTaskFilter] = useState("");
   const [coordinators, setCoordinators] = useState<CoordinatorOption[]>([]);
   const [transferTarget, setTransferTarget] = useState<CaseQueueItem | null>(null);
@@ -658,10 +660,10 @@ export function CoordinatorHomePage() {
 
   if (tab === "overview") {
     return (
-      <CoordinatorDashboardShell user={user} active="dashboard" onNavigate={setTab} onSearch={(query) => { setSearchQuery(query); setTab("search"); }}>
+      <CoordinatorDashboardShell user={user} active="dashboard" onNavigate={setTab} onSearch={(query) => { setCaseDisruptionFilter(null); setSearchQuery(query); setTab("search"); }}>
         <CoordinatorDashboard
           data={overview} opsData={opsOverview} syncedAt={overviewSyncedAt} coordinators={coordinators}
-          onOpenCases={() => setTab("queue")} onOpenDisruptions={() => setTab("disruptions")}
+          onOpenCases={() => { setCaseDisruptionFilter(null); setCaseInitialView("active"); setTab("search"); }} onOpenMyCases={() => { setCaseDisruptionFilter(null); setCaseInitialView("mine"); setTab("search"); }} onOpenDisruptions={() => setTab("disruptions")}
           onOpenCase={(id) => navigate(`/cases/${id}`)}
         />
       </CoordinatorDashboardShell>
@@ -672,10 +674,11 @@ export function CoordinatorHomePage() {
   // The original DisruptionsPanel remains intact below as an unused rollback.
   if (tab === "disruptions") {
     return (
-      <CoordinatorDashboardShell user={user} active="cases" onNavigate={setTab} onSearch={(query) => { setSearchQuery(query); setTab("search"); }}>
+      <CoordinatorDashboardShell user={user} active="cases" onNavigate={setTab} onSearch={(query) => { setCaseDisruptionFilter(null); setSearchQuery(query); setTab("search"); }}>
         <DisruptionOperationsDashboard
           data={overview} opsData={opsOverview} syncedAt={overviewSyncedAt} coordinators={coordinators}
-          onOpenCases={() => setTab("queue")} onOpenDisruptions={() => setTab("disruptions")}
+          onOpenCases={() => { setCaseDisruptionFilter(null); setCaseInitialView("active"); setTab("search"); }} onOpenMyCases={() => { setCaseDisruptionFilter(null); setCaseInitialView("mine"); setTab("search"); }} onOpenDisruptions={() => setTab("disruptions")}
+          onOpenAffectedBookings={(id, title) => { setSearchQuery(""); setCaseInitialView("active"); setCaseDisruptionFilter({ id, title }); setTab("search"); }}
           onOpenCase={(id) => navigate(`/cases/${id}`)}
         />
       </CoordinatorDashboardShell>
@@ -687,7 +690,7 @@ export function CoordinatorHomePage() {
   if (tab === "search") {
     return (
       <CoordinatorDashboardShell user={user} active="reports" onNavigate={setTab} onSearch={(query) => setSearchQuery(query)}>
-        <CoordinatorCasesPage initialQuery={searchQuery} onOpenCase={(id) => navigate(`/cases/${id}`)} />
+        <CoordinatorCasesPage initialQuery={searchQuery} initialView={caseInitialView} initialDisruptionFilter={caseDisruptionFilter} currentUserId={user.id} onOpenCase={(id) => navigate(`/cases/${id}`)} onEscalate={(id) => navigate(`/coordinator/cases/${id}/escalation`)} />
       </CoordinatorDashboardShell>
     );
   }
