@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { AppShell } from "../../shared/components/AppShell";
-import { CoordinatorTopNav } from "../../shared/components/CoordinatorTopNav";
 import { useAuth } from "../auth";
 import * as caseApi from "../cases/api";
 import type { CaseSummary } from "../cases/types";
 import * as api from "./api";
 import type { AdminOption } from "./types";
+import { CoordinatorDashboardShell } from "./CoordinatorDashboardShell";
 import "./OptionsAdminPage.css";
 
 const OPTION_TITLES: Record<string, string> = {
@@ -14,6 +13,12 @@ const OPTION_TITLES: Record<string, string> = {
   alternate: "Move to an alternative stay",
   cancel: "Cancel & refund",
 };
+const OPTION_DESCRIPTIONS: Record<string, string> = {
+  defer: "Shift reservation dates while keeping the original hotel.",
+  alternate: "Relocate the guest to a suitable partner hotel.",
+  cancel: "Cancel the booking and review the refund details.",
+};
+const OPTION_ICONS: Record<string, string> = { defer: "◷", alternate: "▣", cancel: "$" };
 
 function parsePayload(json: string): Record<string, unknown> {
   try {
@@ -94,7 +99,7 @@ function OptionCard({ option, caseId, readOnly, onChanged }: { option: AdminOpti
   return (
     <div className={`option-admin-card ${option.availability === "unavailable" ? "option-admin-card-unavailable" : ""}`}>
       <div className="option-admin-header">
-        <h3>{option.optionType === "custom" ? (option.customTitle ?? "Custom option") : (OPTION_TITLES[option.optionType] ?? option.optionType)}</h3>
+        <div className="option-admin-title"><i>{OPTION_ICONS[option.optionType] ?? "◇"}</i><div><h3>{option.optionType === "custom" ? (option.customTitle ?? "Custom option") : (OPTION_TITLES[option.optionType] ?? option.optionType)}</h3><p>{OPTION_DESCRIPTIONS[option.optionType] ?? "Coordinator-created option for this case."}</p></div></div>
         <div className="option-admin-tags">
           <span className={`tag tag-status-${option.availability === "unavailable" ? "overdue" : "normal"}`}>{option.availability}</span>
           {option.locked && <span className="tag tag-status-warn">locked</span>}
@@ -267,19 +272,37 @@ export function OptionsAdminPage() {
 
   if (!user) return null;
 
+  const availableCount = options.filter((option) => option.availability !== "unavailable").length;
+
   return (
-    <AppShell
-      centerContent={<CoordinatorTopNav activeTab="todo" />}
-      showBack={() => navigate("/coordinator/home", { state: { tab: "todo" } })}
+    <CoordinatorDashboardShell
+      user={user}
+      active="reports"
+      onNavigate={() => navigate("/coordinator/home")}
+      onSearch={() => navigate("/coordinator/home")}
     >
-      <div className="options-admin-layout">
-      <div className="options-admin">
+      <div className="options-workspace">
+        <div className="options-workspace-topline">
+          <button type="button" className="options-workspace-back" onClick={() => navigate(`/cases/${caseId}`)}>
+            ← Back to Case Workspace (CASE-{caseId.slice(0, 8).toUpperCase()})
+          </button>
+          <div className="options-workspace-sync">
+            <i aria-hidden="true" />
+            {syncedAt ? `Synced ${syncedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · refreshes every 30s` : "Syncing…"}
+          </div>
+        </div>
+
         {caseSummary && (
-          <p className="options-admin-summary">
-            {caseSummary.hotelName} · {caseSummary.checkIn} → {caseSummary.checkOut} · {caseSummary.disruptionTitle}
-          </p>
+          <section className="options-case-strip">
+            <div><small>Guest</small><strong><i className="options-summary-icon">♙</i>{caseSummary.guestNickname ?? "Guest not recorded"}</strong><span>{caseSummary.confirmationNo ?? "No booking reference"}</span></div>
+            <div><small>Hotel</small><strong><i className="options-summary-icon">▦</i>{caseSummary.hotelName ?? "Not recorded"}</strong><span>{caseSummary.checkIn && caseSummary.checkOut ? `▣ ${caseSummary.checkIn} → ${caseSummary.checkOut}` : "Dates not recorded"}</span></div>
+            <div><small>Disruption</small><strong><i className="options-summary-icon warning">△</i>{caseSummary.disruptionTitle ?? "Not recorded"}</strong><span className="options-summary-priority">● {caseSummary.priority} priority</span></div>
+            <div><small>Available options</small><strong className="options-count">{availableCount}</strong><span>{options.length} generated</span></div>
+          </section>
         )}
 
+        <div className="options-admin-layout">
+      <div className="options-admin">
         {allUnavailable && (
           <div className="options-admin-alert">
             All options are unavailable — this case has been escalated to the human upgrade queue.
@@ -292,13 +315,16 @@ export function OptionsAdminPage() {
           </div>
         )}
 
-        <div className="coord-toolbar">
+        <div className="options-section-heading">
+          <div><h2>Generated options</h2><p>Edit only the details that require coordinator review.</p></div>
+          <div className="coord-toolbar">
           <button type="button" className="coord-btn-secondary" disabled={regenerating || isClosed} onClick={() => void regenerate()}>
             {regenerating ? "Regenerating…" : "Regenerate unlocked options"}
           </button>
           <button type="button" className="coord-btn-primary" disabled={pushing || options.length === 0 || isClosed} onClick={() => void push()}>
             {pushing ? "Pushing…" : "Push options to guest"}
           </button>
+          </div>
         </div>
         {pushResult && <p className="options-admin-push-result">{pushResult}</p>}
 
@@ -318,7 +344,7 @@ export function OptionsAdminPage() {
       {caseSummary && (
         <aside className="options-admin-side">
           <div className="options-admin-side-card">
-            <h3>Case details</h3>
+            <div className="options-side-heading"><h3>Case details</h3><span>REF: #{caseSummary.confirmationNo ?? caseId.slice(0, 8).toUpperCase()}</span></div>
             <dl className="options-admin-side-list">
               <div>
                 <dt>Status</dt>
@@ -333,7 +359,7 @@ export function OptionsAdminPage() {
               <div>
                 <dt>Options</dt>
                 <dd>
-                  {options.filter((o) => o.availability !== "unavailable").length} available / {options.length} total
+                  {availableCount} available / {options.length} total
                 </dd>
               </div>
             </dl>
@@ -341,15 +367,11 @@ export function OptionsAdminPage() {
               Open case conversation →
             </button>
           </div>
-          {syncedAt && (
-            <p className="coord-sync-indicator options-admin-sync">
-              <span className="coord-sync-dot" aria-hidden="true" />
-              Synced {syncedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · refreshes every 30s
-            </p>
-          )}
+          <div className="options-review-guide"><h3><span>♢</span> Review Guidelines</h3><ul><li>Lock options to prevent automated updates during review.</li><li>Hide “Cancel & refund” when it is not suitable for the guest.</li><li>Push only after checking hotel, dates, fees and availability.</li></ul></div>
         </aside>
       )}
       </div>
-    </AppShell>
+      </div>
+    </CoordinatorDashboardShell>
   );
 }

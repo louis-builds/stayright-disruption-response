@@ -1,9 +1,11 @@
 import { useMemo, useState, type ChangeEvent, type FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
 import type { AuthUser, Language } from "../auth/types";
 import * as api from "./api";
 import { AppShell } from "../../shared/components/AppShell";
 import { RoleTopNav } from "../../shared/components/RoleTopNav";
+import { CoordinatorDashboardShell } from "../coordinator/CoordinatorDashboardShell";
 import "./ProfilePage.css";
 
 const PHONE_RE = /^\+?[0-9]{7,15}$/;
@@ -39,11 +41,26 @@ function passwordStrength(pw: string): { pct: number; label: string; tier: "weak
 /** user is guaranteed non-null by ProtectedRoute; split into two components purely to avoid breaking the Rules of Hooks. */
 export function ProfilePage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   if (!user) return null;
+  if (user.role === "coordinator") {
+    return (
+      <CoordinatorDashboardShell
+        user={user}
+        active="reports"
+        onNavigate={() => navigate("/coordinator/home")}
+        onSearch={() => navigate("/coordinator/home")}
+      >
+        <div className="profile-coordinator-stage">
+          <ProfilePageContent user={user} embedded />
+        </div>
+      </CoordinatorDashboardShell>
+    );
+  }
   return <ProfilePageContent user={user} />;
 }
 
-function ProfilePageContent({ user }: { user: AuthUser }) {
+function ProfilePageContent({ user, embedded = false }: { user: AuthUser; embedded?: boolean }) {
   const { updateUser, logout } = useAuth();
   const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl ?? undefined);
   const [nickname, setNickname] = useState(user.nickname);
@@ -157,10 +174,12 @@ function ProfilePageContent({ user }: { user: AuthUser }) {
     }
   }
 
-  return (
-    <AppShell centerContent={<RoleTopNav role={user.role} />}>
+  const content = (
       <div className="profile-page">
-        <h2 className="profile-page-title">Profile</h2>
+        <header className="profile-page-hero">
+          <div><small>ACCOUNT</small><h1>My Profile</h1><p>Manage your personal details, sign-in email and account security.</p></div>
+          <span>{completeness}% complete</span>
+        </header>
         {user.mustChangePassword && (
           <div className="profile-force-password-banner">
             Your password was reset by a coordinator. Please set a new password below before continuing.
@@ -315,6 +334,8 @@ function ProfilePageContent({ user }: { user: AuthUser }) {
           Log out
         </button>
       </div>
-    </AppShell>
   );
+
+  if (embedded) return content;
+  return <AppShell centerContent={<RoleTopNav role={user.role} />}>{content}</AppShell>;
 }

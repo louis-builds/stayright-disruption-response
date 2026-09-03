@@ -336,11 +336,16 @@ public class CaseService(
         var (status, statusLabel) = await ResolveDisplayStatusAsync(c, ct);
         var unreadAi = await cases.CountUnreadInThreadAsync(caseId, "ai", userRole, ct);
         var unreadCoordinator = await cases.CountUnreadInThreadAsync(caseId, "coordinator", userRole, ct);
+        var guest = c.Booking is null ? null : await users.FindByIdAsync(c.Booking.GuestUserId, ct);
+        var assignee = c.AssigneeCoordinatorId.HasValue ? await users.FindByIdAsync(c.AssigneeCoordinatorId.Value, ct) : null;
         return new CaseSummaryDto(
             c.Id, status, statusLabel, c.Priority,
             c.Disruption?.Type, c.Disruption?.Title,
             c.Booking?.Hotel?.Name, c.Booking?.CheckIn, c.Booking?.CheckOut, c.CreatedAt,
-            c.EscalationReason is not null, unreadAi, unreadCoordinator);
+            c.EscalationReason is not null, unreadAi, unreadCoordinator,
+            c.DisruptionId, c.Disruption?.RawSignalText, c.Booking?.ConfirmationNo,
+            guest?.Nickname, guest?.AvatarUrl, guest?.Email, guest?.Phone,
+            c.AssigneeCoordinatorId, assignee?.Nickname);
     }
 
     // 案件详情页头部徽章:客人关心的是"进展到哪一步"，不是内部 Case.Status——那个字段从建案到结案

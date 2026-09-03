@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import * as api from "./api";
-import type { CaseQueueItem, CoordinatorOption, DisruptionListItem, OpsOverview, OverviewDto, SevenDayTrendPoint } from "./types";
+import type { CaseQueueItem, CoordinatorOption, DisruptionDetail, DisruptionListItem, OpsOverview, OverviewDto, SevenDayTrendPoint } from "./types";
 import { DisruptionLiveMap } from "./DisruptionLiveMap";
 import "./CoordinatorDashboard.css";
 import "./CoordinatorAnalyticsDashboard.css";
@@ -11,7 +11,9 @@ interface Props {
   syncedAt: Date | null;
   coordinators: CoordinatorOption[];
   onOpenCases: () => void;
+  onOpenMyCases: () => void;
   onOpenDisruptions: () => void;
+  onOpenAffectedBookings?: (disruptionId: string, disruptionTitle: string) => void;
   onOpenCase: (id: string) => void;
 }
 
@@ -63,17 +65,18 @@ function readableEventTitle(item: DisruptionListItem, region: string) {
   return `${kind.replace(/^./, (letter) => letter.toUpperCase())} near ${region}`;
 }
 
-export function DisruptionOperationsDashboard({ data, syncedAt, onOpenCases, onOpenDisruptions, onOpenCase }: Props) {
+export function DisruptionOperationsDashboard({ data, syncedAt, onOpenDisruptions, onOpenAffectedBookings, onOpenCase }: Props) {
   const [disruptions, setDisruptions] = useState<DisruptionListItem[]>([]);
-  const [allQueue, setAllQueue] = useState<CaseQueueItem[]>([]);
   const [affectedBookings, setAffectedBookings] = useState<CaseQueueItem[]>([]);
   const [recent, setRecent] = useState<CaseQueueItem[]>([]);
   const [eventPresentation, setEventPresentation] = useState<Record<string, { title: string; region: string; handovers: number }>>({});
   const [selectedDisruptionId, setSelectedDisruptionId] = useState<string | null>(null);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
+  const [selectedDetail, setSelectedDetail] = useState<DisruptionDetail | null>(null);
+  const [detailExpanded, setDetailExpanded] = useState(false);
 
   useEffect(() => {
-    void Promise.all([api.fetchDisruptions(), api.fetchQueue(), api.fetchClosed(7)]).then(([d, q, c]) => {
+    void Promise.all([api.fetchDisruptions(), api.fetchClosed(7)]).then(([d, c]) => {
       if (d.code === 0) {
         setDisruptions(d.data);
         const defaultEvent = [...d.data].filter((item) => item.status === "active").sort((a, b) => b.affectedCount - a.affectedCount)[0] ?? d.data[0];
@@ -88,49 +91,66 @@ export function DisruptionOperationsDashboard({ data, syncedAt, onOpenCases, onO
           }] as const;
         })).then((rows) => setEventPresentation(Object.fromEntries(rows)));
       }
-      if (q.code === 0) setAllQueue(q.data);
       if (c.code === 0) setRecent(c.data.slice(0, 3));
     });
   }, []);
 
   useEffect(() => {
     if (!selectedDisruptionId) return;
-    void api.fetchDisruptionCases(selectedDisruptionId).then((response) => {
-      if (response.code !== 0) return;
-      const rows = response.data.filter(needsHuman);
-      setAffectedBookings(rows);
-      setSelectedCaseId(rows[0]?.caseId ?? null);
+    setDetailExpanded(false);
+    void Promise.all([api.fetchDisruptionCases(selectedDisruptionId), api.fetchDisruption(selectedDisruptionId)]).then(([cases, detail]) => {
+      if (cases.code === 0) {
+        const rows = cases.data.filter(needsHuman);
+        setAffectedBookings(rows);
+        setSelectedCaseId(rows[0]?.caseId ?? null);
+      }
+      setSelectedDetail(detail.code === 0 ? detail.data : null);
     });
   }, [selectedDisruptionId]);
 
   const active = useMemo(() => disruptions.filter((item) => item.status === "active"), [disruptions]);
   const selectedDisruption = disruptions.find((item) => item.id === selectedDisruptionId) ?? active[0] ?? disruptions[0];
   const selectedBooking = affectedBookings.find((item) => item.caseId === selectedCaseId) ?? affectedBookings[0] ?? null;
-  const globalAttention = allQueue.filter(needsHuman);
-  const affectedTotal = active.reduce((sum, item) => sum + item.affectedCount, 0);
   const attentionCount = (event: DisruptionListItem) => eventPresentation[event.id]?.handovers ?? 0;
   const attentionDisruptions = [...active].sort((a, b) => attentionCount(b) - attentionCount(a) || b.affectedCount - a.affectedCount);
+  const rawWeather = (() => {
+    if (!selectedDetail?.rawSignalJson) return [] as Array<[string, string]>;
+    try {
+      const signal = JSON.parse(selectedDetail.rawSignalJson) as Record<string, unknown>;
+      const labels: Record<string, [string, string]> = {
+        wind_gusts_kmh: ["Wind gusts", "km/h"], precipitation_mm: ["Rainfall", "mm"], snowfall_cm: ["Snowfall", "cm"],
+      };
+      return Object.entries(signal).filter(([key]) => labels[key]).map(([key, value]) => [labels[key][0], `${String(value)} ${labels[key][1]}`] as [string, string]);
+    } catch { return [] as Array<[string, string]>; }
+  })();
 
   if (!data) return <div className="entry-loading">Loading coordinator dashboard...</div>;
 
-  const kpis = [
-    { label: "Active Disruptions", value: active.length || data.activeWeatherCount + data.activeFlightCount + data.activeRoadCount, note: "Events currently affecting bookings", tone: "red", action: onOpenDisruptions },
-    { label: "Affected Bookings", value: affectedTotal, note: "Bookings linked to active disruptions", tone: "cyan", action: onOpenDisruptions },
-    { label: "Bookings Requiring Attention", value: globalAttention.length, note: "AI handovers requiring human review", tone: "amber", action: onOpenCases },
-    { label: "Overdue Cases", value: data.overdueInProgressCount, note: "Cases beyond the service threshold", tone: "rose", action: onOpenCases },
-  ];
-
   return <div className="entry-dashboard">
-    <header className="entry-heading"><div><h1>Coordinator Dashboard</h1><p>Select a disruption, inspect its location, then review the affected bookings requiring human attention.</p></div>{syncedAt && <span><i/>Synced {syncedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>}</header>
-
-    <section className="entry-kpis">{kpis.map((item) => <button key={item.label} className={`entry-kpi ${item.tone}`} onClick={item.action}><span>{item.label}</span><strong>{item.value}</strong><small>{item.note}</small><i>›</i></button>)}</section>
+    <header className="entry-heading"><div><small className="entry-eyebrow">Disruption monitoring</small><h1>Disruption Operations</h1><p>Monitor active disruptions, inspect event details, and review affected bookings.</p></div>{syncedAt && <span><i/>Synced {syncedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>}</header>
 
     <div className="entry-top-grid">
-      <section className="entry-map">
+      <section className={`entry-map ${detailExpanded ? "details-open" : ""}`}>
         {selectedDisruption && import.meta.env.VITE_DASHBOARD_LIVE_MAP === "true" && <DisruptionLiveMap disruptionId={selectedDisruption.id}/>} 
         <header><div><h2>Selected Disruption Map</h2><p>Location and impact area for the selected event</p></div>{selectedDisruption?.severity && <b>{selectedDisruption.severity} severity</b>}</header>
-        <div className="entry-map-summary"><small>{selectedDisruption ? (eventPresentation[selectedDisruption.id]?.region ?? selectedDisruption.region) || "Unknown region" : "No active region"}</small><h3>{selectedDisruption ? eventPresentation[selectedDisruption.id]?.title ?? selectedDisruption.title : "No active disruption"}</h3><dl><div><dt>Cause</dt><dd>{selectedDisruption?.eventSubtype ?? selectedDisruption?.type ?? "—"}</dd></div><div><dt>Affected bookings</dt><dd>{selectedDisruption?.affectedCount ?? 0}</dd></div></dl></div>
-        <footer><button onClick={onOpenDisruptions}>View Affected Bookings</button><button onClick={onOpenDisruptions}>View Disruption Details</button></footer>
+        {detailExpanded && <article className="entry-map-summary expanded">
+          <button className="entry-map-summary-toggle" onClick={() => setDetailExpanded((current) => !current)} aria-expanded={detailExpanded}>
+            <span><small>{selectedDisruption ? (eventPresentation[selectedDisruption.id]?.region ?? selectedDisruption.region) || "Unknown region" : "No active region"}</small><h3>{selectedDisruption ? eventPresentation[selectedDisruption.id]?.title ?? selectedDisruption.title : "No active disruption"}</h3></span>
+            <i>{detailExpanded ? "×" : "Details"}</i>
+          </button>
+          <div className="entry-map-summary-brief"><span>{(selectedDisruption?.eventSubtype ?? selectedDisruption?.type ?? "Unknown").replaceAll("_", " ")}</span><span>{selectedDisruption?.severity ?? "Unrated"} severity</span></div>
+          {selectedDetail && <div className="entry-map-detail">
+            {selectedDetail.rawSignalText && <p>{selectedDetail.rawSignalText}</p>}
+            <dl>
+              <div><dt>Impact area</dt><dd>{selectedDetail.radiusKm != null ? `${selectedDetail.radiusKm} km radius` : "Not specified"}</dd></div>
+              <div><dt>Starts</dt><dd>{new Date(selectedDetail.startAt).toLocaleString("en-NZ")}</dd></div>
+              <div><dt>Expected until</dt><dd>{selectedDetail.endAtOrWindow ? new Date(selectedDetail.endAtOrWindow).toLocaleString("en-NZ") : "Open-ended"}</dd></div>
+              <div><dt>Source</dt><dd>{selectedDetail.type === "weather" ? "Weather detection feed" : `${selectedDetail.type} event feed`}</dd></div>
+            </dl>
+            {rawWeather.length > 0 && <section><strong>Weather evidence</strong><div>{rawWeather.map(([label, value]) => <span key={label}><small>{label}</small><b>{value}</b></span>)}</div></section>}
+          </div>}
+        </article>}
+        <footer>{selectedDisruption && <button onClick={() => onOpenAffectedBookings?.(selectedDisruption.id, eventPresentation[selectedDisruption.id]?.title ?? selectedDisruption.title)}>View Affected Bookings</button>}<button onClick={() => setDetailExpanded((current) => !current)}>{detailExpanded ? "Hide Details" : "View Details"}</button></footer>
       </section>
 
       <section className="entry-queue entry-disruption-list">
@@ -153,7 +173,7 @@ export function DisruptionOperationsDashboard({ data, syncedAt, onOpenCases, onO
   </div>;
 }
 
-export function CoordinatorDashboard({ data, opsData, syncedAt, onOpenCases, onOpenDisruptions }: Props) {
+export function CoordinatorDashboard({ data, opsData, syncedAt, onOpenCases, onOpenMyCases, onOpenDisruptions }: Props) {
   const [queue, setQueue] = useState<CaseQueueItem[]>([]);
   const [mine, setMine] = useState<CaseQueueItem[]>([]);
   const [disruptions, setDisruptions] = useState<DisruptionListItem[]>([]);
@@ -227,7 +247,7 @@ export function CoordinatorDashboard({ data, opsData, syncedAt, onOpenCases, onO
       <button className="attention" onClick={onOpenCases}><span>Cases requiring attention</span><strong>{attention.length}</strong><i className="amber">△</i><div><small>AI handovers and urgent cases</small><em>Filter cases&nbsp; →</em></div></button>
       <button className="overdue" onClick={onOpenCases}><span>Overdue cases</span><strong>{data.overdueInProgressCount}</strong><i className="rose">♧</i><div><small>SLA threshold exceeded</small><em>Urgent filter&nbsp; →</em></div></button>
       <button className="hotel" onClick={onOpenCases}><span>Waiting for hotel</span><strong>{opsData?.hotelOverdueInquiryCount ?? "—"}</strong><i className="violet">▦</i><div><small>Responses requiring follow-up</small><em>Hotel filter&nbsp; →</em></div></button>
-      <button className="mine" onClick={onOpenCases}><span>My active cases</span><strong>{mine.length}</strong><i className="teal">♙</i><div><small>Open cases assigned to you</small><em>Assigned filter&nbsp; →</em></div></button>
+      <button className="mine" onClick={onOpenMyCases}><span>My active cases</span><strong>{mine.length}</strong><i className="teal">♙</i><div><small>Open cases assigned to you</small><em>Assigned filter&nbsp; →</em></div></button>
     </section>
 
     <section className="analytics-primary-grid">

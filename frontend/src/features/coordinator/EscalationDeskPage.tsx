@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { AppShell } from "../../shared/components/AppShell";
-import { CoordinatorTopNav } from "../../shared/components/CoordinatorTopNav";
 import { useAuth } from "../auth";
 import * as caseApi from "../cases/api";
 import type { CaseSummary } from "../cases/types";
 import * as api from "./api";
 import type { AdminOption, CaseNotification, RefundStatus } from "./types";
+import { CoordinatorDashboardShell } from "./CoordinatorDashboardShell";
 import "./EscalationDeskPage.css";
 
 const DECISION_TYPES = [
@@ -155,11 +154,10 @@ export function EscalationDeskPage() {
   const canClose = !isRefund || refundStatus?.confirmed;
 
   return (
-    <AppShell centerContent={<CoordinatorTopNav activeTab="queue" />} showBack>
+    <CoordinatorDashboardShell user={user} active="reports" onNavigate={() => navigate("/coordinator/home")} onSearch={() => navigate("/coordinator/home")}>
+      <div className="escalation-workspace">
       <div className="escalation-desk">
-        <button type="button" className="coord-btn-link" onClick={() => navigate(`/cases/${caseId}`)}>
-          ← Open conversation with guest
-        </button>
+        <div className="escalation-topline"><button type="button" className="coord-btn-link" onClick={() => navigate(`/cases/${caseId}`)}>← Back to Case Workspace</button>{syncedAt && <p className="coord-sync-indicator escalation-sync"><span className="coord-sync-dot" aria-hidden="true" />Synced {syncedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · refreshes every 30s</p>}</div>
 
         {loading ? (
           <p className="coord-empty">Loading…</p>
@@ -167,18 +165,8 @@ export function EscalationDeskPage() {
           <>
             {caseSummary && (
               <div className="escalation-header">
-                <div>
-                  <h2>{caseSummary.hotelName} — {caseSummary.disruptionTitle}</h2>
-                  <p className="coord-row-sub">
-                    {caseSummary.checkIn} → {caseSummary.checkOut} · priority {caseSummary.priority} · status {caseSummary.statusLabel}
-                  </p>
-                </div>
-                {syncedAt && (
-                  <p className="coord-sync-indicator escalation-sync">
-                    <span className="coord-sync-dot" aria-hidden="true" />
-                    Synced {syncedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · refreshes every 30s
-                  </p>
-                )}
+                <div><small>CASE RESOLUTION</small><div className="escalation-header-badges"><span>CASE-{caseId.slice(0, 8).toUpperCase()}</span><em className={`priority-${caseSummary.priority}`}>{caseSummary.priority} priority</em><em className={`status-${caseSummary.status}`}>{caseSummary.statusLabel}</em></div><h1>{caseSummary.disruptionTitle ?? "Disruption case"}</h1><p>{caseSummary.hotelName ?? "Hotel not recorded"}</p></div>
+                <dl><div><dt>Guest</dt><dd>{caseSummary.guestNickname ?? "Guest not recorded"}</dd><small>{caseSummary.confirmationNo ?? "No booking reference"}</small></div><div><dt>Stay dates</dt><dd>{caseSummary.checkIn && caseSummary.checkOut ? `${caseSummary.checkIn} → ${caseSummary.checkOut}` : "Not recorded"}</dd></div></dl>
               </div>
             )}
 
@@ -294,6 +282,7 @@ export function EscalationDeskPage() {
           </>
         )}
       </div>
-    </AppShell>
+      </div>
+    </CoordinatorDashboardShell>
   );
 }
