@@ -113,6 +113,10 @@ export function pushOptions(caseId: string) {
   return apiPost<{ success: boolean; sentAt: string }>(`/api/coordinator/cases/${caseId}/options/push`, {});
 }
 
+export function fetchPushOptionsStatus(caseId: string) {
+  return apiGet<import("./types").PushOptionsStatus>(`/api/coordinator/cases/${caseId}/options/push-status`);
+}
+
 export function fetchRefundStatus(caseId: string) {
   return apiGet<RefundStatus>(`/api/cases/${caseId}/refund`);
 }

@@ -237,10 +237,33 @@ public class OptionsAdminService(IOptionsAdminRepository repo, IBookingRepositor
         await repo.SaveChangesAsync(ct);
     }
 
+    public async Task<PushOptionsStatusDto> GetPushStatusAsync(Guid caseId, CancellationToken ct = default)
+    {
+        if (await repo.FindCaseStatusAsync(caseId, ct) is null) throw new CaseNotFoundException();
+        var latestOptionUpdate = await repo.FindLatestOptionUpdateAsync(caseId, ct);
+        var latestSuccess = await repo.FindLatestOptionsPushAsync(caseId, successfulOnly: true, ct);
+        var latestAttempt = await repo.FindLatestOptionsPushAsync(caseId, successfulOnly: false, ct);
+
+        if (latestOptionUpdate is not null && latestSuccess?.SentAt >= latestOptionUpdate)
+            return new PushOptionsStatusDto(false, "sent", latestSuccess.SentAt);
+        if (latestAttempt is not null && !latestAttempt.Success &&
+            (latestOptionUpdate is null || latestAttempt.SentAt >= latestOptionUpdate))
+            return new PushOptionsStatusDto(true, "retry", latestAttempt.SentAt);
+        if (latestSuccess is not null)
+            return new PushOptionsStatusDto(true, "updated", latestSuccess.SentAt);
+        return new PushOptionsStatusDto(true, "ready", latestAttempt?.SentAt);
+    }
+
     public async Task<PushOptionsResultDto> PushAsync(Guid caseId, CancellationToken ct = default)
     {
+        await using var transaction = await repo.BeginTransactionAsync(ct);
+        if (!await repo.LockCaseForUpdateAsync(caseId, ct)) throw new CaseNotFoundException();
         var c = await repo.FindCaseWithContextAsync(caseId, ct) ?? throw new CaseNotFoundException();
         if (c.Status == "closed") throw new CaseClosedException();
+        var latestOptionUpdate = await repo.FindLatestOptionUpdateAsync(caseId, ct);
+        var latestSuccess = await repo.FindLatestOptionsPushAsync(caseId, successfulOnly: true, ct);
+        if (latestOptionUpdate is null) throw new NoOptionsToPushException();
+        if (latestSuccess?.SentAt >= latestOptionUpdate) throw new OptionsAlreadyPushedException();
         var now = DateTimeOffset.UtcNow;
         var guest = c.Booking?.GuestUser;
         var success = true;
@@ -271,6 +294,10 @@ public class OptionsAdminService(IOptionsAdminRepository repo, IBookingRepositor
         }
 
         await repo.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
         return new PushOptionsResultDto(success, now);
     }
 }
+
+public sealed class OptionsAlreadyPushedException : Exception { }
+public sealed class NoOptionsToPushException : Exception { }

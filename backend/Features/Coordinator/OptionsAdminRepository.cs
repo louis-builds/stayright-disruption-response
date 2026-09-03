@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using TravelDisruptionAgent.Api.Infrastructure.Data;
 using TravelDisruptionAgent.Api.Infrastructure.Data.Entities;
+using Microsoft.EntityFrameworkCore.Storage;
+using System.Data;
 
 namespace TravelDisruptionAgent.Api.Features.Coordinator;
 
@@ -55,6 +57,32 @@ public class OptionsAdminRepository(AppDbContext db) : IOptionsAdminRepository
 
     public async Task AddNotificationAsync(Notification notification, CancellationToken ct = default) =>
         await db.Notifications.AddAsync(notification, ct);
+
+    public Task<Notification?> FindLatestOptionsPushAsync(Guid caseId, bool successfulOnly, CancellationToken ct = default) =>
+        db.Notifications
+            .Where(n => n.CaseId == caseId && n.Type == "options_pushed" && (!successfulOnly || n.Success))
+            .OrderByDescending(n => n.SentAt)
+            .FirstOrDefaultAsync(ct);
+
+    public Task<DateTimeOffset?> FindLatestOptionUpdateAsync(Guid caseId, CancellationToken ct = default) =>
+        db.Options.Where(o => o.CaseId == caseId).MaxAsync(o => (DateTimeOffset?)o.UpdatedAt, ct);
+
+    public Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken ct = default) =>
+        db.Database.BeginTransactionAsync(ct);
+
+    public async Task<bool> LockCaseForUpdateAsync(Guid caseId, CancellationToken ct = default)
+    {
+        var connection = db.Database.GetDbConnection();
+        if (connection.State != ConnectionState.Open) await connection.OpenAsync(ct);
+        await using var command = connection.CreateCommand();
+        command.Transaction = db.Database.CurrentTransaction?.GetDbTransaction();
+        command.CommandText = "SELECT 1 FROM cases WHERE id = @caseId FOR UPDATE";
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = "caseId";
+        parameter.Value = caseId;
+        command.Parameters.Add(parameter);
+        return await command.ExecuteScalarAsync(ct) is not null;
+    }
 
     public Task SaveChangesAsync(CancellationToken ct = default) => db.SaveChangesAsync(ct);
 }

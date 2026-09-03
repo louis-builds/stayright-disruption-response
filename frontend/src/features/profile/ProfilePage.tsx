@@ -177,8 +177,8 @@ function ProfilePageContent({ user, embedded = false }: { user: AuthUser; embedd
   const content = (
       <div className="profile-page">
         <header className="profile-page-hero">
-          <div><small>ACCOUNT</small><h1>My Profile</h1><p>Manage your personal details, sign-in email and account security.</p></div>
-          <span>{completeness}% complete</span>
+          <div><small>ACCOUNT</small><h1>Profile Settings</h1><p>Manage your personal details, email credentials, and account security.</p></div>
+          <span>Coordinator account</span>
         </header>
         {user.mustChangePassword && (
           <div className="profile-force-password-banner">
@@ -189,7 +189,7 @@ function ProfilePageContent({ user, embedded = false }: { user: AuthUser; embedd
         <div className="profile-col">
         <section className="profile-card">
           <div className="profile-card-header-row">
-            <h2>Basic info</h2>
+            <div className="profile-section-title"><i>♙</i><div><h2>Personal Profile</h2><p>Basic identity and operational information</p></div></div>
             <div className="profile-completeness" title={`${completeness}% complete`}>
               <div className="profile-completeness-track">
                 <div className="profile-completeness-fill" style={{ width: `${completeness}%` }} />
@@ -244,16 +244,24 @@ function ProfilePageContent({ user, embedded = false }: { user: AuthUser; embedd
 
             {profileMessage && <p className="profile-message">{profileMessage}</p>}
             <button type="submit" className="profile-submit" disabled={profileSaving}>
-              {profileSaving ? <span className="profile-spinner" aria-hidden="true" /> : "Save profile"}
+              {profileSaving ? <span className="profile-spinner" aria-hidden="true" /> : "Save Profile Changes"}
             </button>
           </form>
+          <div className="profile-inline-account">
+            <h3><span>◇</span> Account Summary</h3>
+            <dl className="profile-account-list">
+              <div><dt>Member since</dt><dd>{formatJoinDate(user.createdAt)}</dd></div>
+              <div><dt>Operational role</dt><dd className="profile-account-role">{user.role}</dd></div>
+            </dl>
+            <div className="profile-operational-scope"><strong>Operational Scope</strong><p>{ROLE_BLURB[user.role]}</p></div>
+          </div>
         </section>
         </div>
 
         <div className="profile-col">
         <section className="profile-card">
-          <h2>Email</h2>
-          <p className="profile-current-email">Current email: {user.email}</p>
+          <div className="profile-section-title"><i>✉</i><div><h2>Email Management</h2><p>Primary notification and sign-in email</p></div></div>
+          <div className="profile-current-email"><small>Current email</small><strong>{user.email}</strong></div>
           {emailStage === "idle" ? (
             <div className="profile-form">
               <label className="profile-field">
@@ -285,7 +293,7 @@ function ProfilePageContent({ user, embedded = false }: { user: AuthUser; embedd
         </section>
 
         <section className="profile-card">
-          <h2>Change password</h2>
+          <div className="profile-section-title"><i>♙</i><div><h2>Security &amp; Password</h2><p>Manage authentication credentials</p></div></div>
           <form onSubmit={handlePasswordSubmit} className="profile-form">
             <label className="profile-field">
               <span>Current password</span>
@@ -308,25 +316,11 @@ function ProfilePageContent({ user, embedded = false }: { user: AuthUser; embedd
             </label>
             {passwordMessage && <p className="profile-message">{passwordMessage}</p>}
             <button type="submit" className="profile-submit" disabled={passwordSaving}>
-              {passwordSaving ? <span className="profile-spinner" aria-hidden="true" /> : "Change password"}
+              {passwordSaving ? <span className="profile-spinner" aria-hidden="true" /> : "Update Password"}
             </button>
           </form>
         </section>
 
-        <section className="profile-card profile-card-compact">
-          <h2>Account</h2>
-          <dl className="profile-account-list">
-            <div>
-              <dt>Member since</dt>
-              <dd>{formatJoinDate(user.createdAt)}</dd>
-            </div>
-            <div>
-              <dt>Account type</dt>
-              <dd className="profile-account-role">{user.role}</dd>
-            </div>
-          </dl>
-          <p className="profile-account-blurb">{ROLE_BLURB[user.role]}</p>
-        </section>
         </div>
         </div>
 

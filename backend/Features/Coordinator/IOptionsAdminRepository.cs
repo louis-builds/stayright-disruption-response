@@ -1,4 +1,5 @@
 using TravelDisruptionAgent.Api.Infrastructure.Data.Entities;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace TravelDisruptionAgent.Api.Features.Coordinator;
 
@@ -18,5 +19,9 @@ public interface IOptionsAdminRepository
     Task<HashSet<Guid>> ListOfferedAlternateHotelIdsAsync(Guid caseId, CancellationToken ct = default);
     Task AddAlternateOfferAsync(Guid caseId, Guid hotelId, CancellationToken ct = default);
     Task AddNotificationAsync(Notification notification, CancellationToken ct = default);
+    Task<Notification?> FindLatestOptionsPushAsync(Guid caseId, bool successfulOnly, CancellationToken ct = default);
+    Task<DateTimeOffset?> FindLatestOptionUpdateAsync(Guid caseId, CancellationToken ct = default);
+    Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken ct = default);
+    Task<bool> LockCaseForUpdateAsync(Guid caseId, CancellationToken ct = default);
     Task SaveChangesAsync(CancellationToken ct = default);
 }

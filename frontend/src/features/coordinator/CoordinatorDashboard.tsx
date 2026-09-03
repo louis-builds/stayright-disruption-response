@@ -29,6 +29,10 @@ function waitLabel(value: string) {
 function needsHuman(item: CaseQueueItem) {
   return item.priority === "high" || Boolean(item.escalationReason) || item.overdue;
 }
+
+function isOpenAttentionCase(item: CaseQueueItem) {
+  return item.status !== "closed" && needsHuman(item);
+}
 function displayReason(item: CaseQueueItem) {
   if (item.escalationReason) return item.escalationReason;
   if (item.isHighValueGuest) return "High-value guest requires review";
@@ -87,7 +91,7 @@ export function DisruptionOperationsDashboard({ data, syncedAt, onOpenDisruption
           return [item.id, {
             title: readableEventTitle(item, region),
             region,
-            handovers: cases.code === 0 ? cases.data.filter(needsHuman).length : 0,
+            handovers: cases.code === 0 ? cases.data.filter(isOpenAttentionCase).length : 0,
           }] as const;
         })).then((rows) => setEventPresentation(Object.fromEntries(rows)));
       }
@@ -100,7 +104,7 @@ export function DisruptionOperationsDashboard({ data, syncedAt, onOpenDisruption
     setDetailExpanded(false);
     void Promise.all([api.fetchDisruptionCases(selectedDisruptionId), api.fetchDisruption(selectedDisruptionId)]).then(([cases, detail]) => {
       if (cases.code === 0) {
-        const rows = cases.data.filter(needsHuman);
+        const rows = cases.data.filter(isOpenAttentionCase);
         setAffectedBookings(rows);
         setSelectedCaseId(rows[0]?.caseId ?? null);
       }
@@ -112,7 +116,9 @@ export function DisruptionOperationsDashboard({ data, syncedAt, onOpenDisruption
   const selectedDisruption = disruptions.find((item) => item.id === selectedDisruptionId) ?? active[0] ?? disruptions[0];
   const selectedBooking = affectedBookings.find((item) => item.caseId === selectedCaseId) ?? affectedBookings[0] ?? null;
   const attentionCount = (event: DisruptionListItem) => eventPresentation[event.id]?.handovers ?? 0;
-  const attentionDisruptions = [...active].sort((a, b) => attentionCount(b) - attentionCount(a) || b.affectedCount - a.affectedCount);
+  const attentionDisruptions = [...active]
+    .filter((item) => attentionCount(item) > 0)
+    .sort((a, b) => attentionCount(b) - attentionCount(a) || b.affectedCount - a.affectedCount);
   const rawWeather = (() => {
     if (!selectedDetail?.rawSignalJson) return [] as Array<[string, string]>;
     try {

@@ -4,7 +4,7 @@ import { useAuth } from "../auth";
 import * as caseApi from "../cases/api";
 import type { CaseSummary } from "../cases/types";
 import * as api from "./api";
-import type { AdminOption } from "./types";
+import type { AdminOption, PushOptionsStatus } from "./types";
 import { CoordinatorDashboardShell } from "./CoordinatorDashboardShell";
 import "./OptionsAdminPage.css";
 
@@ -211,6 +211,7 @@ export function OptionsAdminPage() {
   const [pushResult, setPushResult] = useState<string | null>(null);
   const [regenerating, setRegenerating] = useState(false);
   const [pushing, setPushing] = useState(false);
+  const [pushStatus, setPushStatus] = useState<PushOptionsStatus | null>(null);
   const [syncedAt, setSyncedAt] = useState<Date | null>(null);
   // refresh()(挂载+每次锁定/解锁/标记不可用/存字段/重新生成之后都会调用)和 30 秒轮询打的是同一组
   // 接口、互相之间没有任何先后顺序保证——亲测复现过:协调员点了 Lock,refresh() 很快把这张卡片
@@ -222,10 +223,11 @@ export function OptionsAdminPage() {
   const refresh = useCallback(async () => {
     setLoading(true);
     const requestId = ++latestRequestIdRef.current;
-    const [caseRes, optionsRes] = await Promise.all([caseApi.fetchCase(caseId), api.fetchAdminOptions(caseId)]);
+    const [caseRes, optionsRes, pushStatusRes] = await Promise.all([caseApi.fetchCase(caseId), api.fetchAdminOptions(caseId), api.fetchPushOptionsStatus(caseId)]);
     if (requestId === latestRequestIdRef.current) {
       if (caseRes.code === 0) setCaseSummary(caseRes.data);
       if (optionsRes.code === 0) setOptions(optionsRes.data);
+      if (pushStatusRes.code === 0) setPushStatus(pushStatusRes.data);
       setLoading(false);
       setSyncedAt(new Date());
     }
@@ -240,10 +242,11 @@ export function OptionsAdminPage() {
   useEffect(() => {
     const timer = window.setInterval(() => {
       const requestId = ++latestRequestIdRef.current;
-      void Promise.all([caseApi.fetchCase(caseId), api.fetchAdminOptions(caseId)]).then(([caseRes, optionsRes]) => {
+      void Promise.all([caseApi.fetchCase(caseId), api.fetchAdminOptions(caseId), api.fetchPushOptionsStatus(caseId)]).then(([caseRes, optionsRes, pushStatusRes]) => {
         if (requestId === latestRequestIdRef.current) {
           if (caseRes.code === 0) setCaseSummary(caseRes.data);
           if (optionsRes.code === 0) setOptions(optionsRes.data);
+          if (pushStatusRes.code === 0) setPushStatus(pushStatusRes.data);
           setSyncedAt(new Date());
         }
       });
@@ -264,6 +267,10 @@ export function OptionsAdminPage() {
     setPushing(false);
     if (res.code === 0) {
       setPushResult(res.data.success ? "Pushed to guest successfully." : "Push recorded but the email failed to send — flagged for retry.");
+      await refresh();
+    } else {
+      setPushResult(res.message);
+      await refresh();
     }
   }
 
@@ -321,8 +328,8 @@ export function OptionsAdminPage() {
           <button type="button" className="coord-btn-secondary" disabled={regenerating || isClosed} onClick={() => void regenerate()}>
             {regenerating ? "Regenerating…" : "Regenerate unlocked options"}
           </button>
-          <button type="button" className="coord-btn-primary" disabled={pushing || options.length === 0 || isClosed} onClick={() => void push()}>
-            {pushing ? "Pushing…" : "Push options to guest"}
+          <button type="button" className="coord-btn-primary" disabled={pushing || options.length === 0 || isClosed || pushStatus?.canPush === false} onClick={() => void push()}>
+            {pushing ? "Pushing…" : pushStatus?.state === "sent" ? "Sent to guest" : pushStatus?.state === "updated" ? "Send updated options" : pushStatus?.state === "retry" ? "Retry sending" : "Push options to guest"}
           </button>
           </div>
         </div>
