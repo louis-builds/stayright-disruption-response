@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TravelDisruptionAgent.Api.Infrastructure.Data;
@@ -12,9 +13,11 @@ using TravelDisruptionAgent.Api.Infrastructure.Data;
 namespace TravelDisruptionAgent.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260902123117_AddAlternateOfferAudit")]
+    partial class AddAlternateOfferAudit
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -678,11 +681,6 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .HasColumnType("text")
                         .HasColumnName("google_place_id");
 
-                    b.PrimitiveCollection<List<string>>("ImageUrls")
-                        .IsRequired()
-                        .HasColumnType("text[]")
-                        .HasColumnName("image_urls");
-
                     b.Property<double>("Lat")
                         .HasColumnType("double precision")
                         .HasColumnName("lat");
@@ -695,10 +693,6 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("name");
-
-                    b.Property<int>("PrimaryImageIndex")
-                        .HasColumnType("integer")
-                        .HasColumnName("primary_image_index");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -742,55 +736,6 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .HasDatabaseName("ix_hotel_perks_hotel_id");
 
                     b.ToTable("hotel_perks", (string)null);
-                });
-
-            modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.HotelRefundPolicy", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("content");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<DateTimeOffset?>("EffectiveFrom")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("effective_from");
-
-                    b.Property<DateTimeOffset?>("EffectiveUntil")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("effective_until");
-
-                    b.Property<Guid>("HotelId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("hotel_id");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_active");
-
-                    b.Property<string>("StructuredRulesJson")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("structured_rules");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.HasKey("Id")
-                        .HasName("pk_hotel_refund_policies");
-
-                    b.HasIndex("HotelId", "IsActive")
-                        .HasDatabaseName("ix_hotel_refund_policies_hotel_id_is_active");
-
-                    b.ToTable("hotel_refund_policies", (string)null);
                 });
 
             modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.Inquiry", b =>
@@ -1584,18 +1529,6 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_hotel_perks_hotels_hotel_id");
-
-                    b.Navigation("Hotel");
-                });
-
-            modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.HotelRefundPolicy", b =>
-                {
-                    b.HasOne("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.Hotel", "Hotel")
-                        .WithMany()
-                        .HasForeignKey("HotelId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_hotel_refund_policies_hotels_hotel_id");
 
                     b.Navigation("Hotel");
                 });

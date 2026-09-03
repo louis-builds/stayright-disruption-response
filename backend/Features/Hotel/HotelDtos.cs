@@ -31,11 +31,11 @@ public record HotelWorkbenchItemDto(
     string Kind, Guid CaseId, string ConfirmationNo, string GuestNickname, string DisruptionTitle,
     string Status, DateTimeOffset RequestedAt, TimeSpan WaitTime, bool Overdue);
 
-public record HotelProfileDto(Guid Id, string Name, string Address, double Lat, double Lng, List<RoomTypeDto> RoomTypes, List<HotelPerkDto> Perks);
+public record HotelProfileDto(Guid Id, string Name, string Address, double Lat, double Lng, List<string> ImageUrls, int PrimaryImageIndex, List<RoomTypeDto> RoomTypes, List<HotelPerkDto> Perks);
 
 public record RoomTypeDto(Guid Id, string Name, string Description, List<string> Amenities, int Capacity, decimal PriceAmount, string Currency, List<string> ImageUrls);
 
-public record UpdateHotelProfileRequest(string Name, string Address, double Lat, double Lng);
+public record UpdateHotelProfileRequest(string Name, string Address, double Lat, double Lng, List<string> ImageUrls, int PrimaryImageIndex);
 
 public record UpsertRoomTypeRequest(string Name, string Description, List<string> Amenities, int Capacity, decimal PriceAmount, string Currency, List<string> ImageUrls);
 
@@ -46,3 +46,17 @@ public record AddHotelPerkRequest(string Name);
 public record SetOptionPerksRequest(List<string> PerkNames);
 
 public record CreateCustomOptionRequest(string Title, List<string> PerkNames);
+
+public record HotelRefundPolicyDto(
+    Guid Id, string Content, string? StructuredRulesJson,
+    DateTimeOffset? EffectiveFrom, DateTimeOffset? EffectiveUntil,
+    bool IsActive, DateTimeOffset UpdatedAt);
+
+public record UpsertHotelRefundPolicyRequest(
+    string Content, string? StructuredRulesJson,
+    DateTimeOffset? EffectiveFrom, DateTimeOffset? EffectiveUntil,
+    bool IsActive);
+
+public record UploadRefundPolicyFileRequest(
+    string? StructuredRulesJson,
+    DateTimeOffset? EffectiveFrom, DateTimeOffset? EffectiveUntil);

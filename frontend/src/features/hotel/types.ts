@@ -61,6 +61,26 @@ export interface HotelProfile {
   address: string;
   lat: number;
   lng: number;
+  imageUrls: string[];
+  primaryImageIndex: number;
   roomTypes: RoomType[];
   perks: HotelPerk[];
+}
+
+export interface HotelRefundPolicy {
+  id: string;
+  content: string;
+  structuredRulesJson?: string;
+  effectiveFrom?: string;
+  effectiveUntil?: string;
+  isActive: boolean;
+  updatedAt: string;
+}
+
+export interface UpsertHotelRefundPolicyRequest {
+  content: string;
+  structuredRulesJson?: string;
+  effectiveFrom?: string;
+  effectiveUntil?: string;
+  isActive: boolean;
 }

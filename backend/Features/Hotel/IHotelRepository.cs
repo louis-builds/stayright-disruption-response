@@ -47,5 +47,8 @@ public interface IHotelRepository
     Task<List<Option>> ListOptionsForCaseAsync(Guid caseId, CancellationToken ct = default);
     Task AddOptionAsync(Option option, CancellationToken ct = default);
 
+    Task<HotelRefundPolicy?> GetActiveRefundPolicyAsync(Guid hotelId, CancellationToken ct = default);
+    Task<HotelRefundPolicy> UpsertRefundPolicyAsync(Guid hotelId, UpsertHotelRefundPolicyRequest request, CancellationToken ct = default);
+
     Task SaveChangesAsync(CancellationToken ct = default);
 }

@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json;
 using TravelDisruptionAgent.Api.Features.Auth;
 using TravelDisruptionAgent.Api.Features.Chat;
+using TravelDisruptionAgent.Api.Features.HotelPortal;
 using TravelDisruptionAgent.Api.Infrastructure;
 using TravelDisruptionAgent.Api.Infrastructure.Data.Entities;
 using TravelDisruptionAgent.Api.Infrastructure.Email;
@@ -11,7 +12,8 @@ namespace TravelDisruptionAgent.Api.Features.Cases;
 
 public class CaseService(
     ICaseRepository cases, IUserRepository users, IEmailService email, IChatService chat,
-    IRagRepository ragRepository, GeminiClient gemini, CaseActionTokenService actionTokens, ILogger<CaseService> logger) : ICaseService
+    IRagRepository ragRepository, GeminiClient gemini, CaseActionTokenService actionTokens,
+    IHotelRepository hotelRepo, ILogger<CaseService> logger) : ICaseService
 {
     private static MessageDto ToDto(Message m) => new(m.Id, m.CaseId, m.SenderRole, m.Content, m.Vote, m.Thread, m.CreatedAt, m.ReadAt);
     private static OptionDto ToDto(Option o) => new(o.Id, o.OptionType, o.Availability, o.Selected, o.PayloadJson, o.CreatedAt, o.CustomTitle, o.PerkNames);
@@ -374,13 +376,14 @@ public class CaseService(
 
     public async Task<List<OptionDto>> GetOptionsAsync(Guid caseId, Guid userId, string userRole, CancellationToken ct = default)
     {
-        await LoadAuthorizedCaseAsync(cases, caseId, userId, userRole, ct);
+        var c = await LoadAuthorizedCaseAsync(cases, caseId, userId, userRole, ct);
+        var hotelId = c.Booking?.HotelId;
         var list = await cases.ListOptionsAsync(caseId, ct);
         var visible = new List<Option>();
         foreach (var o in list)
         {
             if (o.CoordinatorVisibilityOverride == false) continue;
-            if (o.CoordinatorVisibilityOverride != true && o.OptionType == "cancel" && !await PolicyAllowsCancelAsync(ct)) continue;
+            if (o.CoordinatorVisibilityOverride != true && o.OptionType == "cancel" && hotelId.HasValue && !await PolicyAllowsCancelAsync(hotelId.Value, ct)) continue;
             visible.Add(o);
         }
         return [.. visible.Select(ToDto)];
@@ -682,14 +685,28 @@ public class CaseService(
     };
 
     /// <summary>退款政策要不要展示给客人得看政策文档怎么说，不能无脑跟 defer/alternate 一样直接推——
-    /// 复用 GetPolicySummaryAsync 已经在用的政策文档定位逻辑，再让 Gemini 读摘录给个是否建议展示的判断。
+    /// 优先读酒店自己的政策，没有才回退到平台默认 RagDocument 政策。再让 Gemini 读摘录给个是否建议展示的判断。
     /// 没配 Gemini key 或摘录都找不到时保守放行（总比卡住客人、有退款权利却看不到强）。</summary>
-    private async Task<bool> PolicyAllowsCancelAsync(CancellationToken ct)
+    private async Task<bool> PolicyAllowsCancelAsync(Guid hotelId, CancellationToken ct)
     {
-        var docs = await ragRepository.GetDefaultDocumentsAsync(ct);
-        var policyDoc = docs.FirstOrDefault(d => d.Name.Contains("policy", StringComparison.OrdinalIgnoreCase)
-            || d.Name.Contains("政策", StringComparison.OrdinalIgnoreCase));
-        var section = policyDoc?.Content.Split("\n## ").FirstOrDefault(s => s.Contains("refund", StringComparison.OrdinalIgnoreCase));
+        string? section = null;
+
+        var hotelPolicy = await hotelRepo.GetActiveRefundPolicyAsync(hotelId, ct);
+        if (hotelPolicy is not null)
+        {
+            section = hotelPolicy.Content.Split("\n## ")
+                .FirstOrDefault(s => s.Contains("refund", StringComparison.OrdinalIgnoreCase))
+                ?? hotelPolicy.Content;
+        }
+
+        if (section is null)
+        {
+            var docs = await ragRepository.GetDefaultDocumentsAsync(ct);
+            var policyDoc = docs.FirstOrDefault(d => d.Name.Contains("policy", StringComparison.OrdinalIgnoreCase)
+                || d.Name.Contains("政策", StringComparison.OrdinalIgnoreCase));
+            section = policyDoc?.Content.Split("\n## ").FirstOrDefault(s => s.Contains("refund", StringComparison.OrdinalIgnoreCase));
+        }
+
         if (section is null) return true;
 
         var prompt = $"Cancellation policy excerpt:\n{section.Trim()}\n\nA guest's stay was disrupted through no fault of their own and " +
@@ -714,7 +731,7 @@ public class CaseService(
         foreach (var o in others)
         {
             if (o.CoordinatorVisibilityOverride == false) continue;
-            if (o.CoordinatorVisibilityOverride != true && o.OptionType == "cancel" && !await PolicyAllowsCancelAsync(ct)) continue;
+            if (o.CoordinatorVisibilityOverride != true && o.OptionType == "cancel" && full.Booking?.HotelId is { } hotelId && !await PolicyAllowsCancelAsync(hotelId, ct)) continue;
             lines.Add($"Also available: {OptionTitle(o)}.");
         }
         lines.Add("Open your options to compare and confirm.");
@@ -978,27 +995,55 @@ public class CaseService(
 
     public async Task<PolicySummaryDto> GetPolicySummaryAsync(Guid caseId, Guid optionId, Guid userId, string userRole, CancellationToken ct = default)
     {
-        await LoadAuthorizedCaseAsync(cases, caseId, userId, userRole, ct);
+        var c = await LoadAuthorizedCaseAsync(cases, caseId, userId, userRole, ct);
         var option = await cases.FindOptionAsync(optionId, caseId, ct) ?? throw new CaseNotFoundException();
 
-        var docs = await ragRepository.GetDefaultDocumentsAsync(ct);
-        var policyDoc = docs.FirstOrDefault(d => d.Name.Contains("policy", StringComparison.OrdinalIgnoreCase)
-            || d.Name.Contains("政策", StringComparison.OrdinalIgnoreCase));
-
         string? excerpt = null;
-        if (policyDoc is not null)
+        string? docName = null;
+        int? docVersion = null;
+
+        var hotelId = c.Booking?.HotelId;
+        if (hotelId.HasValue)
         {
-            var keyword = option.OptionType switch
+            var hotelPolicy = await hotelRepo.GetActiveRefundPolicyAsync(hotelId.Value, ct);
+            if (hotelPolicy is not null)
             {
-                "cancel" => "refund",
-                "defer" => "deferral due to a disruption",
-                _ => "price difference",
-            };
-            var section = policyDoc.Content.Split("\n## ")
-                .FirstOrDefault(s => s.Contains(keyword, StringComparison.OrdinalIgnoreCase));
-            excerpt = section?.Trim();
+                var keyword = option.OptionType switch
+                {
+                    "cancel" => "refund",
+                    "defer" => "deferral due to a disruption",
+                    _ => "price difference",
+                };
+                excerpt = hotelPolicy.Content.Split("\n## ")
+                    .FirstOrDefault(s => s.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+                    ?.Trim()
+                    ?? hotelPolicy.Content.Trim();
+                docName = $"Hotel policy: {c.Booking?.Hotel?.Name}";
+                docVersion = null;
+            }
         }
 
-        return new PolicySummaryDto(excerpt, policyDoc?.Name, policyDoc?.Version, option.PayloadJson);
+        if (excerpt is null)
+        {
+            var docs = await ragRepository.GetDefaultDocumentsAsync(ct);
+            var policyDoc = docs.FirstOrDefault(d => d.Name.Contains("policy", StringComparison.OrdinalIgnoreCase)
+                || d.Name.Contains("政策", StringComparison.OrdinalIgnoreCase));
+            if (policyDoc is not null)
+            {
+                var keyword = option.OptionType switch
+                {
+                    "cancel" => "refund",
+                    "defer" => "deferral due to a disruption",
+                    _ => "price difference",
+                };
+                excerpt = policyDoc.Content.Split("\n## ")
+                    .FirstOrDefault(s => s.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+                    ?.Trim();
+                docName = policyDoc.Name;
+                docVersion = policyDoc.Version;
+            }
+        }
+
+        return new PolicySummaryDto(excerpt, docName, docVersion, option.PayloadJson);
     }
 }

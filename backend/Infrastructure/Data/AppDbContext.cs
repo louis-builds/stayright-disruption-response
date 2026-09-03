@@ -11,6 +11,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Hotel> Hotels => Set<Hotel>();
     public DbSet<RoomType> RoomTypes => Set<RoomType>();
     public DbSet<HotelPerk> HotelPerks => Set<HotelPerk>();
+    public DbSet<HotelRefundPolicy> HotelRefundPolicies => Set<HotelRefundPolicy>();
     public DbSet<Booking> Bookings => Set<Booking>();
     public DbSet<Disruption> Disruptions => Set<Disruption>();
     public DbSet<Case> Cases => Set<Case>();
@@ -26,6 +27,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<DisruptionExclusion> DisruptionExclusions => Set<DisruptionExclusion>();
     public DbSet<DisruptionWindowAudit> DisruptionWindowAudits => Set<DisruptionWindowAudit>();
     public DbSet<OptionLockAudit> OptionLockAudits => Set<OptionLockAudit>();
+    public DbSet<AlternateOfferAudit> AlternateOfferAudits => Set<AlternateOfferAudit>();
     public DbSet<UserStatusAudit> UserStatusAudits => Set<UserStatusAudit>();
     public DbSet<AlertAcknowledgement> AlertAcknowledgements => Set<AlertAcknowledgement>();
     public DbSet<RagDocumentChunk> RagDocumentChunks => Set<RagDocumentChunk>();
@@ -117,6 +119,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             e.HasIndex(x => x.HotelId);
             e.HasOne(x => x.Hotel).WithMany().HasForeignKey(x => x.HotelId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<HotelRefundPolicy>(e =>
+        {
+            e.HasIndex(x => new { x.HotelId, x.IsActive });
+            e.HasOne(x => x.Hotel).WithMany().HasForeignKey(x => x.HotelId).OnDelete(DeleteBehavior.Cascade);
+            e.Property(x => x.StructuredRulesJson).HasColumnType("jsonb").HasColumnName("structured_rules");
         });
 
         modelBuilder.Entity<Booking>(e =>
@@ -218,6 +227,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<OptionLockAudit>(e =>
         {
             e.HasIndex(x => x.OptionId);
+        });
+
+        modelBuilder.Entity<AlternateOfferAudit>(e =>
+        {
+            e.HasIndex(x => x.CaseId);
         });
 
         modelBuilder.Entity<UserStatusAudit>(e =>
