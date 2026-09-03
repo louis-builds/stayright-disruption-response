@@ -121,6 +121,7 @@ builder.Services.AddScoped<ISystemSettingsRepository, SystemSettingsRepository>(
 builder.Services.AddScoped<IKnowledgeBaseRepository, KnowledgeBaseRepository>();
 builder.Services.AddScoped<IKnowledgeBaseService, KnowledgeBaseService>();
 builder.Services.AddScoped<IHotelRepository, HotelRepository>();
+builder.Services.AddScoped<RefundPolicyRuleExtractor>();
 builder.Services.AddScoped<IHotelService, HotelService>();
 builder.Services.AddScoped<IFaqRepository, FaqRepository>();
 builder.Services.AddScoped<IFaqService, FaqService>();

@@ -84,6 +84,10 @@ public class HotelController(IHotelService hotelService) : ControllerBase
         [FromForm] UploadRefundPolicyFileRequest request, IFormFile file, CancellationToken ct) =>
         HandleAsync(() => hotelService.UploadRefundPolicyFileAsync(CurrentUserId, file, request, ct));
 
+    [HttpPost("profile/refund-policy/extract")]
+    public Task<ActionResult<ApiResponse<ExtractedRefundRulesDto>>> ExtractRefundRules([FromBody] ExtractRefundRulesRequest request, CancellationToken ct) =>
+        HandleAsync(() => hotelService.ExtractRefundRulesAsync(CurrentUserId, request, ct));
+
     [HttpPost("profile/room-types")]
     public Task<ActionResult<ApiResponse<RoomTypeDto>>> AddRoomType([FromBody] UpsertRoomTypeRequest request, CancellationToken ct) =>
         HandleAsync(() => hotelService.AddRoomTypeAsync(CurrentUserId, request, ct));

@@ -27,39 +27,6 @@ function PhotoLightbox({ url, onClose }: { url: string; onClose: () => void }) {
   );
 }
 
-interface PolicyRules {
-  freeCancellationHours: number;
-  cancellationFeePercent: number;
-  cancellationFeeFixed: number;
-  currency: string;
-}
-
-const DEFAULT_RULES: PolicyRules = {
-  freeCancellationHours: 48,
-  cancellationFeePercent: 10,
-  cancellationFeeFixed: 0,
-  currency: "NZD",
-};
-
-function parseRules(json?: string): PolicyRules {
-  if (!json) return DEFAULT_RULES;
-  try {
-    const parsed = JSON.parse(json) as Partial<PolicyRules>;
-    return {
-      freeCancellationHours: Number(parsed.freeCancellationHours ?? DEFAULT_RULES.freeCancellationHours),
-      cancellationFeePercent: Number(parsed.cancellationFeePercent ?? DEFAULT_RULES.cancellationFeePercent),
-      cancellationFeeFixed: Number(parsed.cancellationFeeFixed ?? DEFAULT_RULES.cancellationFeeFixed),
-      currency: parsed.currency || DEFAULT_RULES.currency,
-    };
-  } catch {
-    return DEFAULT_RULES;
-  }
-}
-
-function buildRules(rules: PolicyRules): string {
-  return JSON.stringify(rules);
-}
-
 /** datetime-local 的 placeholder 会跟系统语言走（中文系统显示“年/月/日”），改成 text + placeholder 才能稳定英文。 */
 function formatDateTimeForInput(iso?: string): string {
   return iso ? iso.slice(0, 16).replace("T", " ") : "";
@@ -76,7 +43,6 @@ function parseDateTimeInput(value: string): string | null {
 
 function RefundPolicySection() {
   const [content, setContent] = useState("");
-  const [rules, setRules] = useState<PolicyRules>(DEFAULT_RULES);
   const [effectiveFrom, setEffectiveFrom] = useState("");
   const [effectiveUntil, setEffectiveUntil] = useState("");
   const [loading, setLoading] = useState(true);
@@ -93,17 +59,12 @@ function RefundPolicySection() {
       .then((res) => {
         if (res.code === 0 && res.data) {
           setContent(res.data.content);
-          setRules(parseRules(res.data.structuredRulesJson));
           setEffectiveFrom(formatDateTimeForInput(res.data.effectiveFrom));
           setEffectiveUntil(formatDateTimeForInput(res.data.effectiveUntil));
         }
       })
       .finally(() => setLoading(false));
   }, []);
-
-  function updateRules<K extends keyof PolicyRules>(key: K, value: PolicyRules[K]) {
-    setRules((prev) => ({ ...prev, [key]: value }));
-  }
 
   async function uploadFile(file: File) {
     const validExts = [".md", ".txt", ".pdf", ".docx"];
@@ -128,14 +89,12 @@ function RefundPolicySection() {
     setExtractStatus("extracting");
     try {
       const res = await api.uploadRefundPolicyFile(file, {
-        structuredRulesJson: buildRules(rules),
         effectiveFrom: parsedFrom || undefined,
         effectiveUntil: parsedUntil || undefined,
         isActive: true,
       });
       if (res.code === 0 && res.data) {
         setContent(res.data.content);
-        setRules(parseRules(res.data.structuredRulesJson));
         setEffectiveFrom(formatDateTimeForInput(res.data.effectiveFrom));
         setEffectiveUntil(formatDateTimeForInput(res.data.effectiveUntil));
         setUploadedFileName(file.name);
@@ -184,7 +143,6 @@ function RefundPolicySection() {
 
     const body: UpsertHotelRefundPolicyRequest = {
       content,
-      structuredRulesJson: buildRules(rules),
       effectiveFrom: parsedFrom || undefined,
       effectiveUntil: parsedUntil || undefined,
       isActive: true,
@@ -249,52 +207,9 @@ function RefundPolicySection() {
         <textarea value={content} onChange={(e) => setContent(e.target.value)} rows={8} />
       </label>
 
-      <div className="hotel-profile-card-section">
-        <h4>Automatic refund calculation</h4>
-        <p className="hotel-profile-card-caption">
-          These numbers control how the cancel/refund option amount is calculated. You can leave defaults if your policy content explains everything in plain text.
-        </p>
-
-        <div className="option-admin-fields">
-          <label className="coord-field">
-            <span>Free cancellation window (hours before check-in)</span>
-            <input
-              type="number"
-              min={0}
-              value={rules.freeCancellationHours}
-              onChange={(e) => updateRules("freeCancellationHours", Number(e.target.value))}
-            />
-          </label>
-          <label className="coord-field">
-            <span>Cancellation fee (% of total)</span>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step="0.01"
-              value={rules.cancellationFeePercent}
-              onChange={(e) => updateRules("cancellationFeePercent", Number(e.target.value))}
-            />
-          </label>
-        </div>
-
-        <div className="option-admin-fields">
-          <label className="coord-field">
-            <span>Fixed cancellation fee ({rules.currency})</span>
-            <input
-              type="number"
-              min={0}
-              step="0.01"
-              value={rules.cancellationFeeFixed}
-              onChange={(e) => updateRules("cancellationFeeFixed", Number(e.target.value))}
-            />
-          </label>
-          <label className="coord-field">
-            <span>Currency</span>
-            <input value={rules.currency} onChange={(e) => updateRules("currency", e.target.value)} />
-          </label>
-        </div>
-      </div>
+      <p className="hotel-profile-card-caption">
+        Refund amounts are calculated automatically from this policy text by AI — no extra configuration needed.
+      </p>
 
       <div className="hotel-profile-card-section">
         <h4>Effective dates</h4>

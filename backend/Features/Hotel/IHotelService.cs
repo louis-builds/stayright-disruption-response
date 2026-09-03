@@ -25,6 +25,8 @@ public interface IHotelService
     Task<HotelRefundPolicyDto?> GetRefundPolicyAsync(Guid hotelUserId, CancellationToken ct = default);
     Task<HotelRefundPolicyDto> UpsertRefundPolicyAsync(Guid hotelUserId, UpsertHotelRefundPolicyRequest request, CancellationToken ct = default);
     Task<HotelRefundPolicyDto> UploadRefundPolicyFileAsync(Guid hotelUserId, IFormFile file, UploadRefundPolicyFileRequest request, CancellationToken ct = default);
+    /// <summary>从政策自由文本预填结构化规则（不落库）。政策没提到的字段为 null，由前端保留表单原值。</summary>
+    Task<ExtractedRefundRulesDto> ExtractRefundRulesAsync(Guid hotelUserId, ExtractRefundRulesRequest request, CancellationToken ct = default);
 
     /// <summary>给这家酒店自己名下的方案(defer 或目标是自己的 alternate)附加/替换权益快照。</summary>
     Task SetOptionPerksAsync(Guid hotelUserId, Guid optionId, SetOptionPerksRequest request, CancellationToken ct = default);
