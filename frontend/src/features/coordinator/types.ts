@@ -245,3 +245,9 @@ export interface AdminOption {
   perkNames: string[];
   coordinatorVisibilityOverride: boolean | null;
 }
+
+export interface PushOptionsStatus {
+  canPush: boolean;
+  state: "ready" | "sent" | "updated" | "retry";
+  lastAttemptAt: string | null;
+}

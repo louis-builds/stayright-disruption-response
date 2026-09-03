@@ -15,6 +15,25 @@ const DECISION_TYPES = [
   { value: "人工决议结案", label: "Other manual resolution" },
 ];
 
+const OPTION_META: Record<string, { title: string; description: string; icon: string }> = {
+  defer: { title: "Defer stay", description: "Move the stay dates while keeping the original hotel.", icon: "◷" },
+  alternate: { title: "Alternative stay", description: "Relocate the guest to an available partner hotel.", icon: "▣" },
+  cancel: { title: "Cancel & refund", description: "Cancel the booking and return the eligible amount.", icon: "▤" },
+};
+const FIELD_LABELS: Record<string, string> = {
+  hotel: "Alternative hotel", room_type: "Room type", fee_diff: "Price difference", currency: "Currency",
+  distance_km: "Distance", refund_amount: "Refund total", cancellation_fee: "Cancellation fee",
+  eta_business_days: "Estimated payout", new_check_in_offset_days: "New check-in offset",
+  new_check_out_offset_days: "New check-out offset",
+};
+
+function formatOptionValue(key: string, value: unknown) {
+  if (key === "distance_km") return `${value} km`;
+  if (key === "eta_business_days") return `${value} business days`;
+  if (key.includes("offset_days")) return `+${value} days`;
+  return String(value);
+}
+
 function OptionSnapshot({ option }: { option: AdminOption }) {
   let payload: Record<string, unknown> = {};
   try {
@@ -22,22 +41,24 @@ function OptionSnapshot({ option }: { option: AdminOption }) {
   } catch {
     // leave empty
   }
+  const meta = OPTION_META[option.optionType] ?? { title: option.customTitle ?? "Custom option", description: "Coordinator-reviewed option.", icon: "◇" };
+  const visibleFields = Object.entries(payload).filter(([key]) => key !== "hotel_id");
   return (
     <div className="escalation-option-snapshot">
       <div className="option-admin-header">
-        <h4>{option.optionType}</h4>
+        <div className="escalation-option-title"><i>{meta.icon}</i><div><h4>{meta.title}</h4><p>{meta.description}</p></div></div>
         <span className={`tag tag-status-${option.availability === "unavailable" ? "overdue" : "normal"}`}>{option.availability}</span>
       </div>
       {option.availability === "unavailable" ? (
         <p className="option-admin-reason">Unavailable: {option.unavailableReason}</p>
       ) : (
-        <ul className="escalation-snapshot-fields">
-          {Object.entries(payload).map(([k, v]) => (
-            <li key={k}>
-              {k.replace(/_/g, " ")}: {String(v)}
-            </li>
+        <dl className="escalation-snapshot-fields">
+          {visibleFields.map(([k, v]) => (
+            <div key={k}>
+              <dt>{FIELD_LABELS[k] ?? k.replace(/_/g, " ")}</dt><dd>{formatOptionValue(k, v)}</dd>
+            </div>
           ))}
-        </ul>
+        </dl>
       )}
     </div>
   );
@@ -52,6 +73,7 @@ export function EscalationDeskPage() {
   const [caseSummary, setCaseSummary] = useState<CaseSummary | null>(null);
   const [options, setOptions] = useState<AdminOption[]>([]);
   const [notifications, setNotifications] = useState<CaseNotification[]>([]);
+  const [notificationPage, setNotificationPage] = useState(1);
   const [refundStatus, setRefundStatus] = useState<RefundStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -152,12 +174,24 @@ export function EscalationDeskPage() {
   if (!user) return null;
 
   const canClose = !isRefund || refundStatus?.confirmed;
+  const optionOrder: Record<string, number> = { alternate: 0, defer: 1, cancel: 2, custom: 3 };
+  const orderedOptions = [...options].sort((a, b) => (optionOrder[a.optionType] ?? 9) - (optionOrder[b.optionType] ?? 9));
+  const notificationsPerPage = 5;
+  const orderedNotifications = [...notifications].sort((a, b) => {
+    const aTime = new Date(a.sentAt).getTime();
+    const bTime = new Date(b.sentAt).getTime();
+    return (Number.isNaN(bTime) ? 0 : bTime) - (Number.isNaN(aTime) ? 0 : aTime);
+  });
+  const notificationPageCount = Math.max(1, Math.ceil(orderedNotifications.length / notificationsPerPage));
+  const currentNotificationPage = Math.min(notificationPage, notificationPageCount);
+  const notificationStart = (currentNotificationPage - 1) * notificationsPerPage;
+  const visibleNotifications = orderedNotifications.slice(notificationStart, notificationStart + notificationsPerPage);
 
   return (
     <CoordinatorDashboardShell user={user} active="reports" onNavigate={() => navigate("/coordinator/home")} onSearch={() => navigate("/coordinator/home")}>
       <div className="escalation-workspace">
       <div className="escalation-desk">
-        <div className="escalation-topline"><button type="button" className="coord-btn-link" onClick={() => navigate(`/cases/${caseId}`)}>← Back to Case Workspace</button>{syncedAt && <p className="coord-sync-indicator escalation-sync"><span className="coord-sync-dot" aria-hidden="true" />Synced {syncedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · refreshes every 30s</p>}</div>
+        <div className="escalation-topline"><button type="button" className="coord-btn-link" onClick={() => navigate(`/cases/${caseId}`)}>← Coordinator Options&nbsp; / &nbsp;<strong>Case Decision</strong></button>{syncedAt && <p className="coord-sync-indicator escalation-sync"><span className="coord-sync-dot" aria-hidden="true" />Last sync {syncedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · auto-refreshes every 30s</p>}</div>
 
         {loading ? (
           <p className="coord-empty">Loading…</p>
@@ -165,20 +199,20 @@ export function EscalationDeskPage() {
           <>
             {caseSummary && (
               <div className="escalation-header">
-                <div><small>CASE RESOLUTION</small><div className="escalation-header-badges"><span>CASE-{caseId.slice(0, 8).toUpperCase()}</span><em className={`priority-${caseSummary.priority}`}>{caseSummary.priority} priority</em><em className={`status-${caseSummary.status}`}>{caseSummary.statusLabel}</em></div><h1>{caseSummary.disruptionTitle ?? "Disruption case"}</h1><p>{caseSummary.hotelName ?? "Hotel not recorded"}</p></div>
-                <dl><div><dt>Guest</dt><dd>{caseSummary.guestNickname ?? "Guest not recorded"}</dd><small>{caseSummary.confirmationNo ?? "No booking reference"}</small></div><div><dt>Stay dates</dt><dd>{caseSummary.checkIn && caseSummary.checkOut ? `${caseSummary.checkIn} → ${caseSummary.checkOut}` : "Not recorded"}</dd></div></dl>
+                <div className="escalation-case-title"><div className="escalation-header-badges"><span>CASE-{caseId.slice(0, 8).toUpperCase()}</span><em className={`priority-${caseSummary.priority}`}>{caseSummary.priority} priority</em><em className={`status-${caseSummary.status}`}>{caseSummary.statusLabel}</em></div><h1>{caseSummary.hotelName ?? "Hotel not recorded"} — {caseSummary.disruptionTitle ?? "Disruption case"}</h1></div>
+                <dl><div><dt>Hotel partner</dt><dd>▦ {caseSummary.hotelName ?? "Not recorded"}</dd></div><div><dt>Guest</dt><dd>♙ {caseSummary.guestNickname ?? "Guest not recorded"}</dd></div><div><dt>Booking reference</dt><dd>▣ {caseSummary.confirmationNo ?? "Not recorded"}</dd></div><div><dt>Stay dates</dt><dd>▤ {caseSummary.checkIn && caseSummary.checkOut ? `${caseSummary.checkIn} → ${caseSummary.checkOut}` : "Not recorded"}</dd></div></dl>
               </div>
             )}
 
             <div className="escalation-desk-layout">
             <div className="escalation-desk-main">
             <div className="escalation-section">
-              <h3>Options already pushed to the guest (and their availability)</h3>
+              <div className="escalation-section-heading"><div><h3>Options Shared with Guest</h3><p>Current recovery proposals and their latest availability.</p></div><span>{options.length} options</span></div>
               {options.length === 0 ? (
                 <p className="coord-empty">No options were generated for this case.</p>
               ) : (
                 <div className="escalation-snapshot-grid">
-                  {options.map((o) => (
+                  {orderedOptions.map((o) => (
                     <OptionSnapshot key={o.id} option={o} />
                   ))}
                 </div>
@@ -186,21 +220,19 @@ export function EscalationDeskPage() {
             </div>
 
             <div className="escalation-section">
-              <h3>Notifications sent for this case</h3>
+              <div className="escalation-section-heading"><div><h3>Communication &amp; Notification History</h3><p>Chronological delivery record for this case.</p></div><span>{notifications.length} events</span></div>
               {notifications.length === 0 ? (
                 <p className="coord-empty">No notifications yet.</p>
               ) : (
                 <div className="coord-table">
-                  {notifications.map((n) => (
+                  {visibleNotifications.map((n) => (
                     <div key={n.id} className="coord-row">
                       <div className="coord-row-main">
-                        <p className="coord-row-conf">
-                          {n.title} <span className="coord-row-meta">({n.channel})</span>
-                        </p>
+                        <p className="coord-row-conf">{n.title} <span className="coord-row-meta">via {n.channel}</span></p>
                         <p className="coord-row-sub">{n.body}</p>
                       </div>
                       <div className="coord-row-actions">
-                        <span className={`tag tag-status-${n.success ? "normal" : "overdue"}`}>{n.success ? "sent" : "failed"}</span>
+                        <time className="escalation-notification-time">{new Date(n.sentAt).toLocaleString("en-NZ", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</time><span className={`tag tag-status-${n.success ? "normal" : "overdue"}`}>{n.success ? "sent" : "failed"}</span>
                         {!n.success && (
                           <button type="button" className="coord-btn-link" onClick={() => void resend(n.id)}>
                             Resend
@@ -211,12 +243,28 @@ export function EscalationDeskPage() {
                   ))}
                 </div>
               )}
+              {notifications.length > notificationsPerPage && (
+                <div className="escalation-history-pagination">
+                  <p>
+                    Showing {notificationStart + 1}–{Math.min(notificationStart + notificationsPerPage, notifications.length)} of {notifications.length}
+                  </p>
+                  <div>
+                    <button type="button" disabled={currentNotificationPage === 1} onClick={() => setNotificationPage((page) => Math.max(1, page - 1))}>
+                      Previous
+                    </button>
+                    <span>{currentNotificationPage} / {notificationPageCount}</span>
+                    <button type="button" disabled={currentNotificationPage === notificationPageCount} onClick={() => setNotificationPage((page) => Math.min(notificationPageCount, page + 1))}>
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
             </div>
 
             <div className="escalation-desk-side">
             <div className="escalation-section">
-              <h3>Final decision</h3>
+              <div className="escalation-final-heading"><div><h3>Final Decision</h3><p>Confirm the outcome and close this case.</p></div><span>CASE-{caseId.slice(0, 8).toUpperCase()}</span></div>
               {/* resultMsg/error render outside the closed/open branch on purpose: submitDecision()
                   sets resultMsg then immediately awaits refresh(), which flips caseSummary.status to
                   "closed" — if the message lived inside the "not yet closed" branch below, that

@@ -151,5 +151,26 @@ public class OptionsAdminController(IOptionsAdminService optionsAdmin) : Control
         {
             return Conflict(ApiResponse<object?>.Fail(409, "Case is closed; options can no longer be changed"));
         }
+        catch (OptionsAlreadyPushedException)
+        {
+            return Conflict(ApiResponse<object?>.Fail(409, "This version of the options has already been sent"));
+        }
+        catch (NoOptionsToPushException)
+        {
+            return Conflict(ApiResponse<object?>.Fail(409, "There are no options to send"));
+        }
+    }
+
+    [HttpGet("push-status")]
+    public async Task<ActionResult<ApiResponse<PushOptionsStatusDto>>> PushStatus(Guid caseId, CancellationToken ct)
+    {
+        try
+        {
+            return Ok(ApiResponse<PushOptionsStatusDto>.Ok(await optionsAdmin.GetPushStatusAsync(caseId, ct)));
+        }
+        catch (CaseNotFoundException)
+        {
+            return NotFound(ApiResponse<object?>.Fail(404, "Case not found"));
+        }
     }
 }
