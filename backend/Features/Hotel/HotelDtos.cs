@@ -60,3 +60,12 @@ public record UpsertHotelRefundPolicyRequest(
 public record UploadRefundPolicyFileRequest(
     string? StructuredRulesJson,
     DateTimeOffset? EffectiveFrom, DateTimeOffset? EffectiveUntil);
+
+// 从政策自由文本提取结构化规则的预填请求/响应。响应里政策没提到的字段为 null，
+// 前端只回填非 null 字段，其余保持表单现状，绝不拿 AI 的猜测覆盖酒店人员的输入。
+// AiUsed=false 表示 LLM 不可用、走了本地正则兜底，前端据此提示"预填可能不完整"。
+public record ExtractRefundRulesRequest(string Content);
+
+public record ExtractedRefundRulesDto(
+    int? FreeCancellationHours, decimal? CancellationFeePercent,
+    decimal? CancellationFeeFixed, string? Currency, bool AiUsed);

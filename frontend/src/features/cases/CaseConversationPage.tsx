@@ -7,6 +7,7 @@ import { useCaseConversation } from "./useCaseConversation";
 import { fetchTopFaqQuestions } from "./api";
 import type { CaseMessage, SenderRole, Thread } from "./types";
 import "./CaseConversationPage.css";
+import { CoordinatorCaseWorkspacePage } from "../coordinator/CoordinatorCaseWorkspacePage";
 
 const ROLE_META: Record<SenderRole, { label: string; avatar: string }> = {
   guest: { label: "You", avatar: "🧳" },
@@ -95,7 +96,7 @@ function MessageBubble({
   );
 }
 
-export function CaseConversationPage() {
+export function LegacyCaseConversationPage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   // guest 的主流程是问 AI,默认落在 ai 线程;协调员(以及理论上的酒店角色)进这页通常就是为了
@@ -390,4 +391,9 @@ export function CaseConversationPage() {
       </div>
     </AppShell>
   );
+}
+
+export function CaseConversationPage() {
+  const { user } = useAuth();
+  return user?.role === "coordinator" ? <CoordinatorCaseWorkspacePage /> : <LegacyCaseConversationPage />;
 }

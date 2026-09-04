@@ -9,5 +9,6 @@ public interface IOptionsAdminService
     Task LockAsync(Guid caseId, Guid optionId, Guid actorUserId, CancellationToken ct = default);
     Task UnlockAsync(Guid caseId, Guid optionId, Guid actorUserId, string reason, CancellationToken ct = default);
     Task RegenerateAsync(Guid caseId, CancellationToken ct = default);
+    Task<PushOptionsStatusDto> GetPushStatusAsync(Guid caseId, CancellationToken ct = default);
     Task<PushOptionsResultDto> PushAsync(Guid caseId, CancellationToken ct = default);
 }
