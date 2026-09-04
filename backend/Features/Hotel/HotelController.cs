@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using TravelDisruptionAgent.Api.Features.Coordinator;
 using TravelDisruptionAgent.Api.Infrastructure;
@@ -68,6 +69,24 @@ public class HotelController(IHotelService hotelService) : ControllerBase
     [HttpPut("profile")]
     public Task<ActionResult<ApiResponse<object?>>> UpdateProfile([FromBody] UpdateHotelProfileRequest request, CancellationToken ct) =>
         HandleAsync<object?>(async () => { await hotelService.UpdateProfileAsync(CurrentUserId, request, ct); return null; });
+
+    [HttpGet("profile/refund-policy")]
+    public Task<ActionResult<ApiResponse<HotelRefundPolicyDto?>>> GetRefundPolicy(CancellationToken ct) =>
+        HandleAsync(() => hotelService.GetRefundPolicyAsync(CurrentUserId, ct));
+
+    [HttpPut("profile/refund-policy")]
+    public Task<ActionResult<ApiResponse<HotelRefundPolicyDto>>> UpsertRefundPolicy([FromBody] UpsertHotelRefundPolicyRequest request, CancellationToken ct) =>
+        HandleAsync(() => hotelService.UpsertRefundPolicyAsync(CurrentUserId, request, ct));
+
+    [HttpPost("profile/refund-policy/file")]
+    [Consumes("multipart/form-data")]
+    public Task<ActionResult<ApiResponse<HotelRefundPolicyDto>>> UploadRefundPolicyFile(
+        [FromForm] UploadRefundPolicyFileRequest request, IFormFile file, CancellationToken ct) =>
+        HandleAsync(() => hotelService.UploadRefundPolicyFileAsync(CurrentUserId, file, request, ct));
+
+    [HttpPost("profile/refund-policy/extract")]
+    public Task<ActionResult<ApiResponse<ExtractedRefundRulesDto>>> ExtractRefundRules([FromBody] ExtractRefundRulesRequest request, CancellationToken ct) =>
+        HandleAsync(() => hotelService.ExtractRefundRulesAsync(CurrentUserId, request, ct));
 
     [HttpPost("profile/room-types")]
     public Task<ActionResult<ApiResponse<RoomTypeDto>>> AddRoomType([FromBody] UpsertRoomTypeRequest request, CancellationToken ct) =>

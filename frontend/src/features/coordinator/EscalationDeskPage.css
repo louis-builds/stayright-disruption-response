@@ -1,8 +1,12 @@
+.escalation-workspace{padding:28px;background:#f5f7fb;color:#171d32}
 .escalation-desk {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
 }
+
+.escalation-topline{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.escalation-topline .coord-btn-link{padding:0;color:#7130df;font-size:13px;font-weight:700}
 
 .escalation-header {
   display: flex;
@@ -10,13 +14,22 @@
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
+  padding:24px 26px;
+  border:1px solid #e3e7ef;
+  border-radius:18px;
+  background:#fff;
+  box-shadow:0 7px 22px rgba(28,38,65,.035);
 }
 
-.escalation-header h2 {
-  margin: 0 0 0.2rem;
-  color: #10243c;
-  font-size: 1.1rem;
-}
+.escalation-header>div>small{color:#7531e8;font-size:10px;font-weight:800;letter-spacing:.08em}
+.escalation-header h1{margin:9px 0 4px;color:#141a30;font-size:27px;line-height:1.2}
+.escalation-header>div>p{margin:0;color:#848da3;font-size:14px}
+.escalation-header-badges{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}
+.escalation-header-badges span,.escalation-header-badges em{padding:5px 9px;border-radius:999px;background:#f0e9fd;color:#7230df;font-size:10px;font-style:normal;font-weight:800;text-transform:capitalize}
+.escalation-header-badges em[class^="priority-high"]{background:#fff0f3;color:#d62e55}
+.escalation-header-badges em[class^="status-"]{background:#fff4e7;color:#bd680d}
+.escalation-header dl{display:grid;grid-template-columns:repeat(2,minmax(150px,1fr));gap:24px;margin:0;padding-left:26px;border-left:1px solid #eceef3}
+.escalation-header dl div{min-width:0}.escalation-header dt{color:#979fb1;font-size:9px;font-weight:800;letter-spacing:.05em;text-transform:uppercase}.escalation-header dd{margin:6px 0 0;color:#20263b;font-size:13px;font-weight:800}.escalation-header dl small{display:block;margin-top:4px;color:#929aab;font-size:10px}
 
 .escalation-sync {
   margin: 0.2rem 0 0;
@@ -27,7 +40,7 @@
    两栏都用满宽度，不用再靠拉长滚动条才能看完。 */
 .escalation-desk-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: minmax(0, 1fr) 360px;
   gap: 1.25rem;
   align-items: start;
 }
@@ -56,8 +69,8 @@
 .escalation-section {
   background: white;
   border: 1px solid #e6edf3;
-  border-radius: 12px;
-  padding: 1.1rem 1.3rem;
+  border-radius: 16px;
+  padding: 1.25rem 1.35rem;
   display: flex;
   flex-direction: column;
   gap: 0.7rem;
@@ -66,9 +79,14 @@
 
 .escalation-section h3 {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: 1rem;
   color: #10243c;
 }
+
+.escalation-desk-side .escalation-section{border-top:3px solid #7a32e8;box-shadow:0 8px 24px rgba(28,38,65,.045)}
+.escalation-desk-side .coord-field select,.escalation-desk-side .coord-field textarea,.escalation-desk-side .coord-field input{box-sizing:border-box;width:100%;padding:10px 11px;border:1px solid #dfe3eb;border-radius:9px;background:#fff;color:#20263b}
+.escalation-desk-side .coord-btn-primary{width:100%;border-color:#7932e8;background:#7932e8;color:#fff}
+.escalation-desk-side .coord-btn-secondary{width:100%;border-radius:9px}
 
 .escalation-snapshot-grid {
   display: grid;
@@ -130,3 +148,117 @@
     animation: none;
   }
 }
+
+@media(max-width:760px){.escalation-workspace{padding:16px}.escalation-topline,.escalation-header{align-items:flex-start;flex-direction:column}.escalation-header dl{width:100%;box-sizing:border-box;padding:18px 0 0;border-left:0;border-top:1px solid #eceef3}.escalation-header h1{font-size:23px}}
+
+/* Operational resolution layout: readable option summaries and compact history. */
+.escalation-workspace .escalation-desk-layout{grid-template-columns:minmax(0,1fr) 350px;gap:18px}
+.escalation-workspace .escalation-section{gap:14px;padding:18px 20px}
+.escalation-section-heading,.escalation-final-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding-bottom:13px;border-bottom:1px solid #e8ebf1}
+.escalation-section-heading h3,.escalation-final-heading h3{margin:0;font-size:15px}
+.escalation-section-heading p,.escalation-final-heading p{margin:4px 0 0;color:#9299aa;font-size:10px}
+.escalation-section-heading>span,.escalation-final-heading>span{flex:0 0 auto;padding:5px 8px;border-radius:999px;background:#f4f1fa;color:#7e7392;font-size:9px;font-weight:800}
+.escalation-workspace .escalation-snapshot-grid{display:flex;flex-direction:column;gap:10px}
+.escalation-workspace .escalation-option-snapshot,.escalation-workspace .escalation-snapshot-grid .escalation-option-snapshot:nth-last-child(1):nth-child(odd){display:block;grid-column:auto;padding:14px 15px;border-color:#e6e9f0;border-radius:12px;background:#fff}
+.escalation-workspace .escalation-option-snapshot:hover{transform:none;box-shadow:0 5px 14px rgba(28,38,65,.045)}
+.escalation-workspace .escalation-option-snapshot .option-admin-header{align-items:flex-start;padding-bottom:11px;border-bottom:1px solid #eceef3}
+.escalation-option-title{display:flex;align-items:flex-start;gap:10px}.escalation-option-title>i{display:grid;place-items:center;flex:0 0 auto;width:28px;height:28px;border-radius:8px;background:#f1e9fe;color:#7932e8;font-style:normal;font-weight:800}
+.escalation-option-title h4{font-size:13px}.escalation-option-title p{margin:3px 0 0;color:#969daf;font-size:9px}
+.escalation-workspace .escalation-snapshot-fields,.escalation-workspace .escalation-snapshot-grid .escalation-option-snapshot:nth-last-child(1):nth-child(odd) .escalation-snapshot-fields{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:11px 0 0;padding:0}
+.escalation-snapshot-fields>div{min-width:0;padding:9px 10px;border:1px solid #edf0f4;border-radius:9px;background:#f8f9fb}
+.escalation-snapshot-fields dt{overflow:hidden;color:#969dae;font-size:8px;font-weight:800;letter-spacing:.03em;text-overflow:ellipsis;text-transform:uppercase;white-space:nowrap}
+.escalation-snapshot-fields dd{overflow:hidden;margin:4px 0 0;color:#30364a;font-size:10px;font-weight:800;text-overflow:ellipsis;white-space:nowrap}
+.escalation-workspace .coord-table{display:flex;flex-direction:column;gap:8px;border:0;background:transparent}
+.escalation-workspace .coord-table .coord-row{padding:11px 13px;border:1px solid #e7eaf0;border-radius:10px;background:#fafbfc}
+.escalation-workspace .coord-row-conf{font-size:11px}.escalation-workspace .coord-row-sub{margin-top:4px;font-size:9px;line-height:1.45}
+.escalation-workspace .coord-row-actions{gap:8px}.escalation-notification-time{color:#969daf;font-size:8px;white-space:nowrap}
+.escalation-workspace .escalation-desk-side .escalation-section{gap:13px;padding:18px;border-top:0}
+.escalation-workspace .escalation-final-heading>span{border-radius:5px}
+.escalation-workspace .escalation-desk-side .coord-field{gap:5px;font-size:10px;font-weight:700}
+.escalation-workspace .escalation-desk-side .coord-field select,.escalation-workspace .escalation-desk-side .coord-field textarea,.escalation-workspace .escalation-desk-side .coord-field input{font-size:11px}
+.escalation-workspace .escalation-desk-side .coord-btn-primary{border-radius:9px;background:#7932e8;font-size:11px;font-weight:800}
+@media(max-width:900px){.escalation-workspace .escalation-desk-layout{grid-template-columns:1fr}.escalation-workspace .escalation-snapshot-fields,.escalation-workspace .escalation-snapshot-grid .escalation-option-snapshot:nth-last-child(1):nth-child(odd) .escalation-snapshot-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Approved Case Decision composition. Backend actions remain unchanged. */
+.escalation-workspace{box-sizing:border-box;width:100%;padding:22px 26px}
+.escalation-workspace .escalation-desk{max-width:1240px;margin:0 auto;gap:16px}
+.escalation-workspace .escalation-topline{min-height:28px}
+.escalation-workspace .escalation-topline .coord-btn-link{color:#788095;font-size:10px;font-weight:500}
+.escalation-workspace .escalation-topline strong{color:#343a4c}
+.escalation-workspace .escalation-sync{font-size:9px}
+.escalation-workspace .escalation-header{display:block;padding:14px 16px;border-radius:14px}
+.escalation-workspace .escalation-case-title{padding-bottom:12px;border-bottom:1px solid #e8ebf1}
+.escalation-workspace .escalation-case-title h1{margin:7px 0 0;font-size:18px}
+.escalation-workspace .escalation-header-badges{margin-top:0}
+.escalation-workspace .escalation-header-badges span,.escalation-workspace .escalation-header-badges em{padding:4px 8px;font-size:8px}
+.escalation-workspace .escalation-header dl{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:11px;padding:0;border:0}
+.escalation-workspace .escalation-header dl>div{padding:9px 11px;border:1px solid #edf0f4;border-radius:9px;background:#f8f9fb}
+.escalation-workspace .escalation-header dt{font-size:7px}
+.escalation-workspace .escalation-header dd{overflow:hidden;margin-top:4px;font-size:9px;text-overflow:ellipsis;white-space:nowrap}
+.escalation-workspace .escalation-desk-layout{grid-template-columns:minmax(0,1.9fr) minmax(300px,.7fr);gap:16px}
+.escalation-workspace .escalation-desk-main{gap:16px}
+.escalation-workspace .escalation-section{padding:15px 17px;border-radius:14px}
+.escalation-workspace .escalation-section-heading,.escalation-workspace .escalation-final-heading{padding-bottom:10px}
+.escalation-workspace .escalation-section-heading h3,.escalation-workspace .escalation-final-heading h3{font-size:13px}
+.escalation-workspace .escalation-section-heading p,.escalation-workspace .escalation-final-heading p{font-size:8px}
+.escalation-workspace .escalation-snapshot-grid{gap:9px}
+.escalation-workspace .escalation-option-snapshot,.escalation-workspace .escalation-snapshot-grid .escalation-option-snapshot:nth-last-child(1):nth-child(odd){padding:11px 12px}
+.escalation-workspace .escalation-option-snapshot .option-admin-header{padding-bottom:8px}
+.escalation-workspace .escalation-option-title>i{width:25px;height:25px}
+.escalation-workspace .escalation-option-title h4{font-size:11px}
+.escalation-workspace .escalation-option-title p{font-size:8px}
+.escalation-workspace .escalation-snapshot-fields,.escalation-workspace .escalation-snapshot-grid .escalation-option-snapshot:nth-last-child(1):nth-child(odd) .escalation-snapshot-fields{gap:7px;margin-top:8px}
+.escalation-workspace .escalation-snapshot-fields>div{padding:7px 8px}
+.escalation-workspace .escalation-snapshot-fields dt{font-size:7px}.escalation-workspace .escalation-snapshot-fields dd{font-size:9px}
+.escalation-workspace .coord-table .coord-row{padding:9px 11px}
+.escalation-workspace .coord-row-conf{font-size:9px}.escalation-workspace .coord-row-sub{font-size:8px}
+.escalation-workspace .escalation-desk-side{top:78px}
+.escalation-workspace .escalation-desk-side .escalation-section{padding:15px 16px}
+.escalation-workspace .escalation-desk-side .coord-field{font-size:9px}
+.escalation-workspace .escalation-desk-side .coord-field select,.escalation-workspace .escalation-desk-side .coord-field textarea,.escalation-workspace .escalation-desk-side .coord-field input{padding:8px 9px;font-size:10px}
+.escalation-workspace .escalation-desk-side .coord-btn-primary,.escalation-workspace .escalation-desk-side .coord-btn-secondary{padding:9px;font-size:10px}
+@media(max-width:900px){.escalation-workspace .escalation-header dl{grid-template-columns:repeat(2,minmax(0,1fr))}.escalation-workspace .escalation-desk-layout{grid-template-columns:1fr}}
+@media(max-width:560px){.escalation-workspace{padding:15px}.escalation-workspace .escalation-header dl,.escalation-workspace .escalation-snapshot-fields,.escalation-workspace .escalation-snapshot-grid .escalation-option-snapshot:nth-last-child(1):nth-child(odd) .escalation-snapshot-fields{grid-template-columns:1fr}}
+
+/* Readable Case Decision sizing. Keeps the approved structure without shrinking it to mockup scale. */
+.escalation-workspace .escalation-desk{max-width:1480px;gap:20px}
+.escalation-workspace .escalation-topline .coord-btn-link{font-size:14px}
+.escalation-workspace .escalation-sync{font-size:13px}
+.escalation-workspace .escalation-header{padding:20px 22px}
+.escalation-workspace .escalation-case-title h1{font-size:24px}
+.escalation-workspace .escalation-header-badges span,.escalation-workspace .escalation-header-badges em{padding:6px 10px;font-size:12px}
+.escalation-workspace .escalation-header dl{gap:12px;margin-top:14px}
+.escalation-workspace .escalation-header dl>div{padding:12px 14px}
+.escalation-workspace .escalation-header dt{font-size:11px}
+.escalation-workspace .escalation-header dd{font-size:14px}
+.escalation-workspace .escalation-desk-layout{grid-template-columns:minmax(0,1fr) minmax(340px,390px);gap:20px}
+.escalation-workspace .escalation-section{padding:20px 22px}
+.escalation-workspace .escalation-section-heading h3,.escalation-workspace .escalation-final-heading h3{font-size:19px}
+.escalation-workspace .escalation-section-heading p,.escalation-workspace .escalation-final-heading p{font-size:13px;line-height:1.45}
+.escalation-workspace .escalation-section-heading>span,.escalation-workspace .escalation-final-heading>span{font-size:11px}
+.escalation-workspace .escalation-snapshot-grid{gap:12px}
+.escalation-workspace .escalation-option-snapshot,.escalation-workspace .escalation-snapshot-grid .escalation-option-snapshot:nth-last-child(1):nth-child(odd){padding:16px 18px}
+.escalation-workspace .escalation-option-title>i{width:34px;height:34px}
+.escalation-workspace .escalation-option-title h4{font-size:16px}
+.escalation-workspace .escalation-option-title p{font-size:12px;line-height:1.4}
+.escalation-workspace .escalation-snapshot-fields>div{padding:11px 12px}
+.escalation-workspace .escalation-snapshot-fields dt{font-size:10px}
+.escalation-workspace .escalation-snapshot-fields dd{font-size:13px}
+.escalation-workspace .coord-table .coord-row{padding:13px 15px}
+.escalation-workspace .coord-row-conf{font-size:14px}
+.escalation-workspace .coord-row-sub{font-size:12px;line-height:1.5}
+.escalation-workspace .escalation-notification-time{font-size:11px}
+.escalation-workspace .escalation-desk-side .escalation-section{padding:20px}
+.escalation-workspace .escalation-desk-side .coord-field{font-size:13px}
+.escalation-workspace .escalation-desk-side .coord-field select,.escalation-workspace .escalation-desk-side .coord-field textarea,.escalation-workspace .escalation-desk-side .coord-field input{padding:11px 12px;font-size:14px}
+.escalation-workspace .escalation-desk-side .coord-btn-primary,.escalation-workspace .escalation-desk-side .coord-btn-secondary{padding:12px;font-size:13px}
+
+.escalation-history-pagination{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-top:4px}
+.escalation-history-pagination p{margin:0;color:#7f889e;font-size:13px}
+.escalation-history-pagination>div{display:flex;align-items:center;gap:8px}
+.escalation-history-pagination button{padding:8px 12px;border:1px solid #dfe3ec;border-radius:8px;background:#fff;color:#4f5870;font:inherit;font-size:13px;cursor:pointer}
+.escalation-history-pagination button:hover:not(:disabled){border-color:#7a32e8;color:#7130df}
+.escalation-history-pagination button:disabled{cursor:not-allowed;opacity:.45}
+.escalation-history-pagination span{min-width:48px;color:#697287;font-size:12px;text-align:center}
+
+@media(max-width:900px){.escalation-workspace .escalation-desk-layout{grid-template-columns:1fr}.escalation-history-pagination{align-items:flex-start;flex-direction:column}}

@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TravelDisruptionAgent.Api.Infrastructure.Data;
@@ -12,9 +13,11 @@ using TravelDisruptionAgent.Api.Infrastructure.Data;
 namespace TravelDisruptionAgent.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260902111014_UpdateHotelImages")]
+    partial class UpdateHotelImages
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -55,34 +58,6 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .HasDatabaseName("ix_alert_acknowledgements_alert_key_acknowledged_date");
 
                     b.ToTable("alert_acknowledgements", (string)null);
-                });
-
-            modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.AlternateOfferAudit", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<Guid>("CaseId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("case_id");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<Guid>("HotelId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("hotel_id");
-
-                    b.HasKey("Id")
-                        .HasName("pk_alternate_offer_audits");
-
-                    b.HasIndex("CaseId")
-                        .HasDatabaseName("ix_alternate_offer_audits_case_id");
-
-                    b.ToTable("alternate_offer_audits", (string)null);
                 });
 
             modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.Booking", b =>
@@ -309,42 +284,6 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .HasDatabaseName("ix_case_notes_case_id");
 
                     b.ToTable("case_notes", (string)null);
-                });
-
-            modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.CaseWorkflowStateHistory", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<Guid>("CaseId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("case_id");
-
-                    b.Property<DateTimeOffset?>("EndedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("ended_at");
-
-                    b.Property<DateTimeOffset>("StartedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("started_at");
-
-                    b.Property<string>("State")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("state");
-
-                    b.HasKey("Id")
-                        .HasName("pk_case_workflow_state_histories");
-
-                    b.HasIndex("CaseId", "StartedAt")
-                        .HasDatabaseName("ix_case_workflow_state_histories_case_id_started_at");
-
-                    b.HasIndex("State", "StartedAt", "EndedAt")
-                        .HasDatabaseName("ix_case_workflow_state_histories_state_started_at_ended_at");
-
-                    b.ToTable("case_workflow_state_histories", (string)null);
                 });
 
             modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.Disruption", b =>
@@ -1548,18 +1487,6 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .HasConstraintName("fk_case_notes_cases_case_id");
 
                     b.Navigation("Author");
-
-                    b.Navigation("Case");
-                });
-
-            modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.CaseWorkflowStateHistory", b =>
-                {
-                    b.HasOne("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.Case", "Case")
-                        .WithMany()
-                        .HasForeignKey("CaseId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_case_workflow_state_histories_cases_case_id");
 
                     b.Navigation("Case");
                 });

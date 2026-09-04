@@ -1,5 +1,7 @@
 using System.Text.Json;
+using TravelDisruptionAgent.Api.Features.Bookings;
 using TravelDisruptionAgent.Api.Features.Cases;
+using TravelDisruptionAgent.Api.Features.HotelPortal;
 using TravelDisruptionAgent.Api.Infrastructure.Data.Entities;
 using TravelDisruptionAgent.Api.Infrastructure.Email;
 
@@ -8,7 +10,7 @@ namespace TravelDisruptionAgent.Api.Features.Coordinator;
 // ponytail: 三选项的金额一律从酒店/房型表规则计算,不接 Gemini 生成数字(政策要求"不用文档搜索来查价",
 // 延伸到不用 AI 编数字);AI 预填目前体现为"自动生成结构化字段草稿,协调员改表单"这一步,
 // 真正调用 Gemini 润色话术留作后续增强,不在本任务强绑定,避免把金额正确性绑定到网络可用性上。
-public class OptionsAdminService(IOptionsAdminRepository repo, IEmailService email)
+public class OptionsAdminService(IOptionsAdminRepository repo, IBookingRepository bookingRepo, IEmailService email, IHotelRepository hotelRepo)
     : IOptionsAdminService
 {
     private static readonly string[] CanonicalTypes = ["defer", "alternate", "cancel"];
@@ -25,6 +27,26 @@ public class OptionsAdminService(IOptionsAdminRepository repo, IEmailService ema
         var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
                 Math.Cos(lat1 * Math.PI / 180) * Math.Cos(lat2 * Math.PI / 180) * Math.Sin(dLng / 2) * Math.Sin(dLng / 2);
         return r * 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+    }
+
+    // ponytail: 权重是拍脑袋定的启发式(没有真实客人反馈数据可标定)——距离按公里数直接算分,
+    // 容量差一档扣 5 分,每有一个共同 amenity 减 3 分,客人自己以前住过这家酒店减 20 分(强偏好信号),
+    // 价格只占很小的尾巴项当打平时的 tie-breaker。等有真实选择数据了再回来调这几个数字。
+    private static double ScoreAlternate(Hotel candidateHotel, RoomType candidateRoom, Hotel? originalHotel,
+        RoomType? originalRoom, HashSet<Guid> guestPreviousHotelIds)
+    {
+        var distanceKm = originalHotel is null
+            ? 0
+            : HaversineKm(originalHotel.Lat, originalHotel.Lng, candidateHotel.Lat, candidateHotel.Lng);
+        var capacityDiff = originalRoom is null ? 0 : Math.Abs(candidateRoom.Capacity - originalRoom.Capacity);
+        var amenityOverlap = originalRoom is null ? 0 : candidateRoom.Amenities.Intersect(originalRoom.Amenities).Count();
+        var stayedBeforeBonus = guestPreviousHotelIds.Contains(candidateHotel.Id) ? 1 : 0;
+
+        return distanceKm
+            + capacityDiff * 5
+            - amenityOverlap * 3
+            - stayedBeforeBonus * 20
+            + (double)candidateRoom.PriceAmount / 100;
     }
 
     private async Task<List<Option>> BuildDraftOptionsAsync(Case c, IEnumerable<string> typesToBuild, CancellationToken ct)
@@ -53,10 +75,23 @@ public class OptionsAdminService(IOptionsAdminRepository repo, IEmailService ema
 
         if (types.Contains("alternate"))
         {
-            var alt = await repo.FindCheapestAlternateAsync(booking.HotelId, ct);
+            var candidates = await repo.ListAlternateCandidatesAsync(booking.HotelId, ct);
+            var alreadyOfferedHotelIds = await repo.ListOfferedAlternateHotelIdsAsync(c.Id, ct);
+            // 排除已经推荐过的酒店；但如果候选已经被排到一个都不剩(比如就两三家在营酒店，
+            // 全被推荐过了)，宁可重复推荐也不要一个方案都不给客人。
+            var unseenCandidates = candidates.Where(cand => !alreadyOfferedHotelIds.Contains(cand.Hotel.Id)).ToList();
+            if (unseenCandidates.Count > 0) candidates = unseenCandidates;
+            (Hotel Hotel, RoomType RoomType)? alt = null;
+            if (candidates.Count > 0)
+            {
+                var previousHotelIds = (await bookingRepo.ListForGuestAsync(booking.GuestUserId, ct))
+                    .Select(b => b.HotelId).ToHashSet();
+                alt = candidates.MinBy(cand => ScoreAlternate(cand.Hotel, cand.RoomType, booking.Hotel, booking.RoomType, previousHotelIds));
+            }
             if (alt is not null)
             {
                 var (hotel, roomType) = alt.Value;
+                await repo.AddAlternateOfferAsync(c.Id, hotel.Id, ct);
                 var originalNightly = booking.RoomType?.PriceAmount ?? booking.TotalAmount / nights;
                 var feeDiff = Math.Round((roomType.PriceAmount - originalNightly) * nights, 2);
                 var distanceKm = booking.Hotel is not null
@@ -65,6 +100,7 @@ public class OptionsAdminService(IOptionsAdminRepository repo, IEmailService ema
                 var altPayload = JsonSerializer.Serialize(new
                 {
                     hotel = hotel.Name,
+                    hotel_id = hotel.Id,
                     room_type = roomType.Name,
                     fee_diff = feeDiff,
                     currency = booking.Currency,
@@ -80,8 +116,9 @@ public class OptionsAdminService(IOptionsAdminRepository repo, IEmailService ema
 
         if (types.Contains("cancel"))
         {
-            var cancellationFee = Math.Round(booking.TotalAmount * 0.1m, 2);
-            var refundAmount = booking.TotalAmount - cancellationFee;
+            var policy = await hotelRepo.GetActiveRefundPolicyAsync(booking.HotelId, ct);
+            var rules = RefundPolicyParser.Parse(policy?.StructuredRulesJson);
+            var (cancellationFee, refundAmount) = RefundPolicyParser.CalculateRefund(booking.TotalAmount, rules);
             var cancelPayload = JsonSerializer.Serialize(new
             {
                 refund_amount = refundAmount,
@@ -200,10 +237,33 @@ public class OptionsAdminService(IOptionsAdminRepository repo, IEmailService ema
         await repo.SaveChangesAsync(ct);
     }
 
+    public async Task<PushOptionsStatusDto> GetPushStatusAsync(Guid caseId, CancellationToken ct = default)
+    {
+        if (await repo.FindCaseStatusAsync(caseId, ct) is null) throw new CaseNotFoundException();
+        var latestOptionUpdate = await repo.FindLatestOptionUpdateAsync(caseId, ct);
+        var latestSuccess = await repo.FindLatestOptionsPushAsync(caseId, successfulOnly: true, ct);
+        var latestAttempt = await repo.FindLatestOptionsPushAsync(caseId, successfulOnly: false, ct);
+
+        if (latestOptionUpdate is not null && latestSuccess?.SentAt >= latestOptionUpdate)
+            return new PushOptionsStatusDto(false, "sent", latestSuccess.SentAt);
+        if (latestAttempt is not null && !latestAttempt.Success &&
+            (latestOptionUpdate is null || latestAttempt.SentAt >= latestOptionUpdate))
+            return new PushOptionsStatusDto(true, "retry", latestAttempt.SentAt);
+        if (latestSuccess is not null)
+            return new PushOptionsStatusDto(true, "updated", latestSuccess.SentAt);
+        return new PushOptionsStatusDto(true, "ready", latestAttempt?.SentAt);
+    }
+
     public async Task<PushOptionsResultDto> PushAsync(Guid caseId, CancellationToken ct = default)
     {
+        await using var transaction = await repo.BeginTransactionAsync(ct);
+        if (!await repo.LockCaseForUpdateAsync(caseId, ct)) throw new CaseNotFoundException();
         var c = await repo.FindCaseWithContextAsync(caseId, ct) ?? throw new CaseNotFoundException();
         if (c.Status == "closed") throw new CaseClosedException();
+        var latestOptionUpdate = await repo.FindLatestOptionUpdateAsync(caseId, ct);
+        var latestSuccess = await repo.FindLatestOptionsPushAsync(caseId, successfulOnly: true, ct);
+        if (latestOptionUpdate is null) throw new NoOptionsToPushException();
+        if (latestSuccess?.SentAt >= latestOptionUpdate) throw new OptionsAlreadyPushedException();
         var now = DateTimeOffset.UtcNow;
         var guest = c.Booking?.GuestUser;
         var success = true;
@@ -234,6 +294,10 @@ public class OptionsAdminService(IOptionsAdminRepository repo, IEmailService ema
         }
 
         await repo.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
         return new PushOptionsResultDto(success, now);
     }
 }
+
+public sealed class OptionsAlreadyPushedException : Exception { }
+public sealed class NoOptionsToPushException : Exception { }

@@ -341,26 +341,23 @@ export function HotelHomePage() {
   return (
     <AppShell centerContent={<HotelTopNav activeTab={tab} onSelectTab={setTab} />}>
       <div className="coord-home">
-        {isTaskTab && (
-          <div className="coord-tabs">
-            {TASK_TABS.map((t) => (
-              <button
-                key={t.key}
-                type="button"
-                className={`coord-tab ${tab === t.key ? "coord-tab-active" : ""}`}
-                onClick={() => setTab(t.key)}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-        )}
-
         <div className="coord-panel">
           {isTaskTab && (
-            <div className="coord-toolbar">
+            <div className="hotel-panel-toolbar">
+              <div className="coord-tabs">
+                {TASK_TABS.map((t) => (
+                  <button
+                    key={t.key}
+                    type="button"
+                    className={`coord-tab ${tab === t.key ? "coord-tab-active" : ""}`}
+                    onClick={() => setTab(t.key)}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
               <input
-                className="coord-search-input"
+                className="coord-search-input hotel-toolbar-search"
                 placeholder={
                   tab === "todo"
                     ? "Filter by confirmation no / guest / disruption / option type"
@@ -371,31 +368,45 @@ export function HotelHomePage() {
               />
             </div>
           )}
-          {tab === "todo" && syncedAt && (pendingInquiries.length > 0 || pendingOptions.length > 0) && (
-            <p className="coord-sync-indicator">
-              <span className="coord-sync-dot" aria-hidden="true" />
-              Synced {syncedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · refreshes every 30s
-            </p>
-          )}
           {tab === "todo" && (
-            <div className="coord-queue-stats">
-              <div className={`coord-stat-card ${todoStats.overdueCount > 0 ? "coord-stat-card-warn" : ""}`}>
-                <span className="coord-stat-label">Disruption requests</span>
-                <span className="coord-stat-value">{todoStats.h1Total}</span>
-                <span className="coord-stat-sub">
-                  {todoStats.overdueCount > 0 && <span className="hotel-overdue-dot" aria-hidden="true" />}
-                  {todoStats.overdueCount} overdue
-                </span>
+            <div className="hotel-dashboard-header">
+              <div className="hotel-dashboard-title">
+                <span className="hotel-dashboard-eyebrow">Live queue</span>
+                <h2>My to-dos</h2>
+                {syncedAt && (pendingInquiries.length > 0 || pendingOptions.length > 0) && (
+                  <p className="coord-sync-indicator">
+                    <span className="coord-sync-dot" aria-hidden="true" />
+                    Synced {syncedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · refreshes every 30s
+                  </p>
+                )}
               </div>
-              <div className="coord-stat-card">
-                <span className="coord-stat-label">Guest selections</span>
-                <span className="coord-stat-value">{todoStats.h2Total}</span>
-                <span className="coord-stat-sub">awaiting hotel confirmation</span>
-              </div>
-              <div className="coord-stat-card">
-                <span className="coord-stat-label">Returning guests</span>
-                <span className="coord-stat-value">{todoStats.returningCount}</span>
-                <span className="coord-stat-sub">across both queues</span>
+              <div className="hotel-dashboard-stats">
+                <div className={`hotel-stat-card ${todoStats.overdueCount > 0 ? "hotel-stat-card-urgent" : ""}`}>
+                  <span className="hotel-stat-icon" aria-hidden="true">⚠</span>
+                  <div>
+                    <span className="hotel-stat-value">{todoStats.h1Total}</span>
+                    <span className="hotel-stat-label">Disruption requests</span>
+                    {todoStats.overdueCount > 0 && (
+                      <span className="hotel-stat-badge hotel-stat-badge-urgent">{todoStats.overdueCount} overdue</span>
+                    )}
+                  </div>
+                </div>
+                <div className="hotel-stat-card">
+                  <span className="hotel-stat-icon" aria-hidden="true">👤</span>
+                  <div>
+                    <span className="hotel-stat-value">{todoStats.h2Total}</span>
+                    <span className="hotel-stat-label">Guest selections</span>
+                    <span className="hotel-stat-badge">awaiting confirmation</span>
+                  </div>
+                </div>
+                <div className="hotel-stat-card">
+                  <span className="hotel-stat-icon" aria-hidden="true">↺</span>
+                  <div>
+                    <span className="hotel-stat-value">{todoStats.returningCount}</span>
+                    <span className="hotel-stat-label">Returning guests</span>
+                    <span className="hotel-stat-badge">across queues</span>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -430,57 +441,62 @@ export function HotelHomePage() {
             </div>
           ) : tab === "todo" ? (
             <>
-              <h3>Pending requests</h3>
+              <h3 className="hotel-section-title">Pending requests</h3>
               {todoItems.length === 0 ? (
                 <p className="coord-empty">No pending requests.</p>
               ) : (
-                <div className="coord-table">
+                <div className="hotel-request-list">
                   {todoPage.paged.map((d) =>
                     d.kind === "inquiry" ? (
-                      <div key={`inq-${d.item.id}`} className={`coord-row ${d.item.overdue ? "coord-row-overdue" : ""}`}>
-                        <div className="coord-row-main">
-                          <p className="coord-row-title">
-                            <span className="coord-row-conf">{d.item.confirmationNo}</span>
-                            <span className="coord-row-conf">{d.item.guestNickname}</span>
-                            {d.item.guestCommitted && <span className="tag tag-status-warn">guest confirmed</span>}
-                            {d.item.isReturningGuest && <span className="tag tag-status-returning">returning</span>}
-                            {d.item.isHighValueGuest && <span className="tag tag-status-vip">high value</span>}
-                          </p>
-                          <p className="coord-row-sub">
-                            {d.item.disruptionTitle} · {d.item.roomTypeName} · {d.item.checkIn} → {d.item.checkOut}
-                          </p>
-                          {d.item.proposedNewCheckIn && d.item.proposedNewCheckOut && (
-                            <p className="coord-row-meta">
-                              {d.item.guestCommitted
-                                ? `Guest confirmed this deferral — on your approval it moves to ~${d.item.proposedNewCheckIn} → ${d.item.proposedNewCheckOut} (estimated)`
-                                : `If confirmed, deferred to ~${d.item.proposedNewCheckIn} → ${d.item.proposedNewCheckOut} (estimated)`}
+                      <div key={`inq-${d.item.id}`} className={`hotel-request-card ${d.item.overdue ? "hotel-request-card-urgent" : ""}`}>
+                        <div className="hotel-request-bar" aria-hidden="true" />
+                        <div className="hotel-request-body">
+                          <div className="hotel-request-main">
+                            <div className="hotel-request-title">
+                              <span className="hotel-request-conf">{d.item.confirmationNo}</span>
+                              <span className="hotel-request-guest">{d.item.guestNickname}</span>
+                              <div className="hotel-request-tags">
+                                {d.item.guestCommitted && <span className="tag tag-status-warn">guest confirmed</span>}
+                                {d.item.isReturningGuest && <span className="tag tag-status-returning">returning</span>}
+                                {d.item.isHighValueGuest && <span className="tag tag-status-vip">high value</span>}
+                              </div>
+                            </div>
+                            <p className="hotel-request-subtitle">
+                              {d.item.disruptionTitle} · {d.item.roomTypeName} · {d.item.checkIn} → {d.item.checkOut}
                             </p>
-                          )}
-                          {d.item.overdue && <p className="coord-row-meta">overdue — please respond soon</p>}
-                        </div>
-                        <div className="coord-row-actions">
-                          <button
-                            type="button"
-                            className="coord-btn-link"
-                            disabled={busyId === d.item.id}
-                            onClick={() => void confirmInquiry(d.item.id)}
-                          >
-                            {busyId === d.item.id ? "Confirming…" : "Confirm deferral"}
-                          </button>
-                          <button
-                            type="button"
-                            className="coord-btn-link"
-                            onClick={() => setCustomOptionTarget({ caseId: d.item.caseId, confirmationNo: d.item.confirmationNo })}
-                          >
-                            + Offer custom option
-                          </button>
-                          <button
-                            type="button"
-                            className="coord-btn-link coord-btn-danger"
-                            onClick={() => setRejectTarget({ kind: "inquiry", id: d.item.id, label: d.item.confirmationNo })}
-                          >
-                            Reject
-                          </button>
+                            {d.item.proposedNewCheckIn && d.item.proposedNewCheckOut && (
+                              <p className="hotel-request-meta">
+                                {d.item.guestCommitted
+                                  ? `Guest confirmed this deferral — on your approval it moves to ~${d.item.proposedNewCheckIn} → ${d.item.proposedNewCheckOut} (estimated)`
+                                  : `If confirmed, deferred to ~${d.item.proposedNewCheckIn} → ${d.item.proposedNewCheckOut} (estimated)`}
+                              </p>
+                            )}
+                            {d.item.overdue && <p className="hotel-request-alert">overdue — please respond soon</p>}
+                          </div>
+                          <div className="hotel-request-actions">
+                            <button
+                              type="button"
+                              className="hotel-btn-primary"
+                              disabled={busyId === d.item.id}
+                              onClick={() => void confirmInquiry(d.item.id)}
+                            >
+                              {busyId === d.item.id ? "Confirming…" : "Confirm deferral"}
+                            </button>
+                            <button
+                              type="button"
+                              className="hotel-btn-secondary"
+                              onClick={() => setCustomOptionTarget({ caseId: d.item.caseId, confirmationNo: d.item.confirmationNo })}
+                            >
+                              + Custom option
+                            </button>
+                            <button
+                              type="button"
+                              className="hotel-btn-danger"
+                              onClick={() => setRejectTarget({ kind: "inquiry", id: d.item.id, label: d.item.confirmationNo })}
+                            >
+                              Reject
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ) : (
@@ -488,45 +504,50 @@ export function HotelHomePage() {
                         const o = d.item;
                         const payload = parsePayload(o.payloadJson);
                         return (
-                          <div key={`opt-${o.optionId}`} className="coord-row">
-                            <div className="coord-row-main">
-                              <p className="coord-row-title">
-                                <span className="coord-row-conf">{o.confirmationNo}</span>
-                                <span className="coord-row-conf">{o.guestNickname}</span>
-                                {o.isReturningGuest && <span className="tag tag-status-returning">returning</span>}
-                                {o.isHighValueGuest && <span className="tag tag-status-vip">high value</span>}
-                              </p>
-                              <p className="coord-row-sub">
-                                {o.optionType}
-                                {payload.room_type ? ` · ${payload.room_type}` : ""}
-                              </p>
-                            </div>
-                            <div className="coord-row-actions">
-                              <button
-                                type="button"
-                                className="coord-btn-link"
-                                disabled={busyId === o.optionId}
-                                onClick={() => void confirmOption(o.optionId)}
-                              >
-                                {busyId === o.optionId ? "Confirming…" : "Confirm availability"}
-                              </button>
-                              <button type="button" className="coord-btn-link" onClick={() => setPerksTarget(o)}>
-                                Add perks{o.perkNames.length > 0 ? ` (${o.perkNames.length})` : ""}
-                              </button>
-                              <button
-                                type="button"
-                                className="coord-btn-link"
-                                onClick={() => setCustomOptionTarget({ caseId: o.caseId, confirmationNo: o.confirmationNo })}
-                              >
-                                + Offer custom option
-                              </button>
-                              <button
-                                type="button"
-                                className="coord-btn-link coord-btn-danger"
-                                onClick={() => setRejectTarget({ kind: "option", id: o.optionId, label: o.confirmationNo })}
-                              >
-                                Reject
-                              </button>
+                          <div key={`opt-${o.optionId}`} className="hotel-request-card">
+                            <div className="hotel-request-bar hotel-request-bar-option" aria-hidden="true" />
+                            <div className="hotel-request-body">
+                              <div className="hotel-request-main">
+                                <div className="hotel-request-title">
+                                  <span className="hotel-request-conf">{o.confirmationNo}</span>
+                                  <span className="hotel-request-guest">{o.guestNickname}</span>
+                                  <div className="hotel-request-tags">
+                                    {o.isReturningGuest && <span className="tag tag-status-returning">returning</span>}
+                                    {o.isHighValueGuest && <span className="tag tag-status-vip">high value</span>}
+                                  </div>
+                                </div>
+                                <p className="hotel-request-subtitle">
+                                  {o.optionType}
+                                  {payload.room_type ? ` · ${payload.room_type}` : ""}
+                                </p>
+                              </div>
+                              <div className="hotel-request-actions">
+                                <button
+                                  type="button"
+                                  className="hotel-btn-primary"
+                                  disabled={busyId === o.optionId}
+                                  onClick={() => void confirmOption(o.optionId)}
+                                >
+                                  {busyId === o.optionId ? "Confirming…" : "Confirm availability"}
+                                </button>
+                                <button type="button" className="hotel-btn-secondary" onClick={() => setPerksTarget(o)}>
+                                  Add perks{o.perkNames.length > 0 ? ` (${o.perkNames.length})` : ""}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="hotel-btn-secondary"
+                                  onClick={() => setCustomOptionTarget({ caseId: o.caseId, confirmationNo: o.confirmationNo })}
+                                >
+                                  + Custom option
+                                </button>
+                                <button
+                                  type="button"
+                                  className="hotel-btn-danger"
+                                  onClick={() => setRejectTarget({ kind: "option", id: o.optionId, label: o.confirmationNo })}
+                                >
+                                  Reject
+                                </button>
+                              </div>
                             </div>
                           </div>
                         );
@@ -539,38 +560,49 @@ export function HotelHomePage() {
             </>
           ) : tab === "done" ? (
             <>
-              <div className="coord-queue-stats">
-                <div className="coord-stat-card">
-                  <span className="coord-stat-label">Disruption requests answered</span>
-                  <span className="coord-stat-value">{doneInquiries.length}</span>
-                  <span className="coord-stat-sub">
-                    {doneStats.acceptedCount} accepted · {doneStats.rejectedCount} rejected
-                  </span>
+              <div className="hotel-dashboard-header">
+                <div className="hotel-dashboard-title">
+                  <span className="hotel-dashboard-eyebrow">Audit trail</span>
+                  <h2>Done</h2>
                 </div>
-                <div className="coord-stat-card">
-                  <span className="coord-stat-label">Guest selections resolved</span>
-                  <span className="coord-stat-value">{doneOptions.length}</span>
-                  <span className="coord-stat-sub">
-                    {doneStats.availableCount} confirmed · {doneStats.unavailableCount} declined
-                  </span>
-                </div>
-                <div className="coord-stat-card coord-stat-card-wide coord-queue-reason-card">
-                  <span className="coord-stat-label">Outcome breakdown</span>
-                  {doneStats.byOutcome.length === 0 ? (
-                    <span className="coord-stat-sub">Nothing resolved yet — outcomes will chart here once you do.</span>
-                  ) : (
-                    <div className="coord-queue-reason-bars">
-                      {doneStats.byOutcome.map(([label, count]) => (
-                        <div key={label} className="coord-queue-reason-row">
-                          <span className="coord-queue-reason-label">{label}</span>
-                          <div className="coord-queue-reason-track">
-                            <div className="coord-queue-reason-fill" style={{ width: `${(count / doneStats.total) * 100}%` }} />
-                          </div>
-                          <span className="coord-queue-reason-count">{count}</span>
-                        </div>
-                      ))}
+                <div className="hotel-dashboard-stats">
+                  <div className="hotel-stat-card">
+                    <span className="hotel-stat-icon" aria-hidden="true">✓</span>
+                    <div>
+                      <span className="hotel-stat-value">{doneInquiries.length}</span>
+                      <span className="hotel-stat-label">Disruption requests answered</span>
+                      <span className="hotel-stat-badge">{doneStats.acceptedCount} accepted · {doneStats.rejectedCount} rejected</span>
                     </div>
-                  )}
+                  </div>
+                  <div className="hotel-stat-card">
+                    <span className="hotel-stat-icon" aria-hidden="true">★</span>
+                    <div>
+                      <span className="hotel-stat-value">{doneOptions.length}</span>
+                      <span className="hotel-stat-label">Guest selections resolved</span>
+                      <span className="hotel-stat-badge">{doneStats.availableCount} confirmed · {doneStats.unavailableCount} declined</span>
+                    </div>
+                  </div>
+                  <div className="hotel-stat-card hotel-stat-card-wide">
+                    <span className="hotel-stat-icon" aria-hidden="true">◎</span>
+                    <div>
+                      <span className="hotel-stat-label">Outcome breakdown</span>
+                      {doneStats.byOutcome.length === 0 ? (
+                        <span className="hotel-stat-badge">Nothing resolved yet — outcomes will chart here once you do.</span>
+                      ) : (
+                        <div className="hotel-outcome-bars">
+                          {doneStats.byOutcome.map(([label, count]) => (
+                            <div key={label} className="hotel-outcome-row">
+                              <span className="hotel-outcome-label">{label}</span>
+                              <div className="hotel-outcome-track">
+                                <div className="hotel-outcome-fill" style={{ width: `${(count / doneStats.total) * 100}%` }} />
+                              </div>
+                              <span className="hotel-outcome-count">{count}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
               {doneInquiries.length + doneOptions.length === 0 ? (
@@ -602,32 +634,37 @@ export function HotelHomePage() {
                 </div>
               ) : (
                 <>
-              <h3>Processed requests</h3>
+              <h3 className="hotel-section-title">Processed requests</h3>
               {doneItems.length === 0 ? (
                 <p className="coord-empty">
                   {taskFilter.trim() ? "No processed requests match your filter." : "No processed requests yet."}
                 </p>
               ) : (
-                <div className="coord-table">
+                <div className="hotel-request-list">
                   {donePage.paged.map((d) => (
-                    <div key={d.id} className="coord-row">
-                      <div className="coord-row-main">
-                        <p className="coord-row-title">
-                          <span className="coord-row-conf">{d.confirmationNo}</span>
-                          <span className="coord-row-conf">{d.guestNickname}</span>
-                          {d.isReturningGuest && <span className="tag tag-status-returning">returning</span>}
-                          {d.isHighValueGuest && <span className="tag tag-status-vip">high value</span>}
-                        </p>
-                        <p className="coord-row-sub">
-                          {d.label} ·{" "}
-                          <span className={`tag tag-status-${d.statusTag === "accepted" || d.statusTag === "confirmed" ? "normal" : "overdue"}`}>
-                            {d.statusTag}
-                          </span>
-                          {timeAgo(d.timestamp) && <span className="coord-row-meta"> · {timeAgo(d.timestamp)}</span>}
-                        </p>
-                        {d.reason && <p className="coord-row-meta">Reason: {d.reason}</p>}
-                        {d.dateInfo && <p className="coord-row-meta">{d.dateInfo}</p>}
-                        {d.finalOutcome && <p className="coord-row-meta coord-row-meta-warn">{d.finalOutcome}</p>}
+                    <div key={d.id} className={`hotel-request-card ${d.statusTag === "rejected" || d.statusTag === "declined" ? "hotel-request-card-muted" : ""}`}>
+                      <div className="hotel-request-bar hotel-request-bar-done" aria-hidden="true" />
+                      <div className="hotel-request-body">
+                        <div className="hotel-request-main">
+                          <div className="hotel-request-title">
+                            <span className="hotel-request-conf">{d.confirmationNo}</span>
+                            <span className="hotel-request-guest">{d.guestNickname}</span>
+                            <div className="hotel-request-tags">
+                              {d.isReturningGuest && <span className="tag tag-status-returning">returning</span>}
+                              {d.isHighValueGuest && <span className="tag tag-status-vip">high value</span>}
+                              <span className={`tag tag-status-${d.statusTag === "accepted" || d.statusTag === "confirmed" ? "normal" : "overdue"}`}>
+                                {d.statusTag}
+                              </span>
+                            </div>
+                          </div>
+                          <p className="hotel-request-subtitle">
+                            {d.label}
+                            {timeAgo(d.timestamp) && <span className="hotel-request-meta"> · {timeAgo(d.timestamp)}</span>}
+                          </p>
+                          {d.reason && <p className="hotel-request-meta">Reason: {d.reason}</p>}
+                          {d.dateInfo && <p className="hotel-request-meta">{d.dateInfo}</p>}
+                          {d.finalOutcome && <p className="hotel-request-alert">{d.finalOutcome}</p>}
+                        </div>
                       </div>
                     </div>
                   ))}

@@ -66,3 +66,15 @@ export async function apiDelete<T>(path: string, options?: ApiOptions): Promise<
   handle401(res, skipAuthRedirect);
   return res.json() as Promise<ApiResponse<T>>;
 }
+
+export async function apiPostMultipart<T>(path: string, formData: FormData, options?: ApiOptions): Promise<ApiResponse<T>> {
+  const { skipAuthRedirect, ...init } = options ?? {};
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    ...init,
+    method: "POST",
+    credentials: "include",
+    body: formData,
+  });
+  handle401(res, skipAuthRedirect);
+  return res.json() as Promise<ApiResponse<T>>;
+}

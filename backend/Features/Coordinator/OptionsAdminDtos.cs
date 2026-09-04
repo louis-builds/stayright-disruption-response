@@ -14,3 +14,5 @@ public record UnlockOptionRequest(string Reason);
 public record SetVisibilityRequest(bool? Visible);
 
 public record PushOptionsResultDto(bool Success, DateTimeOffset SentAt);
+
+public record PushOptionsStatusDto(bool CanPush, string State, DateTimeOffset? LastAttemptAt);

@@ -18,3 +18,27 @@
 .tg-shell-context{display:flex;flex-direction:column;gap:2px}.tg-shell-context small{color:#969aaa;font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase}.tg-shell-context strong{color:#202438;font-size:14px}.tg-shell-topbar>form{height:36px;border-radius:18px;padding-inline:14px}.tg-shell-actions{padding-left:18px;border-left:1px solid #eceef3}
 .tg-shell-online{color:#12a982;font-size:10px;font-weight:600;white-space:nowrap}
 @media(max-width:900px){.tg-shell{grid-template-columns:70px minmax(0,1fr)}}@media(max-width:640px){.tg-shell{grid-template-columns:1fr}}
+
+.tg-settings-backdrop{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(16,22,39,.38);backdrop-filter:blur(3px)}
+.tg-settings-dialog{width:min(560px,100%);overflow:hidden;border:1px solid #e4e6ee;border-radius:20px;background:#fff;box-shadow:0 24px 70px rgba(24,20,45,.22);animation:tg-settings-in .18s ease-out}
+.tg-settings-dialog>header{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding:24px 26px 20px;border-bottom:1px solid #eceef3}
+.tg-settings-dialog>header small{display:block;margin-bottom:5px;color:#7631ed;font-size:10px;font-weight:800;letter-spacing:.08em}
+.tg-settings-dialog>header h2{margin:0;color:#181d32;font-size:22px;line-height:1.25}
+.tg-settings-dialog>header p{margin:7px 0 0;color:#858ba0;font-size:13px}
+.tg-settings-dialog>header button{display:grid;place-items:center;flex:0 0 auto;width:34px;height:34px;border:0;border-radius:10px;background:#f4f1fb;color:#6e35de;font-size:24px;line-height:1;cursor:pointer}
+.tg-settings-dialog>header button:hover{background:#eae1fc}
+.tg-settings-content{padding:22px 26px 26px}
+.tg-settings-content .coord-table{border:0;background:transparent}
+.tg-settings-content .coord-row{display:block;padding:0;border:0}
+.tg-settings-content .coord-row-main{max-width:none!important}
+.tg-settings-content .coord-field{gap:8px;color:#202438;font-size:13px;font-weight:700}
+.tg-settings-content .coord-field input[type="number"]{width:100%;box-sizing:border-box;margin-top:2px;padding:11px 12px;border:1px solid #dfe3ec;border-radius:10px;background:#fafbfc;color:#202438;font-size:15px}
+.tg-settings-content .coord-field input[type="number"]:focus{outline:none;border-color:#8138ee;box-shadow:0 0 0 3px rgba(129,56,238,.12)}
+.tg-settings-content .coord-field input[type="checkbox"]{width:18px;height:18px;accent-color:#7932eb}
+.tg-settings-content .coord-row-meta{color:#858ba0;font-size:12px;line-height:1.55}
+.tg-settings-content .coord-row-actions{display:flex;align-items:center;justify-content:flex-end;gap:12px;margin-top:22px;padding-top:18px;border-top:1px solid #eceef3}
+.tg-settings-content .coord-btn-primary{min-width:110px;padding:10px 18px;border:0;border-radius:10px;background:#782ce9;color:#fff;font-weight:800;cursor:pointer}
+.tg-settings-content .coord-btn-primary:hover{background:#6822d4}
+.tg-settings-content .coord-btn-primary:disabled{opacity:.55;cursor:default}
+@keyframes tg-settings-in{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
+@media(max-width:640px){.tg-settings-backdrop{align-items:flex-end;padding:12px}.tg-settings-dialog{border-radius:18px}.tg-settings-dialog>header,.tg-settings-content{padding-left:20px;padding-right:20px}}

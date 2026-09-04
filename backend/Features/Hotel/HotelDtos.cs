@@ -31,11 +31,11 @@ public record HotelWorkbenchItemDto(
     string Kind, Guid CaseId, string ConfirmationNo, string GuestNickname, string DisruptionTitle,
     string Status, DateTimeOffset RequestedAt, TimeSpan WaitTime, bool Overdue);
 
-public record HotelProfileDto(Guid Id, string Name, string Address, double Lat, double Lng, List<RoomTypeDto> RoomTypes, List<HotelPerkDto> Perks);
+public record HotelProfileDto(Guid Id, string Name, string Address, double Lat, double Lng, List<string> ImageUrls, int PrimaryImageIndex, List<RoomTypeDto> RoomTypes, List<HotelPerkDto> Perks);
 
 public record RoomTypeDto(Guid Id, string Name, string Description, List<string> Amenities, int Capacity, decimal PriceAmount, string Currency, List<string> ImageUrls);
 
-public record UpdateHotelProfileRequest(string Name, string Address, double Lat, double Lng);
+public record UpdateHotelProfileRequest(string Name, string Address, double Lat, double Lng, List<string> ImageUrls, int PrimaryImageIndex);
 
 public record UpsertRoomTypeRequest(string Name, string Description, List<string> Amenities, int Capacity, decimal PriceAmount, string Currency, List<string> ImageUrls);
 
@@ -46,3 +46,26 @@ public record AddHotelPerkRequest(string Name);
 public record SetOptionPerksRequest(List<string> PerkNames);
 
 public record CreateCustomOptionRequest(string Title, List<string> PerkNames);
+
+public record HotelRefundPolicyDto(
+    Guid Id, string Content, string? StructuredRulesJson,
+    DateTimeOffset? EffectiveFrom, DateTimeOffset? EffectiveUntil,
+    bool IsActive, DateTimeOffset UpdatedAt);
+
+public record UpsertHotelRefundPolicyRequest(
+    string Content, string? StructuredRulesJson,
+    DateTimeOffset? EffectiveFrom, DateTimeOffset? EffectiveUntil,
+    bool IsActive);
+
+public record UploadRefundPolicyFileRequest(
+    string? StructuredRulesJson,
+    DateTimeOffset? EffectiveFrom, DateTimeOffset? EffectiveUntil);
+
+// 从政策自由文本提取结构化规则的预填请求/响应。响应里政策没提到的字段为 null，
+// 前端只回填非 null 字段，其余保持表单现状，绝不拿 AI 的猜测覆盖酒店人员的输入。
+// AiUsed=false 表示 LLM 不可用、走了本地正则兜底，前端据此提示"预填可能不完整"。
+public record ExtractRefundRulesRequest(string Content);
+
+public record ExtractedRefundRulesDto(
+    int? FreeCancellationHours, decimal? CancellationFeePercent,
+    decimal? CancellationFeeFixed, string? Currency, bool AiUsed);

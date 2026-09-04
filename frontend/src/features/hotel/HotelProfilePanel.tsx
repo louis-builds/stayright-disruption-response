@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { MapPicker } from "../auth/MapPicker";
 import * as api from "./api";
-import type { HotelPerk, HotelProfile, RoomType } from "./types";
+import type { HotelPerk, HotelProfile, RoomType, UpsertHotelRefundPolicyRequest } from "./types";
 
 const EMPTY_ROOM_TYPE = { name: "", description: "", amenities: [] as string[], capacity: 2, priceAmount: 0, currency: "NZD", imageUrls: [] as string[] };
 
@@ -22,6 +22,225 @@ function PhotoLightbox({ url, onClose }: { url: string; onClose: () => void }) {
       <img src={url} alt="Room photo full size" className="hotel-lightbox-img" onClick={(e) => e.stopPropagation()} />
       <button type="button" className="hotel-lightbox-close" onClick={onClose} aria-label="Close preview">
         ×
+      </button>
+    </div>
+  );
+}
+
+/** datetime-local 的 placeholder 会跟系统语言走（中文系统显示“年/月/日”），改成 text + placeholder 才能稳定英文。 */
+function formatDateTimeForInput(iso?: string): string {
+  return iso ? iso.slice(0, 16).replace("T", " ") : "";
+}
+
+function parseDateTimeInput(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const normalized = trimmed.replace(" ", "T");
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(normalized)) return null;
+  if (isNaN(new Date(normalized).getTime())) return null;
+  return normalized;
+}
+
+function RefundPolicySection() {
+  const [content, setContent] = useState("");
+  const [effectiveFrom, setEffectiveFrom] = useState("");
+  const [effectiveUntil, setEffectiveUntil] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+  const [extractStatus, setExtractStatus] = useState<"idle" | "extracting" | "done" | "error">("idle");
+  const [dragOver, setDragOver] = useState(false);
+
+  useEffect(() => {
+    api
+      .fetchRefundPolicy()
+      .then((res) => {
+        if (res.code === 0 && res.data) {
+          setContent(res.data.content);
+          setEffectiveFrom(formatDateTimeForInput(res.data.effectiveFrom));
+          setEffectiveUntil(formatDateTimeForInput(res.data.effectiveUntil));
+        }
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function uploadFile(file: File) {
+    const validExts = [".md", ".txt", ".pdf", ".docx"];
+    if (!validExts.some((ext) => file.name.toLowerCase().endsWith(ext))) {
+      setError("Only .pdf, .docx, .md and .txt files are supported.");
+      return;
+    }
+
+    const parsedFrom = parseDateTimeInput(effectiveFrom);
+    if (effectiveFrom.trim() && !parsedFrom) {
+      setError("Effective from must be in YYYY-MM-DD HH:mm format.");
+      return;
+    }
+    const parsedUntil = parseDateTimeInput(effectiveUntil);
+    if (effectiveUntil.trim() && !parsedUntil) {
+      setError("Effective until must be in YYYY-MM-DD HH:mm format.");
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    setExtractStatus("extracting");
+    try {
+      const res = await api.uploadRefundPolicyFile(file, {
+        effectiveFrom: parsedFrom || undefined,
+        effectiveUntil: parsedUntil || undefined,
+        isActive: true,
+      });
+      if (res.code === 0 && res.data) {
+        setContent(res.data.content);
+        setEffectiveFrom(formatDateTimeForInput(res.data.effectiveFrom));
+        setEffectiveUntil(formatDateTimeForInput(res.data.effectiveUntil));
+        setUploadedFileName(file.name);
+        setExtractStatus("done");
+        setSuccess(true);
+        setTimeout(() => setSuccess(false), 2000);
+      } else {
+        setError(res.message || "Failed to upload policy file.");
+        setExtractStatus("error");
+      }
+    } catch {
+      setError("Failed to upload policy file.");
+      setExtractStatus("error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleFileChange(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    void uploadFile(files[0]);
+  }
+
+  function handleDrop(e: React.DragEvent<HTMLLabelElement>) {
+    e.preventDefault();
+    setDragOver(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      void uploadFile(e.dataTransfer.files[0]);
+    }
+  }
+
+  async function save() {
+    setError(null);
+    setSuccess(false);
+
+    const parsedFrom = parseDateTimeInput(effectiveFrom);
+    if (effectiveFrom.trim() && !parsedFrom) {
+      setError("Effective from must be in YYYY-MM-DD HH:mm format.");
+      return;
+    }
+    const parsedUntil = parseDateTimeInput(effectiveUntil);
+    if (effectiveUntil.trim() && !parsedUntil) {
+      setError("Effective until must be in YYYY-MM-DD HH:mm format.");
+      return;
+    }
+
+    const body: UpsertHotelRefundPolicyRequest = {
+      content,
+      effectiveFrom: parsedFrom || undefined,
+      effectiveUntil: parsedUntil || undefined,
+      isActive: true,
+    };
+
+    setSaving(true);
+    const res = await api.updateRefundPolicy(body);
+    setSaving(false);
+
+    if (res.code === 0) {
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 2000);
+    } else {
+      setError(res.message || "Failed to save policy.");
+    }
+  }
+
+  if (loading) return <p className="coord-empty">Loading refund policy…</p>;
+
+  return (
+    <div className="hotel-profile-card">
+      <div className="hotel-profile-card-header">
+        <span className="hotel-profile-card-eyebrow">Policy</span>
+        <h3>Cancellation & refund policy</h3>
+        <p className="hotel-profile-card-caption">
+          Upload your policy document or type it below. Guests will see this content when they view your policy.
+        </p>
+      </div>
+
+      <div className="hotel-policy-upload-wrap">
+        <label
+          className={`hotel-policy-upload ${dragOver ? "hotel-policy-upload-dragover" : ""} ${extractStatus === "extracting" ? "hotel-policy-upload-busy" : ""}`}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={handleDrop}
+        >
+          <input type="file" accept=".md,.txt,.pdf,.docx" onChange={(e) => handleFileChange(e.target.files)} disabled={saving} hidden />
+          {extractStatus === "extracting" ? (
+            <>
+              <span className="hotel-policy-upload-icon">⧗</span>
+              <span className="hotel-policy-upload-title">Reading your document…</span>
+              <span className="hotel-policy-upload-hint">AI is extracting the text from {uploadedFileName ?? "the file"}.</span>
+            </>
+          ) : uploadedFileName && extractStatus === "done" ? (
+            <>
+              <span className="hotel-policy-upload-icon hotel-policy-upload-icon-success">✓</span>
+              <span className="hotel-policy-upload-title">{uploadedFileName}</span>
+              <span className="hotel-policy-upload-hint">AI has read your document. You can edit the text below or drop a new file to replace it.</span>
+            </>
+          ) : (
+            <>
+              <span className="hotel-policy-upload-icon">↑</span>
+              <span className="hotel-policy-upload-title">Drop your policy file here, or click to browse</span>
+              <span className="hotel-policy-upload-hint">Supports PDF, Word (.docx), Markdown and plain text. AI will read the file and fill in the form below.</span>
+            </>
+          )}
+        </label>
+      </div>
+
+      <label className="coord-field">
+        <span>Policy content (shown to guests)</span>
+        <textarea value={content} onChange={(e) => setContent(e.target.value)} rows={8} />
+      </label>
+
+      <p className="hotel-profile-card-caption">
+        Refund amounts are calculated automatically from this policy text by AI — no extra configuration needed.
+      </p>
+
+      <div className="hotel-profile-card-section">
+        <h4>Effective dates</h4>
+        <p className="hotel-profile-card-caption">Use 24-hour English format: YYYY-MM-DD HH:mm, e.g. 2026-09-15 14:30.</p>
+        <div className="option-admin-fields">
+          <label className="coord-field">
+            <span>Effective from</span>
+            <input
+              type="text"
+              placeholder="YYYY-MM-DD HH:mm"
+              value={effectiveFrom}
+              onChange={(e) => setEffectiveFrom(e.target.value)}
+            />
+          </label>
+          <label className="coord-field">
+            <span>Effective until</span>
+            <input
+              type="text"
+              placeholder="YYYY-MM-DD HH:mm"
+              value={effectiveUntil}
+              onChange={(e) => setEffectiveUntil(e.target.value)}
+            />
+          </label>
+        </div>
+      </div>
+
+      {error && <em className="register-field-error">{error}</em>}
+      {success && <p className="escalation-refund-confirmed">Saved.</p>}
+
+      <button type="button" className="coord-btn-primary hotel-policy-save" disabled={saving} onClick={() => void save()}>
+        {saving ? "Saving…" : "Save refund policy"}
       </button>
     </div>
   );
@@ -130,7 +349,7 @@ function RoomTypeCard({ roomType, onSave, onDelete }: {
             ))}
           </div>
         )}
-        <div className="coord-toolbar hotel-amenity-add">
+        <div className="hotel-perk-add">
           <input
             className="coord-search-input"
             placeholder="e.g. wifi, lake_view"
@@ -143,7 +362,7 @@ function RoomTypeCard({ roomType, onSave, onDelete }: {
               }
             }}
           />
-          <button type="button" className="coord-btn-secondary" onClick={addAmenity}>
+          <button type="button" className="hotel-btn-secondary" onClick={addAmenity}>
             + Add
           </button>
         </div>
@@ -175,11 +394,11 @@ function RoomTypeCard({ roomType, onSave, onDelete }: {
         </label>
         {imageError && <em className="register-field-error">{imageError}</em>}
       </div>
-      <div className="option-admin-actions">
-        <button type="button" className="coord-btn-secondary" disabled={!dirty || saving} onClick={() => void save()}>
-          {saving ? "Saving…" : "Save"}
+      <div className="hotel-room-type-actions">
+        <button type="button" className="hotel-btn-primary" disabled={!dirty || saving} onClick={() => void save()}>
+          {saving ? "Saving…" : "Save room type"}
         </button>
-        <button type="button" className="coord-btn-link coord-btn-danger" disabled={deleting} onClick={() => void remove()}>
+        <button type="button" className="hotel-btn-danger" disabled={deleting} onClick={() => void remove()}>
           {deleting ? "Deleting…" : "Delete"}
         </button>
       </div>
@@ -217,12 +436,14 @@ function PerksSection({ perks, onAdd, onDelete }: {
   }
 
   return (
-    <div className="escalation-section hotel-perks-section">
-      <h3>Perks</h3>
-      <p className="hotel-perks-hint">
-        Extras you can offer guests when a disruption hits — free breakfast, drinks, a room upgrade. Attach them to a
-        rebooking option or offer a brand-new custom option from the case's to-do row.
-      </p>
+    <div className="hotel-profile-card">
+      <div className="hotel-profile-card-header">
+        <span className="hotel-profile-card-eyebrow">Perks</span>
+        <h3>Perks catalog</h3>
+        <p className="hotel-profile-card-caption">
+          Extras you can offer guests when a disruption hits — free breakfast, drinks, a room upgrade.
+        </p>
+      </div>
       {perks.length === 0 ? (
         <p className="coord-empty">No perks yet — add your first one below so it's ready to attach to a rebooking option.</p>
       ) : (
@@ -241,7 +462,7 @@ function PerksSection({ perks, onAdd, onDelete }: {
                 <span>{p.name}</span>
                 <button
                   type="button"
-                  className="coord-btn-link coord-btn-danger"
+                  className="hotel-btn-danger"
                   disabled={busyId === p.id}
                   onClick={() => void remove(p.id)}
                 >
@@ -252,7 +473,7 @@ function PerksSection({ perks, onAdd, onDelete }: {
           </ul>
         </>
       )}
-      <div className="coord-toolbar">
+      <div className="hotel-perk-add">
         <input
           className="coord-search-input"
           placeholder="e.g. Free breakfast"
@@ -262,7 +483,7 @@ function PerksSection({ perks, onAdd, onDelete }: {
             if (e.key === "Enter") void submit();
           }}
         />
-        <button type="button" className="coord-btn-secondary" disabled={adding} onClick={() => void submit()}>
+        <button type="button" className="hotel-btn-secondary" disabled={adding} onClick={() => void submit()}>
           {adding ? "Adding…" : "+ Add perk"}
         </button>
       </div>
@@ -293,16 +514,172 @@ function RoomTypeSummaryCard({ roomType, onClick }: { roomType: RoomType; onClic
   );
 }
 
+type ProfileTab = "profile" | "hotel" | "rooms" | "policy" | "perks";
+
+const PROFILE_TABS: { key: ProfileTab; label: string }[] = [
+  { key: "profile", label: "Profile" },
+  { key: "hotel", label: "Hotel details" },
+  { key: "rooms", label: "Room types" },
+  { key: "policy", label: "Refund policy" },
+  { key: "perks", label: "Perks" },
+];
+
+type HotelStats = {
+  roomTypeCount: number;
+  priceMin: number;
+  priceMax: number;
+  currency: string;
+  capacityMin: number;
+  capacityMax: number;
+  totalPhotos: number;
+  perkCount: number;
+} | null;
+
+function HotelProfileOverview({
+  profile,
+  name,
+  address,
+  lat,
+  lng,
+  imageUrls,
+  primaryImageIndex,
+  stats,
+  onEdit,
+  onEditRooms,
+  onEditPerks,
+}: {
+  profile: HotelProfile;
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
+  imageUrls: string[];
+  primaryImageIndex: number;
+  stats: HotelStats;
+  onEdit: () => void;
+  onEditRooms: () => void;
+  onEditPerks: () => void;
+}) {
+  const displayedRooms = profile.roomTypes.slice(0, 3);
+  const moreRooms = profile.roomTypes.length > 3 ? profile.roomTypes.length - 3 : 0;
+  const primaryImage = imageUrls[primaryImageIndex] ?? imageUrls[0];
+
+  return (
+    <div className="hotel-profile-overview">
+      <div className="hotel-profile-hero">
+        <div className="hotel-profile-hero-main">
+          <div className="hotel-profile-hero-avatar">
+            {primaryImage ? (
+              <img src={primaryImage} alt={profile.name} />
+            ) : (
+              <span>{profile.name.charAt(0) || "H"}</span>
+            )}
+          </div>
+          <div className="hotel-profile-hero-body">
+            <h3>{name || "Unnamed hotel"}</h3>
+            <p>{address || "No address set"}</p>
+            <div className="hotel-profile-hero-meta">
+              <span>Lat: {lat.toFixed(4)}</span>
+              <span>Lng: {lng.toFixed(4)}</span>
+            </div>
+          </div>
+        </div>
+        <button type="button" className="hotel-btn-secondary" onClick={onEdit}>
+          Edit hotel details
+        </button>
+      </div>
+
+      <div className="hotel-profile-quick-stats">
+        <div className="hotel-quick-stat" onClick={onEditRooms} role="button" tabIndex={0}>
+          <span className="hotel-quick-stat-value">{profile.roomTypes.length}</span>
+          <span className="hotel-quick-stat-label">Room types</span>
+        </div>
+        <div className="hotel-quick-stat" onClick={onEditPerks} role="button" tabIndex={0}>
+          <span className="hotel-quick-stat-value">{profile.perks.length}</span>
+          <span className="hotel-quick-stat-label">Perks</span>
+        </div>
+        <div className="hotel-quick-stat" onClick={onEditRooms} role="button" tabIndex={0}>
+          <span className="hotel-quick-stat-value">{stats ? `${stats.currency} ${stats.priceMin}` : "—"}</span>
+          <span className="hotel-quick-stat-label">From / night</span>
+        </div>
+      </div>
+
+      <div className="hotel-profile-card">
+        <div className="hotel-profile-card-header">
+          <span className="hotel-profile-card-eyebrow">Rooms</span>
+          <h3>Room types</h3>
+        </div>
+        {displayedRooms.length === 0 ? (
+          <p className="coord-empty">No room types yet — add rooms so guests can book.</p>
+        ) : (
+          <div className="hotel-room-type-grid hotel-room-type-grid-compact">
+            {displayedRooms.map((r) => (
+              <RoomTypeSummaryCard key={r.id} roomType={r} onClick={onEditRooms} />
+            ))}
+            {moreRooms > 0 && (
+              <button type="button" className="hotel-room-type-more" onClick={onEditRooms}>
+                <span>+{moreRooms}</span>
+                <span>View all</span>
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="hotel-profile-card">
+        <div className="hotel-profile-card-header">
+          <span className="hotel-profile-card-eyebrow">Perks</span>
+          <h3>Perks catalog</h3>
+        </div>
+        {profile.perks.length === 0 ? (
+          <p className="coord-empty">No perks yet — add perks to offer during disruptions.</p>
+        ) : (
+          <div className="hotel-profile-perk-chips">
+            {profile.perks.slice(0, 8).map((p) => (
+              <span key={p.id} className="hotel-profile-perk-chip">{p.name}</span>
+            ))}
+            {profile.perks.length > 8 && (
+              <button type="button" className="hotel-profile-perk-chip-more" onClick={onEditPerks}>
+                +{profile.perks.length - 8} more
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function HotelProfileTabs({ active, onSelect }: { active: ProfileTab; onSelect: (t: ProfileTab) => void }) {
+  return (
+    <div className="hotel-profile-tabs">
+      {PROFILE_TABS.map((t) => (
+        <button
+          key={t.key}
+          type="button"
+          className={`hotel-profile-tab ${active === t.key ? "hotel-profile-tab-active" : ""}`}
+          onClick={() => onSelect(t.key)}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function HotelProfilePanel() {
   const [profile, setProfile] = useState<HotelProfile | null>(null);
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [lat, setLat] = useState(0);
   const [lng, setLng] = useState(0);
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [primaryImageIndex, setPrimaryImageIndex] = useState(0);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [addingRoomType, setAddingRoomType] = useState(false);
   const [editingRoomTypeId, setEditingRoomTypeId] = useState<string | null>(null);
+  const [tab, setTab] = useState<ProfileTab>("profile");
 
   const refresh = useCallback(async () => {
     const res = await api.fetchProfile();
@@ -312,6 +689,8 @@ export function HotelProfilePanel() {
       setAddress(res.data.address);
       setLat(res.data.lat);
       setLng(res.data.lng);
+      setImageUrls(res.data.imageUrls);
+      setPrimaryImageIndex(res.data.primaryImageIndex);
     }
   }, []);
 
@@ -327,10 +706,33 @@ export function HotelProfilePanel() {
 
   async function saveProfile() {
     setSaving(true);
-    await api.updateProfile(name, address, lat, lng);
+    await api.updateProfile(name, address, lat, lng, imageUrls, primaryImageIndex);
     setSaving(false);
     setSaved(true);
     await refresh();
+  }
+
+  async function handleHotelImageChange(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const newImages: string[] = [];
+    for (const file of [...files]) {
+      if (!file.type.startsWith("image/")) continue;
+      if (file.size > 2 * 1024 * 1024) continue;
+      const dataUrl = await readAsDataUrl(file);
+      newImages.push(dataUrl);
+    }
+    if (newImages.length === 0) return;
+    setImageUrls((prev) => [...prev, ...newImages]);
+  }
+
+  function removeHotelImage(index: number) {
+    setImageUrls((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      if (primaryImageIndex >= next.length && next.length > 0) {
+        setPrimaryImageIndex(0);
+      }
+      return next;
+    });
   }
 
   async function saveRoomType(id: string, r: Omit<RoomType, "id">) {
@@ -350,6 +752,7 @@ export function HotelProfilePanel() {
     await refresh();
     if (res.code === 0) {
       setEditingRoomTypeId(res.data.id);
+      setTab("rooms");
     }
   }
 
@@ -383,107 +786,195 @@ export function HotelProfilePanel() {
   if (!profile) return <p className="coord-empty">Loading…</p>;
 
   return (
-    <div className="hotel-profile-grid">
-      <div className="hotel-profile-col">
-        <div className="escalation-section">
-          <h3>Hotel details</h3>
-          <label className="coord-field">
-            <span>Name</span>
-            <input value={name} onChange={(e) => setName(e.target.value)} />
-          </label>
-          <label className="coord-field">
-            <span>Address</span>
-            <input value={address} onChange={(e) => setAddress(e.target.value)} />
-          </label>
-          <MapPicker
-            lat={lat}
-            lng={lng}
-            onPick={(newLat, newLng, newAddress) => {
-              setLat(newLat);
-              setLng(newLng);
-              if (newAddress) setAddress(newAddress);
-            }}
-          />
-          <button type="button" className="coord-btn-primary" disabled={saving} onClick={() => void saveProfile()}>
-            {saving ? "Saving…" : "Save hotel details"}
-          </button>
-          {saved && <p className="escalation-refund-confirmed">Saved.</p>}
+    <div className="hotel-profile-panel">
+      <div className="hotel-profile-panel-header">
+        <div>
+          <span className="hotel-profile-panel-eyebrow">Hotel profile</span>
+          <h2>Manage your hotel</h2>
         </div>
-
-        <PerksSection perks={profile.perks} onAdd={addPerk} onDelete={deletePerk} />
-
-        {stats && (
-          <div className="escalation-section">
-            <h3>Profile snapshot</h3>
-            <div className="coord-queue-stats hotel-profile-stats">
-              <div className="coord-stat-card">
-                <span className="coord-stat-label">Room types</span>
-                <span className="coord-stat-value">{stats.roomTypeCount}</span>
-                <span className="coord-stat-sub">{stats.totalPhotos} photos total</span>
-              </div>
-              <div className="coord-stat-card">
-                <span className="coord-stat-label">Price range</span>
-                <span className="coord-stat-value coord-stat-value-sm">
-                  {stats.currency} {stats.priceMin}–{stats.priceMax}
-                </span>
-                <span className="coord-stat-sub">per night</span>
-              </div>
-              <div className="coord-stat-card">
-                <span className="coord-stat-label">Capacity range</span>
-                <span className="coord-stat-value coord-stat-value-sm">
-                  {stats.capacityMin}–{stats.capacityMax} guests
-                </span>
-                <span className="coord-stat-sub">{stats.perkCount} perks in catalog</span>
-              </div>
-            </div>
-          </div>
-        )}
+        <p className="hotel-profile-panel-subtitle">
+          Your hotel at a glance. Edit details, rooms, refund policy and perks from the tabs below.
+        </p>
       </div>
 
-      <div className="escalation-section hotel-room-types-section">
-        <h3>Room types</h3>
-        {editingRoomTypeId ? (
-          <div className="hotel-room-type-editor">
-            <div className="hotel-room-type-editor-header">
+      <HotelProfileTabs active={tab} onSelect={setTab} />
+
+      <div className="hotel-profile-panel-body">
+        {tab === "profile" && (
+          <HotelProfileOverview
+            profile={profile}
+            name={name}
+            address={address}
+            lat={lat}
+            lng={lng}
+            imageUrls={imageUrls}
+            primaryImageIndex={primaryImageIndex}
+            stats={stats}
+            onEdit={() => setTab("hotel")}
+            onEditRooms={() => setTab("rooms")}
+            onEditPerks={() => setTab("perks")}
+          />
+        )}
+
+        {tab === "hotel" && (
+          <div className="hotel-profile-card">
+            <div className="hotel-profile-card-header">
+              <span className="hotel-profile-card-eyebrow">Hotel</span>
+              <h3>Hotel details</h3>
+              <p className="hotel-profile-card-caption">
+                Update your hotel name, address and location. The location pin is used to match disruptions near your property.
+              </p>
+            </div>
+            <div className="hotel-details-form">
+              <div className="hotel-details-fields">
+                <div className="hotel-details-image">
+                  <span className="hotel-details-image-label">Hotel photos</span>
+                  <p className="hotel-details-image-hint">
+                    Upload multiple photos. Click "Set as profile photo" to choose which one appears as the hotel avatar.
+                  </p>
+
+                  {imageUrls.length > 0 && (
+                    <div className="hotel-details-image-grid">
+                      {imageUrls.map((url, index) => (
+                        <div
+                          key={`${url}-${index}`}
+                          className={`hotel-details-image-thumb ${index === primaryImageIndex ? "hotel-details-image-thumb-primary" : ""}`}
+                        >
+                          <img src={url} alt={`Hotel photo ${index + 1}`} />
+                          {index === primaryImageIndex && (
+                            <span className="hotel-details-image-primary-badge">Profile photo</span>
+                          )}
+                          <div className="hotel-details-image-thumb-actions">
+                            {index !== primaryImageIndex && (
+                              <button
+                                type="button"
+                                className="hotel-btn-secondary"
+                                onClick={() => setPrimaryImageIndex(index)}
+                              >
+                                Set as profile
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="hotel-btn-danger"
+                              onClick={() => removeHotelImage(index)}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <label className="hotel-details-image-upload">
+                    <span>+ Upload photos</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={(e) => void handleHotelImageChange(e.target.files)}
+                      hidden
+                    />
+                  </label>
+                </div>
+
+                <label className="coord-field">
+                  <span>Hotel name</span>
+                  <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Queenstown Lakeview Hotel" />
+                </label>
+                <label className="coord-field">
+                  <span>Address</span>
+                  <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="e.g. 1 Lake Esplanade, Queenstown" />
+                </label>
+                <div className="hotel-details-coords">
+                  <label className="coord-field">
+                    <span>Latitude</span>
+                    <input value={lat} onChange={(e) => setLat(Number(e.target.value))} type="number" step="any" />
+                  </label>
+                  <label className="coord-field">
+                    <span>Longitude</span>
+                    <input value={lng} onChange={(e) => setLng(Number(e.target.value))} type="number" step="any" />
+                  </label>
+                </div>
+              </div>
+              <div className="hotel-details-map">
+                <span className="hotel-details-map-label">Location</span>
+                <MapPicker
+                  lat={lat}
+                  lng={lng}
+                  onPick={(newLat, newLng, newAddress) => {
+                    setLat(newLat);
+                    setLng(newLng);
+                    if (newAddress) setAddress(newAddress);
+                  }}
+                />
+                <p className="hotel-details-map-hint">Click the map or drag the marker to update coordinates.</p>
+              </div>
+            </div>
+            <div className="hotel-details-actions">
+              <button type="button" className="hotel-btn-primary" disabled={saving} onClick={() => void saveProfile()}>
+                {saving ? "Saving…" : "Save hotel details"}
+              </button>
+              {saved && <span className="hotel-details-saved">Saved successfully</span>}
+            </div>
+          </div>
+        )}
+
+        {tab === "rooms" && (
+          <div className="hotel-profile-card">
+            <div className="hotel-profile-card-header">
+              <span className="hotel-profile-card-eyebrow">Rooms</span>
+              <h3>Room types</h3>
+            </div>
+            {editingRoomTypeId ? (
+              <div className="hotel-room-type-editor">
+                <div className="hotel-room-type-editor-header">
+                  <button
+                    type="button"
+                    className="hotel-room-type-editor-back"
+                    onClick={() => setEditingRoomTypeId(null)}
+                  >
+                    ← Back to room types
+                  </button>
+                </div>
+                {(() => {
+                  const roomType = profile.roomTypes.find((r) => r.id === editingRoomTypeId);
+                  if (!roomType) return null;
+                  return (
+                    <RoomTypeCard
+                      roomType={roomType}
+                      onSave={(v) => saveRoomType(roomType.id, v)}
+                      onDelete={() => deleteRoomType(roomType.id)}
+                    />
+                  );
+                })()}
+              </div>
+            ) : profile.roomTypes.length === 0 ? (
+              <p className="coord-empty">No room types yet — add one so guests have something to book.</p>
+            ) : (
+              <div className="hotel-room-type-grid">
+                {profile.roomTypes.map((r) => (
+                  <RoomTypeSummaryCard key={r.id} roomType={r} onClick={() => setEditingRoomTypeId(r.id)} />
+                ))}
+              </div>
+            )}
+            {!editingRoomTypeId && (
               <button
                 type="button"
-                className="hotel-room-type-editor-back"
-                onClick={() => setEditingRoomTypeId(null)}
+                className="hotel-btn-secondary"
+                disabled={addingRoomType}
+                onClick={() => void addRoomType()}
               >
-                ← Back to room types
+                {addingRoomType ? "Adding…" : "+ Add room type"}
               </button>
-            </div>
-            {(() => {
-              const roomType = profile.roomTypes.find((r) => r.id === editingRoomTypeId);
-              if (!roomType) return null;
-              return (
-                <RoomTypeCard
-                  roomType={roomType}
-                  onSave={(v) => saveRoomType(roomType.id, v)}
-                  onDelete={() => deleteRoomType(roomType.id)}
-                />
-              );
-            })()}
-          </div>
-        ) : profile.roomTypes.length === 0 ? (
-          <p className="coord-empty">No room types yet — add one so guests have something to book.</p>
-        ) : (
-          <div className="hotel-room-type-grid">
-            {profile.roomTypes.map((r) => (
-              <RoomTypeSummaryCard key={r.id} roomType={r} onClick={() => setEditingRoomTypeId(r.id)} />
-            ))}
+            )}
           </div>
         )}
-        {!editingRoomTypeId && (
-          <button
-            type="button"
-            className="coord-btn-secondary"
-            disabled={addingRoomType}
-            onClick={() => void addRoomType()}
-          >
-            {addingRoomType ? "Adding…" : "+ Add room type"}
-          </button>
-        )}
+
+        {tab === "policy" && <RefundPolicySection />}
+
+        {tab === "perks" && <PerksSection perks={profile.perks} onAdd={addPerk} onDelete={deletePerk} />}
       </div>
     </div>
   );

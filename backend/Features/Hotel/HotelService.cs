@@ -1,10 +1,12 @@
+using System.Text.Json;
+using Microsoft.AspNetCore.Http;
 using TravelDisruptionAgent.Api.Features.Cases;
 using TravelDisruptionAgent.Api.Features.Coordinator;
 using TravelDisruptionAgent.Api.Infrastructure.Data.Entities;
 
 namespace TravelDisruptionAgent.Api.Features.HotelPortal;
 
-public class HotelService(IHotelRepository repo, ICaseService caseService, IOptionsAdminService optionsAdmin) : IHotelService
+public class HotelService(IHotelRepository repo, ICaseService caseService, IOptionsAdminService optionsAdmin, RefundPolicyRuleExtractor ruleExtractor) : IHotelService
 {
     // ponytail: 酒店响应超时阈值先写死 6 小时,没有单独配置项。
     private static readonly TimeSpan OverdueThreshold = TimeSpan.FromHours(6);
@@ -192,7 +194,7 @@ public class HotelService(IHotelRepository repo, ICaseService caseService, IOpti
     }
 
     private static HotelProfileDto ToProfileDto(TravelDisruptionAgent.Api.Infrastructure.Data.Entities.Hotel h, List<HotelPerk> perks) => new(
-        h.Id, h.Name, h.Address, h.Lat, h.Lng,
+        h.Id, h.Name, h.Address, h.Lat, h.Lng, h.ImageUrls, h.PrimaryImageIndex,
         [.. h.RoomTypes.Select(r => new RoomTypeDto(r.Id, r.Name, r.Description, r.Amenities, r.Capacity, r.PriceAmount, r.Currency, r.ImageUrls))],
         [.. perks.Select(p => new HotelPerkDto(p.Id, p.Name))]);
 
@@ -204,6 +206,8 @@ public class HotelService(IHotelRepository repo, ICaseService caseService, IOpti
         hotel.Address = request.Address;
         hotel.Lat = request.Lat;
         hotel.Lng = request.Lng;
+        hotel.ImageUrls = request.ImageUrls;
+        hotel.PrimaryImageIndex = request.PrimaryImageIndex;
         hotel.UpdatedAt = DateTimeOffset.UtcNow;
         await repo.SaveChangesAsync(ct);
     }
@@ -254,6 +258,63 @@ public class HotelService(IHotelRepository repo, ICaseService caseService, IOpti
         await repo.SaveChangesAsync(ct);
         return new HotelPerkDto(perk.Id, perk.Name);
     }
+
+    public async Task<HotelRefundPolicyDto?> GetRefundPolicyAsync(Guid hotelUserId, CancellationToken ct = default)
+    {
+        var hotelId = await RequireHotelIdAsync(hotelUserId, ct);
+        var policy = await repo.GetActiveRefundPolicyAsync(hotelId, ct);
+        return policy is null ? null : ToRefundPolicyDto(policy);
+    }
+
+    public async Task<HotelRefundPolicyDto> UpsertRefundPolicyAsync(Guid hotelUserId, UpsertHotelRefundPolicyRequest request, CancellationToken ct = default)
+    {
+        var hotelId = await RequireHotelIdAsync(hotelUserId, ct);
+        RefundPolicyParser.Validate(request.StructuredRulesJson);
+        var policy = await repo.UpsertRefundPolicyAsync(hotelId, await WithAutoExtractedRulesAsync(request, ct), ct);
+        return ToRefundPolicyDto(policy);
+    }
+
+    public async Task<HotelRefundPolicyDto> UploadRefundPolicyFileAsync(Guid hotelUserId, IFormFile file, UploadRefundPolicyFileRequest request, CancellationToken ct = default)
+    {
+        var hotelId = await RequireHotelIdAsync(hotelUserId, ct);
+        RefundPolicyParser.Validate(request.StructuredRulesJson);
+
+        await using var stream = file.OpenReadStream();
+        var content = PolicyDocumentExtractor.Extract(stream, file.FileName, file.Length);
+
+        var upsertRequest = new UpsertHotelRefundPolicyRequest(
+            content, request.StructuredRulesJson, request.EffectiveFrom, request.EffectiveUntil, true);
+        var policy = await repo.UpsertRefundPolicyAsync(hotelId, await WithAutoExtractedRulesAsync(upsertRequest, ct), ct);
+        return ToRefundPolicyDto(policy);
+    }
+
+    /// <summary>酒店端只维护政策自由文本，结构化规则（退款金额怎么算）在保存时由 AI 从文本自动提取。
+    /// 调用方显式传了 StructuredRulesJson 时尊重调用方，不覆盖。文本为空或提取不出任何字段时
+    /// 存 null，CalculateRefund 会走默认 10%+0——与没配政策时的行为一致。</summary>
+    private async Task<UpsertHotelRefundPolicyRequest> WithAutoExtractedRulesAsync(UpsertHotelRefundPolicyRequest request, CancellationToken ct)
+    {
+        if (!string.IsNullOrWhiteSpace(request.StructuredRulesJson)) return request;
+        if (string.IsNullOrWhiteSpace(request.Content)) return request;
+
+        var extracted = await ruleExtractor.ExtractAsync(request.Content, ct);
+        var rulesJson = JsonSerializer.Serialize(new
+        {
+            freeCancellationHours = extracted.FreeCancellationHours,
+            cancellationFeePercent = extracted.CancellationFeePercent,
+            cancellationFeeFixed = extracted.CancellationFeeFixed,
+            currency = extracted.Currency ?? "NZD",
+        });
+        return request with { StructuredRulesJson = rulesJson };
+    }
+
+    public async Task<ExtractedRefundRulesDto> ExtractRefundRulesAsync(Guid hotelUserId, ExtractRefundRulesRequest request, CancellationToken ct = default)
+    {
+        await RequireHotelIdAsync(hotelUserId, ct);
+        return await ruleExtractor.ExtractAsync(request.Content, ct);
+    }
+
+    private static HotelRefundPolicyDto ToRefundPolicyDto(HotelRefundPolicy p) => new(
+        p.Id, p.Content, p.StructuredRulesJson, p.EffectiveFrom, p.EffectiveUntil, p.IsActive, p.UpdatedAt);
 
     public async Task DeletePerkAsync(Guid hotelUserId, Guid perkId, CancellationToken ct = default)
     {
