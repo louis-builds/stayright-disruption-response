@@ -55,6 +55,9 @@ public class OptionsAdminRepository(AppDbContext db) : IOptionsAdminRepository
             Id = Guid.NewGuid(), CaseId = caseId, HotelId = hotelId, CreatedAt = DateTimeOffset.UtcNow,
         }, ct);
 
+    public async Task AddMessageAsync(Message message, CancellationToken ct = default) =>
+        await db.Messages.AddAsync(message, ct);
+
     public async Task AddNotificationAsync(Notification notification, CancellationToken ct = default) =>
         await db.Notifications.AddAsync(notification, ct);
 
