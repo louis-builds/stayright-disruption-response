@@ -171,7 +171,11 @@ public class CaseService(
         // 不管这个案件有没有分配协调员都要落这个字段——协调员的 Escalation queue 页签靠它过滤
         // (CoordinatorService.EscalationFilterMap)，之前这里只发了个 Notification，从没真正设置过
         // 这个字段，队列一直是空的。是否发 Notification 单独判断 AssigneeCoordinatorId，两件事不绑定。
-        if (reply.Escalate) full.EscalationReason = reply.EscalationReason;
+        if (reply.Escalate)
+        {
+            full.EscalationReason = reply.EscalationReason;
+            full.EscalationTrigger = reply.EscalationTrigger;
+        }
 
         var now = DateTimeOffset.UtcNow;
         var aiMessage = new Message
@@ -348,7 +352,23 @@ public class CaseService(
             c.EscalationReason is not null, unreadAi, unreadCoordinator,
             c.DisruptionId, c.Disruption?.RawSignalText, c.Booking?.ConfirmationNo,
             guest?.Nickname, guest?.AvatarUrl, guest?.Email, guest?.Phone,
-            c.AssigneeCoordinatorId, assignee?.Nickname);
+            c.AssigneeCoordinatorId, assignee?.Nickname,
+            c.EscalationReason, c.EscalationReviewedAsReasonable, c.EscalationReviewNote);
+    }
+
+    /// <summary>协调员给这次AI转人工打分：合理还是不合理，不合理要说明原因。只有真的转过人工的
+    /// 案件才能复核——没转人工的案件没有"这次转人工对不对"这回事。</summary>
+    public async Task ReviewEscalationAsync(Guid caseId, Guid coordinatorUserId, bool reasonable, string? note, CancellationToken ct = default)
+    {
+        var c = await cases.FindFullAsync(caseId, ct) ?? throw new CaseNotFoundException();
+        if (c.EscalationReason is null) throw new EscalationNotFoundException();
+
+        c.EscalationReviewedAsReasonable = reasonable;
+        c.EscalationReviewNote = reasonable ? null : note;
+        c.EscalationReviewedByUserId = coordinatorUserId;
+        c.EscalationReviewedAt = DateTimeOffset.UtcNow;
+        c.UpdatedAt = DateTimeOffset.UtcNow;
+        await cases.SaveChangesAsync(ct);
     }
 
     // 案件详情页头部徽章:客人关心的是"进展到哪一步"，不是内部 Case.Status——那个字段从建案到结案

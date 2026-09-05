@@ -1,10 +1,85 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../auth";
+import { reviewEscalation } from "../cases/api";
 import { useCaseConversation } from "../cases/useCaseConversation";
-import type { Thread } from "../cases/types";
+import type { CaseSummary, Thread } from "../cases/types";
 import { CoordinatorDashboardShell } from "./CoordinatorDashboardShell";
+import { escalationReasonLabel } from "./escalationLabels";
 import "./CoordinatorCaseWorkspacePage.css";
+
+// 只在真的转过人工的案件上出现——没转人工就没有"这次转人工准不准"这回事。协调员的判断
+// (合理/不合理+理由)是攒 AI 转人工准确率反馈的唯一入口，日后要调阈值/权重全靠这批真实数据。
+function EscalationReviewPanel({ caseInfo }: { caseInfo: CaseSummary }) {
+  const [choice, setChoice] = useState<"reasonable" | "unreasonable" | null>(null);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [justSubmitted, setJustSubmitted] = useState<{ reasonable: boolean; note: string | null } | null>(null);
+
+  if (!caseInfo.escalationReason) return null;
+
+  const reviewed = justSubmitted ?? (caseInfo.escalationReviewedAsReasonable === null
+    ? null
+    : { reasonable: caseInfo.escalationReviewedAsReasonable, note: caseInfo.escalationReviewNote });
+
+  const canSubmit = choice === "reasonable" || (choice === "unreasonable" && noteDraft.trim().length > 0);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!canSubmit) return;
+    setSubmitting(true);
+    try {
+      const reasonable = choice === "reasonable";
+      const note = reasonable ? undefined : noteDraft.trim();
+      await reviewEscalation(caseInfo.id, reasonable, note);
+      setJustSubmitted({ reasonable, note: note ?? null });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="case-escalation-review">
+      <small>AI escalated this case</small>
+      <p className="case-escalation-reason">{escalationReasonLabel(caseInfo.escalationReason)}</p>
+      {reviewed ? (
+        <p className={`case-escalation-verdict ${reviewed.reasonable ? "reasonable" : "unreasonable"}`}>
+          {reviewed.reasonable ? "Marked as a reasonable escalation." : `Marked as not reasonable — ${reviewed.note}`}
+        </p>
+      ) : (
+        <form className="case-escalation-form" onSubmit={submit}>
+          <span>Was escalating this case the right call?</span>
+          <label>
+            <input
+              type="radio"
+              name="escalation-verdict"
+              checked={choice === "reasonable"}
+              onChange={() => setChoice("reasonable")}
+            />
+            Reasonable
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="escalation-verdict"
+              checked={choice === "unreasonable"}
+              onChange={() => setChoice("unreasonable")}
+            />
+            Not reasonable
+          </label>
+          {choice === "unreasonable" && (
+            <textarea
+              value={noteDraft}
+              onChange={(event) => setNoteDraft(event.target.value)}
+              placeholder="Why wasn't this a reasonable escalation?"
+            />
+          )}
+          <button disabled={submitting || !canSubmit}>{submitting ? "Saving…" : "Submit"}</button>
+        </form>
+      )}
+    </div>
+  );
+}
 
 function initials(role: string) {
   return role === "coordinator" ? "CO" : role === "guest" ? "GU" : role === "ai" ? "AI" : "SY";
@@ -73,6 +148,7 @@ export function CoordinatorCaseWorkspacePage() {
             <div className="case-details-owner"><div><small>Case owner</small><strong>{caseInfo.assigneeNickname ?? "Unassigned"}</strong></div><div><small>Case age</small><strong>{caseAge(caseInfo.createdAt)}</strong></div></div>
             <div className="case-details-hotel"><i>▦</i><div><small>Hotel</small><strong>{caseInfo.hotelName ?? "—"}</strong></div></div>
             <dl className="case-details-core"><div><dt>Disruption</dt><dd>{caseInfo.disruptionTitle ?? "—"}</dd></div><div><dt>Stay dates</dt><dd>{caseInfo.checkIn && caseInfo.checkOut ? `${caseInfo.checkIn} – ${caseInfo.checkOut}` : "Not recorded"}</dd></div><div><dt>Priority</dt><dd><span className={`detail-pill priority ${caseInfo.priority}`}>{caseInfo.priority}</span></dd></div><div><dt>Status</dt><dd><span className={`detail-pill status ${caseInfo.status}`}>{statusTone(caseInfo.statusLabel)}</span></dd></div></dl>
+            <EscalationReviewPanel caseInfo={caseInfo} />
             <div className="case-details-contact"><small>Guest contact & booking</small><div><span><b>{caseInfo.guestNickname ?? "Guest"}</b>{caseInfo.guestPhone ?? "No phone"}</span><span><b>Booking</b>{caseInfo.confirmationNo ?? "—"}</span><span><b>Email</b>{caseInfo.guestEmail ?? "—"}</span></div></div>
             <button className="case-options-action" disabled={caseInfo.status === "closed"} onClick={() => navigate(`/coordinator/cases/${id}/options`)}><span>▰</span>Review Rebooking Options <b>→</b></button>
           </section>}

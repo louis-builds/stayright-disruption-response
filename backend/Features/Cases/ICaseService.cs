@@ -14,6 +14,7 @@ public interface ICaseService
     Task<RefundStatusDto> GetRefundStatusAsync(Guid caseId, CancellationToken ct = default);
     Task<List<CaseSummaryDto>> GetMyCasesAsync(Guid guestUserId, bool includeClosed, CancellationToken ct = default);
     Task<CaseSummaryDto> GetCaseAsync(Guid caseId, Guid userId, string userRole, CancellationToken ct = default);
+    Task ReviewEscalationAsync(Guid caseId, Guid coordinatorUserId, bool reasonable, string? note, CancellationToken ct = default);
     Task<List<OptionDto>> GetOptionsAsync(Guid caseId, Guid userId, string userRole, CancellationToken ct = default);
     Task SelectOptionAsync(Guid caseId, Guid optionId, Guid userId, string userRole, CancellationToken ct = default);
     Task<ConfirmExecutionResultDto> ConfirmExecutionAsync(Guid caseId, Guid optionId, Guid userId, string userRole, CancellationToken ct = default);
