@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as api from "./api";
+import { markCaseNotificationsRead } from "../notifications/api";
 import type { CaseMessage, CaseSummary, Thread } from "./types";
 
 const POLL_INTERVAL_MS = 8_000;
@@ -34,7 +35,7 @@ export function useCaseConversation(caseId: string, role: string, thread: Thread
     (async () => {
       await Promise.all([refreshCaseInfo(), refreshMessages()]);
       if (cancelled) return;
-      await api.markThreadRead(caseId, thread);
+      await Promise.all([api.markThreadRead(caseId, thread), markCaseNotificationsRead(caseId)]);
       setLoading(false);
     })();
 
