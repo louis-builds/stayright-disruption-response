@@ -25,4 +25,14 @@ public class BadCaseRepository(AppDbContext db) : IBadCaseRepository
             .Where(m => m.CaseId == caseId && m.SenderRole == "guest" && m.CreatedAt < beforeCreatedAt)
             .OrderByDescending(m => m.CreatedAt)
             .FirstOrDefaultAsync(ct);
+
+    public async Task<bool> SetMissedEscalationConfirmedAsync(Guid messageId, bool confirmed, CancellationToken ct = default)
+    {
+        var message = await db.Messages.FirstOrDefaultAsync(m => m.Id == messageId, ct);
+        if (message is null) return false;
+        message.MissedEscalationConfirmed = confirmed;
+        message.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
 }

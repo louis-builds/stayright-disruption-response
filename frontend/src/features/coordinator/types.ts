@@ -171,6 +171,8 @@ export interface BadCaseListItem {
   disruptionTitle: string;
   aiReplyExcerpt: string;
   createdAt: string;
+  escalated: boolean;
+  missedEscalationConfirmed: boolean | null;
 }
 
 export interface BadCaseReplay {
