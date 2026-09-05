@@ -60,7 +60,8 @@ public class CaseService(
         var guest = await users.FindByIdAsync(full.Booking!.GuestUserId, ct);
         var language = guest?.Language ?? "en";
         var hotelConfirmed = await cases.IsHotelConfirmedAsync(caseId, ct);
-        var opening = chat.BuildProactiveOpening(full, hotelConfirmed, language);
+        var isReturningGuest = (await hotelRepo.GetReturningGuestIdsAsync([full.Booking.GuestUserId], full.Booking.HotelId, ct)).Count > 0;
+        var opening = chat.BuildProactiveOpening(full, hotelConfirmed, language, isReturningGuest);
 
         var now = DateTimeOffset.UtcNow;
         await cases.AddMessageAsync(new Message
@@ -684,30 +685,18 @@ public class CaseService(
         _ => o.OptionType,
     };
 
-    /// <summary>退款政策要不要展示给客人得看政策文档怎么说，不能无脑跟 defer/alternate 一样直接推——
-    /// 优先读酒店自己的政策，没有才回退到平台默认 RagDocument 政策。再让 Gemini 读摘录给个是否建议展示的判断。
-    /// 没配 Gemini key 或摘录都找不到时保守放行（总比卡住客人、有退款权利却看不到强）。</summary>
+    /// <summary>退款政策要不要展示给客人得看这家酒店自己配没配政策——没配就代表这家酒店不支持退款，
+    /// 不回退到平台默认政策（那是给"取消费怎么算"这类通用问答兜底用的，不能替酒店做"支不支持退款"这个决定）。
+    /// 配了政策再让 Gemini 读摘录判断这份政策具体怎么说；没配 Gemini key 时保守放行（总比卡住客人、
+    /// 有退款权利却看不到强）。</summary>
     private async Task<bool> PolicyAllowsCancelAsync(Guid hotelId, CancellationToken ct)
     {
-        string? section = null;
-
         var hotelPolicy = await hotelRepo.GetActiveRefundPolicyAsync(hotelId, ct);
-        if (hotelPolicy is not null)
-        {
-            section = hotelPolicy.Content.Split("\n## ")
-                .FirstOrDefault(s => s.Contains("refund", StringComparison.OrdinalIgnoreCase))
-                ?? hotelPolicy.Content;
-        }
+        if (hotelPolicy is null) return false;
 
-        if (section is null)
-        {
-            var docs = await ragRepository.GetDefaultDocumentsAsync(ct);
-            var policyDoc = docs.FirstOrDefault(d => d.Name.Contains("policy", StringComparison.OrdinalIgnoreCase)
-                || d.Name.Contains("政策", StringComparison.OrdinalIgnoreCase));
-            section = policyDoc?.Content.Split("\n## ").FirstOrDefault(s => s.Contains("refund", StringComparison.OrdinalIgnoreCase));
-        }
-
-        if (section is null) return true;
+        var section = hotelPolicy.Content.Split("\n## ")
+            .FirstOrDefault(s => s.Contains("refund", StringComparison.OrdinalIgnoreCase))
+            ?? hotelPolicy.Content;
 
         var prompt = $"Cancellation policy excerpt:\n{section.Trim()}\n\nA guest's stay was disrupted through no fault of their own and " +
             "may want to cancel for a refund. Based only on the policy above, should we offer them a cancellation/refund option? " +

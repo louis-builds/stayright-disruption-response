@@ -161,6 +161,7 @@ export interface AdminUser {
 export interface SystemSettings {
   unresolvedTurnThreshold: number;
   lowConfidenceEscalationEnabled: boolean;
+  frustrationEscalationEnabled: boolean;
 }
 
 export interface BadCaseListItem {

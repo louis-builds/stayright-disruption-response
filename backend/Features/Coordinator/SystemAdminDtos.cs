@@ -8,4 +8,4 @@ public record DisableUserRequest(string Reason);
 
 public record ResetPasswordResultDto(string TemporaryPassword);
 
-public record SystemSettingsDto(int UnresolvedTurnThreshold, bool LowConfidenceEscalationEnabled);
+public record SystemSettingsDto(int UnresolvedTurnThreshold, bool LowConfidenceEscalationEnabled, bool FrustrationEscalationEnabled);

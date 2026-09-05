@@ -34,6 +34,7 @@ public class CoordinatorService(ICoordinatorRepository repo, IEmailService email
         ["must_manual"] = "必须人工",
         ["ai_stuck"] = "AI搞不定",
         ["low_confidence"] = "AI没把握",
+        ["frustrated"] = "客人情绪激动",
         ["high_risk"] = "高风险",
     };
 
