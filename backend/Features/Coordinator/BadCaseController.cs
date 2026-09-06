@@ -26,4 +26,18 @@ public class BadCaseController(IBadCaseService badCaseService) : ControllerBase
             return NotFound(ApiResponse<object?>.Fail(404, "Message not found"));
         }
     }
+
+    [HttpPost("{messageId:guid}/missed-escalation-review")]
+    public async Task<ActionResult<ApiResponse<object?>>> ConfirmMissedEscalation(Guid messageId, ConfirmMissedEscalationRequest request, CancellationToken ct)
+    {
+        try
+        {
+            await badCaseService.ConfirmMissedEscalationAsync(messageId, request.Confirmed, ct);
+            return Ok(ApiResponse<object?>.Ok(null));
+        }
+        catch (CaseNotFoundException)
+        {
+            return NotFound(ApiResponse<object?>.Fail(404, "Message not found"));
+        }
+    }
 }

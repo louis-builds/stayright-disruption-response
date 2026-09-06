@@ -66,6 +66,20 @@ export function SettingsPanel() {
             The AI self-reports HIGH/LOW confidence per reply — there's no numeric score to tune, only whether a
             LOW self-report triggers a hand-off.
           </p>
+
+          <label className="coord-field" style={{ marginTop: "1rem", flexDirection: "row", alignItems: "center", gap: "0.6rem" }}>
+            <input
+              type="checkbox"
+              checked={settings.frustrationEscalationEnabled}
+              onChange={(e) => setSettings({ ...settings, frustrationEscalationEnabled: e.target.checked })}
+            />
+            <span>Escalate when the guest sounds frustrated</span>
+          </label>
+          <p className="coord-row-meta">
+            The AI self-reports whether the guest's message sounds frustrated — same as confidence, this is a
+            YES/NO signal with no numeric degree to tune, only whether a YES triggers a hand-off. The AI's reply is
+            still shown to the guest either way; this only controls whether a coordinator also gets looped in.
+          </p>
         </div>
         <div className="coord-row-actions">
           <button type="button" className="coord-btn-primary" disabled={saving} onClick={() => void save()}>

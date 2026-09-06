@@ -1,5 +1,6 @@
 using TravelDisruptionAgent.Api.Features.Chat;
 using TravelDisruptionAgent.Api.Features.Coordinator;
+using TravelDisruptionAgent.Api.Features.HotelPortal;
 using TravelDisruptionAgent.Api.Infrastructure.Data.Entities;
 using TravelDisruptionAgent.Api.Infrastructure.Email;
 using DisruptionEntity = TravelDisruptionAgent.Api.Infrastructure.Data.Entities.Disruption;
@@ -8,7 +9,7 @@ namespace TravelDisruptionAgent.Api.Features.Disruption;
 
 public class DisruptionService(
     IDisruptionRepository repo, ICoordinatorRepository coordinatorRepo, ICoordinatorService coordinatorService, IEmailService email,
-    IChatService chat, ILogger<DisruptionService> logger)
+    IChatService chat, IHotelRepository hotelRepo, ILogger<DisruptionService> logger)
     : IDisruptionService
 {
     private async Task<Dictionary<Guid, string>> CoordinatorNamesAsync(CancellationToken ct) =>
@@ -132,10 +133,11 @@ public class DisruptionService(
             // 之前就已经处理完 H1 请求，那条决定消息会先落库，"线程非空"这个判断条件就失效了，
             // 客人永远看不到这条说明中断情况本身的开场白，直接从"已批准"开始看，体验不连贯。
             var openingLanguage = booking.GuestUser?.Language ?? "en";
+            var isReturningGuest = (await hotelRepo.GetReturningGuestIdsAsync([booking.GuestUserId], booking.HotelId, ct)).Count > 0;
             await repo.AddMessageAsync(new Message
             {
                 Id = Guid.NewGuid(), CaseId = caseEntity.Id, SenderRole = "system",
-                Content = chat.BuildProactiveOpening(caseEntity, hotelConfirmed: false, openingLanguage),
+                Content = chat.BuildProactiveOpening(caseEntity, hotelConfirmed: false, openingLanguage, isReturningGuest),
                 CreatedAt = now, UpdatedAt = now,
             }, ct);
 

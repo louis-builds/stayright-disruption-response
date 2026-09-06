@@ -13,6 +13,10 @@ export function fetchTopFaqQuestions() {
   return apiGet<{ text: string; askCount: number }[]>("/api/faq/top");
 }
 
+export function reviewEscalation(caseId: string, reasonable: boolean, note?: string) {
+  return apiPost<null>(`/api/cases/${caseId}/escalation-review`, { reasonable, note });
+}
+
 interface PagedResult<T> {
   list: T[];
   total: number;

@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TravelDisruptionAgent.Api.Infrastructure.Data;
@@ -12,9 +13,11 @@ using TravelDisruptionAgent.Api.Infrastructure.Data;
 namespace TravelDisruptionAgent.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260904112636_AddEscalationReview")]
+    partial class AddEscalationReview
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -216,10 +219,6 @@ namespace TravelDisruptionAgent.Api.Migrations
                     b.Property<Guid?>("EscalationReviewedByUserId")
                         .HasColumnType("uuid")
                         .HasColumnName("escalation_reviewed_by_user_id");
-
-                    b.Property<string>("EscalationTrigger")
-                        .HasColumnType("text")
-                        .HasColumnName("escalation_trigger");
 
                     b.Property<string>("Priority")
                         .IsRequired()
@@ -894,10 +893,6 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("escalated");
 
-                    b.Property<bool?>("MissedEscalationConfirmed")
-                        .HasColumnType("boolean")
-                        .HasColumnName("missed_escalation_confirmed");
-
                     b.Property<DateTimeOffset?>("ReadAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("read_at");
@@ -1326,10 +1321,6 @@ namespace TravelDisruptionAgent.Api.Migrations
                     b.Property<DateTimeOffset?>("FaqProcessedThrough")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("faq_processed_through");
-
-                    b.Property<bool>("FrustrationEscalationEnabled")
-                        .HasColumnType("boolean")
-                        .HasColumnName("frustration_escalation_enabled");
 
                     b.Property<bool>("LowConfidenceEscalationEnabled")
                         .HasColumnType("boolean")

@@ -141,6 +141,10 @@ export function fetchBadCaseReplay(messageId: string) {
   return apiGet<BadCaseReplay>(`/api/coordinator/bad-cases/${messageId}/replay`);
 }
 
+export function confirmMissedEscalation(messageId: string, confirmed: boolean) {
+  return apiPost<null>(`/api/coordinator/bad-cases/${messageId}/missed-escalation-review`, { confirmed });
+}
+
 export function fetchOpsOverview() {
   return apiGet<OpsOverview>("/api/coordinator/ops/overview");
 }

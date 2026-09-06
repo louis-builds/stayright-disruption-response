@@ -14,6 +14,7 @@ interface OptionPayload {
   fee_diff?: number;
   currency?: string;
   distance_km?: number;
+  reason?: string;
   refund_amount?: number;
   cancellation_fee?: number;
   eta_business_days?: number;
@@ -340,6 +341,7 @@ export function OptionsFlowPage() {
                         </p>
                       )}
                       {payload.distance_km !== undefined && <p className="option-line">{payload.distance_km} km from original hotel</p>}
+                      {payload.reason && <p className="option-line option-recommend-reason">{payload.reason}</p>}
                       {payload.fee_diff !== undefined && (
                         <p className="option-line">
                           Fee difference: {payload.fee_diff >= 0 ? "+" : ""}

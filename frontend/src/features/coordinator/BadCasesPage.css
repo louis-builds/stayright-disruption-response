@@ -84,6 +84,42 @@
   background: #f4f9ff;
 }
 
+.bad-case-missed-review {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  color: #1f2d3d;
+}
+
+.bad-case-missed-review > div {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.bad-case-missed-review button {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border-radius: 7px;
+  border: 1px solid #d7dee6;
+  background: #f7f9fb;
+  color: #1f2d3d;
+  cursor: pointer;
+}
+
+.bad-case-missed-review button:first-child {
+  border-color: #c53a59;
+  color: #c53a59;
+}
+
+.bad-case-missed-verdict {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #4a3413;
+}
+
 @media (max-width: 900px) {
   .bad-cases {
     grid-template-columns: 1fr;

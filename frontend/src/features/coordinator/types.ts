@@ -161,6 +161,7 @@ export interface AdminUser {
 export interface SystemSettings {
   unresolvedTurnThreshold: number;
   lowConfidenceEscalationEnabled: boolean;
+  frustrationEscalationEnabled: boolean;
 }
 
 export interface BadCaseListItem {
@@ -170,6 +171,8 @@ export interface BadCaseListItem {
   disruptionTitle: string;
   aiReplyExcerpt: string;
   createdAt: string;
+  escalated: boolean;
+  missedEscalationConfirmed: boolean | null;
 }
 
 export interface BadCaseReplay {
