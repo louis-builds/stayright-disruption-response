@@ -327,13 +327,25 @@ public class CaseService(
         _ => status,
     };
 
+    private static string? PrimaryHotelImage(Case c)
+    {
+        var hotel = c.Booking?.Hotel;
+        if (hotel is null || hotel.ImageUrls.Count == 0) return null;
+        var index = Math.Clamp(hotel.PrimaryImageIndex, 0, hotel.ImageUrls.Count - 1);
+        return hotel.ImageUrls[index];
+    }
+
     public async Task<List<CaseSummaryDto>> GetMyCasesAsync(Guid guestUserId, bool includeClosed, CancellationToken ct = default)
     {
         var list = await cases.ListForGuestAsync(guestUserId, includeClosed, ct);
         return [.. list.Select(c => new CaseSummaryDto(
             c.Id, c.Status, StatusLabel(c.Status), c.Priority,
             c.Disruption?.Type, c.Disruption?.Title,
-            c.Booking?.Hotel?.Name, c.Booking?.CheckIn, c.Booking?.CheckOut, c.CreatedAt))];
+            c.Booking?.Hotel?.Name, c.Booking?.CheckIn, c.Booking?.CheckOut, c.CreatedAt,
+            DisruptionId: c.DisruptionId,
+            DisruptionDescription: c.Disruption?.RawSignalText,
+            ConfirmationNo: c.Booking?.ConfirmationNo,
+            HotelImageUrl: PrimaryHotelImage(c)))];
     }
 
     public async Task<CaseSummaryDto> GetCaseAsync(Guid caseId, Guid userId, string userRole, CancellationToken ct = default)
@@ -353,7 +365,8 @@ public class CaseService(
             c.DisruptionId, c.Disruption?.RawSignalText, c.Booking?.ConfirmationNo,
             guest?.Nickname, guest?.AvatarUrl, guest?.Email, guest?.Phone,
             c.AssigneeCoordinatorId, assignee?.Nickname,
-            c.EscalationReason, c.EscalationReviewedAsReasonable, c.EscalationReviewNote);
+            HotelImageUrl: PrimaryHotelImage(c),
+            EscalationReason: c.EscalationReason, EscalationReviewedAsReasonable: c.EscalationReviewedAsReasonable, EscalationReviewNote: c.EscalationReviewNote);
     }
 
     /// <summary>协调员给这次AI转人工打分：合理还是不合理，不合理要说明原因。只有真的转过人工的
