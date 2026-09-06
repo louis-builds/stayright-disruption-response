@@ -24,6 +24,7 @@ export interface CaseSummary {
   guestPhone: string | null;
   assigneeCoordinatorId: string | null;
   assigneeNickname: string | null;
+  hotelImageUrl: string | null;
 }
 
 export type SenderRole = "system" | "ai" | "guest" | "coordinator";

@@ -41,7 +41,8 @@ public record CaseSummaryDto(
     bool Escalated = false, int UnreadAiCount = 0, int UnreadCoordinatorCount = 0,
     Guid? DisruptionId = null, string? DisruptionDescription = null, string? ConfirmationNo = null,
     string? GuestNickname = null, string? GuestAvatarUrl = null, string? GuestEmail = null, string? GuestPhone = null,
-    Guid? AssigneeCoordinatorId = null, string? AssigneeNickname = null);
+    Guid? AssigneeCoordinatorId = null, string? AssigneeNickname = null,
+    string? HotelImageUrl = null);
 
 /// <summary>P5 三选项卡片。PayloadJson 原样透传给前端解析（日期/酒店/房型/费用按 option_type 变化，结构不固定）。</summary>
 public record OptionDto(Guid Id, string OptionType, string Availability, bool Selected, string PayloadJson, DateTimeOffset CreatedAt, string? CustomTitle, List<string> PerkNames);

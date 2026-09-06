@@ -65,7 +65,7 @@ function App() {
           <Route
             path="/cases/:id/options"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute roles={["guest"]}>
                 <OptionsFlowPage />
               </ProtectedRoute>
             }

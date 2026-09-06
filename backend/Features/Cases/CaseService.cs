@@ -322,13 +322,25 @@ public class CaseService(
         _ => status,
     };
 
+    private static string? PrimaryHotelImage(Case c)
+    {
+        var hotel = c.Booking?.Hotel;
+        if (hotel is null || hotel.ImageUrls.Count == 0) return null;
+        var index = Math.Clamp(hotel.PrimaryImageIndex, 0, hotel.ImageUrls.Count - 1);
+        return hotel.ImageUrls[index];
+    }
+
     public async Task<List<CaseSummaryDto>> GetMyCasesAsync(Guid guestUserId, bool includeClosed, CancellationToken ct = default)
     {
         var list = await cases.ListForGuestAsync(guestUserId, includeClosed, ct);
         return [.. list.Select(c => new CaseSummaryDto(
             c.Id, c.Status, StatusLabel(c.Status), c.Priority,
             c.Disruption?.Type, c.Disruption?.Title,
-            c.Booking?.Hotel?.Name, c.Booking?.CheckIn, c.Booking?.CheckOut, c.CreatedAt))];
+            c.Booking?.Hotel?.Name, c.Booking?.CheckIn, c.Booking?.CheckOut, c.CreatedAt,
+            DisruptionId: c.DisruptionId,
+            DisruptionDescription: c.Disruption?.RawSignalText,
+            ConfirmationNo: c.Booking?.ConfirmationNo,
+            HotelImageUrl: PrimaryHotelImage(c)))];
     }
 
     public async Task<CaseSummaryDto> GetCaseAsync(Guid caseId, Guid userId, string userRole, CancellationToken ct = default)
@@ -347,7 +359,8 @@ public class CaseService(
             c.EscalationReason is not null, unreadAi, unreadCoordinator,
             c.DisruptionId, c.Disruption?.RawSignalText, c.Booking?.ConfirmationNo,
             guest?.Nickname, guest?.AvatarUrl, guest?.Email, guest?.Phone,
-            c.AssigneeCoordinatorId, assignee?.Nickname);
+            c.AssigneeCoordinatorId, assignee?.Nickname,
+            PrimaryHotelImage(c));
     }
 
     // 案件详情页头部徽章:客人关心的是"进展到哪一步"，不是内部 Case.Status——那个字段从建案到结案
