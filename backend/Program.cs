@@ -18,6 +18,7 @@ using TravelDisruptionAgent.Api.Infrastructure;
 using TravelDisruptionAgent.Api.Infrastructure.Auth;
 using TravelDisruptionAgent.Api.Infrastructure.Data;
 using TravelDisruptionAgent.Api.Infrastructure.Email;
+using TravelDisruptionAgent.Api.Infrastructure.Storage;
 
 // 项目根目录的 .env 是后端配置来源（Gemini/DeepSeek/Google Maps/SMTP/数据库连接），
 // dotnet run 默认从 backend/ 目录起，所以 .env 在上一级。
@@ -99,6 +100,7 @@ builder.Services.AddScoped<ICaseRepository, CaseRepository>();
 builder.Services.AddScoped<ICaseService, CaseService>();
 builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 builder.Services.AddSingleton<CaseActionTokenService>();
+builder.Services.AddSingleton<IPolicyDocumentStorage, S3PolicyDocumentStorage>();
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<IRagRepository, RagRepository>();
 builder.Services.AddScoped<GeminiClient>();
