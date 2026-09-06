@@ -8,6 +8,7 @@ import { fetchTopFaqQuestions } from "./api";
 import type { CaseMessage, SenderRole, Thread } from "./types";
 import "./CaseConversationPage.css";
 import { CoordinatorCaseWorkspacePage } from "../coordinator/CoordinatorCaseWorkspacePage";
+import { GuestDashboardShell } from "../home/GuestDashboardShell";
 
 const ROLE_META: Record<SenderRole, { label: string; avatar: string }> = {
   guest: { label: "You", avatar: "🧳" },
@@ -217,179 +218,185 @@ export function LegacyCaseConversationPage() {
 
   if (!user) return null;
 
-  return (
-    <AppShell centerContent={<RoleTopNav role={user.role} />} showBack>
-      <div className="case-layout">
-      <div className="case-page">
-        {caseInfo && (
-          <div className="case-header">
-            <div>
-              <p className="case-header-title">{caseInfo.disruptionTitle ?? "Disruption case"}</p>
-              <p className="case-header-sub">
-                {caseInfo.hotelName}
-                {caseInfo.checkIn && caseInfo.checkOut ? ` · ${caseInfo.checkIn} → ${caseInfo.checkOut}` : ""}
-              </p>
-            </div>
-            <div className="case-header-actions">
-              <span className={`tag tag-status tag-status-${caseInfo.status}`}>{caseInfo.statusLabel}</span>
-            </div>
-          </div>
-        )}
+  const conversationTabs = (user.role !== "guest" || caseInfo?.escalated) && (
+    <nav className="case-tabs" aria-label="Conversation channel">
+      <button
+        type="button"
+        className={`case-tab ${thread === "ai" ? "case-tab-active" : ""}`}
+        onClick={() => setThread("ai")}
+      >
+        AI conversation
+        {!!caseInfo?.unreadAiCount && <span className="case-tab-badge">{caseInfo.unreadAiCount}</span>}
+      </button>
+      <button
+        type="button"
+        className={`case-tab ${thread === "coordinator" ? "case-tab-active" : ""}`}
+        onClick={() => setThread("coordinator")}
+      >
+        Coordinator conversation
+        {!!caseInfo?.unreadCoordinatorCount && <span className="case-tab-badge">{caseInfo.unreadCoordinatorCount}</span>}
+      </button>
+    </nav>
+  );
 
-        {/* 客人默认只看得到 AI 页签——协调员页签在真正转人工(caseInfo.escalated)之后才出现，
-            不刷新页面靠 useCaseConversation 里 caseInfo 也跟着轮询。协调员/酒店角色不受这道门槛限制，
-            他们打开案件本来就是要去协调员线程沟通的。 */}
-        {(user.role !== "guest" || caseInfo?.escalated) && (
-          <div className="case-tabs">
-            <button
-              type="button"
-              className={`case-tab ${thread === "ai" ? "case-tab-active" : ""}`}
-              onClick={() => setThread("ai")}
-            >
-              AI conversation
-              {!!caseInfo?.unreadAiCount && <span className="case-tab-badge">{caseInfo.unreadAiCount}</span>}
-            </button>
-            <button
-              type="button"
-              className={`case-tab ${thread === "coordinator" ? "case-tab-active" : ""}`}
-              onClick={() => setThread("coordinator")}
-            >
-              Coordinator conversation
-              {!!caseInfo?.unreadCoordinatorCount && <span className="case-tab-badge">{caseInfo.unreadCoordinatorCount}</span>}
-            </button>
-          </div>
-        )}
-
-        <div className="case-thread" ref={scrollRef}>
-          {loading ? (
-            <p className="case-loading">Loading conversation…</p>
-          ) : messages.length === 0 ? (
-            <p className="case-empty">
-              {thread === "coordinator" ? "No messages with your coordinator yet." : "No messages yet."}
-            </p>
-          ) : (
-            messages.map((m) => (
-              <MessageBubble
-                key={m.id}
-                message={m}
-                onVote={(v) => void vote(m.id, v)}
-                viewerRole={viewerRole}
-                typewriter={m.id === typewriterId}
-              />
-            ))
-          )}
-          {sending && (
-            <div className="msg-row">
-              <span className="msg-avatar" aria-hidden="true">
-                🤖
-              </span>
-              <div className="msg-bubble-wrap">
-                <div className="msg-bubble msg-bubble-ai msg-typing">
-                  <span />
-                  <span />
-                  <span />
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {error && <p className="case-error">{error}</p>}
-
-        {canPostHere ? (
-          <form className="case-composer" onSubmit={handleSubmit}>
-            <input
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder="Type a message…"
-              disabled={sending}
-            />
-            <button type="submit" disabled={sending || !draft.trim()}>
-              {sending ? <span className="case-send-spinner" aria-hidden="true" /> : "Send"}
-            </button>
-          </form>
-        ) : (
-          <p className="case-readonly-note">Read-only — this is the guest's conversation with the AI assistant.</p>
-        )}
-      </div>
+  const workspace = (
+    <div className="guest-case-workspace">
+      <button type="button" className="guest-case-back" onClick={() => user.role === "guest" ? navigate("/guest/home") : navigate(-1)}>
+        ← Back to {user.role === "guest" ? "Dashboard" : "Cases"}
+      </button>
 
       {caseInfo && (
-        <aside className="case-side">
-          <div className="case-side-card">
-            <h3>Case details</h3>
-            <dl className="case-side-list">
+        <header className="guest-case-hero">
+          <div className="guest-case-hero-copy">
+            <small>Active case</small>
+            <div className="guest-case-badges">
+              <span>CASE-{id?.slice(0, 8).toUpperCase()}</span>
+              <em className={`priority-${caseInfo.priority}`}>{caseInfo.priority} priority</em>
+              <em className={`status-${caseInfo.status}`}>{caseInfo.statusLabel}</em>
+            </div>
+            <h1>{caseInfo.disruptionTitle ?? "Disruption case"}</h1>
+            <p>{caseInfo.disruptionDescription || "Travel disruption affecting this booking."}</p>
+          </div>
+          <dl>
+            <div>
+              <dt>Hotel</dt>
+              <dd>{caseInfo.hotelName ?? "Not recorded"}</dd>
+            </div>
+            <div>
+              <dt>Booking</dt>
+              <dd>{caseInfo.confirmationNo ?? "Not recorded"}</dd>
+            </div>
+            <div>
+              <dt>Stay dates</dt>
+              <dd>{caseInfo.checkIn && caseInfo.checkOut ? `${caseInfo.checkIn} → ${caseInfo.checkOut}` : "Not recorded"}</dd>
+            </div>
+          </dl>
+        </header>
+      )}
+
+      <div className="guest-case-grid">
+        <section className="guest-case-communication">
+          <header>
+            <div className="guest-case-section-heading">
+              <span aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M5 5.75h14v9.5H9l-4 3v-12.5Z" /></svg>
+              </span>
               <div>
-                <dt>Hotel</dt>
-                <dd>{caseInfo.hotelName ?? "—"}</dd>
+                <h2>Communication Hub</h2>
+                <p>Get live support from StayRight AI or your assigned coordinator.</p>
               </div>
-              <div>
-                <dt>Disruption</dt>
-                <dd>
-                  {caseInfo.disruptionType && <span className="tag tag-type">{caseInfo.disruptionType}</span>}
-                  {" "}
-                  {caseInfo.disruptionTitle ?? "—"}
-                </dd>
-              </div>
-              {caseInfo.checkIn && caseInfo.checkOut && (
-                <div>
-                  <dt>Stay dates</dt>
-                  <dd>
-                    {caseInfo.checkIn} → {caseInfo.checkOut}
-                  </dd>
-                </div>
-              )}
-              <div>
-                <dt>Priority</dt>
-                <dd className="case-side-priority">{caseInfo.priority}</dd>
-              </div>
-              <div>
-                <dt>Messages</dt>
-                <dd>{messages.length}</dd>
-              </div>
-            </dl>
-            {caseInfo.status === "closed" ? (
-              <p className="case-side-closed-note">
-                This case is resolved — options are no longer editable. Check the conversation above for the final outcome.
+            </div>
+            {conversationTabs}
+          </header>
+
+          <div className="case-thread" ref={scrollRef}>
+            {loading ? (
+              <p className="case-loading">Loading conversation…</p>
+            ) : messages.length === 0 ? (
+              <p className="case-empty">
+                {thread === "coordinator" ? "No messages with your coordinator yet." : "No messages yet."}
               </p>
             ) : (
-              <button type="button" className="case-side-options-btn" onClick={() => navigate(`/cases/${id}/options`)}>
-                View rebooking options →
-              </button>
+              messages.map((m) => (
+                <MessageBubble
+                  key={m.id}
+                  message={m}
+                  onVote={(v) => void vote(m.id, v)}
+                  viewerRole={viewerRole}
+                  typewriter={m.id === typewriterId}
+                />
+              ))
+            )}
+            {sending && (
+              <div className="msg-row">
+                <span className="msg-avatar" aria-hidden="true">AI</span>
+                <div className="msg-bubble-wrap">
+                  <div className="msg-bubble msg-bubble-ai msg-typing"><span /><span /><span /></div>
+                </div>
+              </div>
             )}
           </div>
 
-          <div className="case-side-card case-side-tip">
-            {viewerRole === "guest" && faqQuestions.length > 0 ? (
-              <>
-                <h3>Frequently asked</h3>
-                <div className="case-faq-list">
-                  {faqQuestions.map((q) => (
-                    <button key={q.text} type="button" className="case-faq-chip" onClick={() => setDraft(q.text)}>
-                      {q.text}
-                    </button>
-                  ))}
-                </div>
-              </>
-            ) : thread === "ai" ? (
-              <>
-                <h3>How replies work</h3>
-                <p>
-                  An AI assistant answers first using this case's policy and history. If a question is complex, ambiguous,
-                  or you've asked a few times without resolution, it hands off to a human coordinator automatically —
-                  no need to ask twice.
-                </p>
-              </>
-            ) : (
-              <>
-                <h3>How replies work</h3>
-                <p>This is a direct, human-only conversation with your assigned coordinator — the AI assistant never reads or replies here.</p>
-              </>
-            )}
-          </div>
-        </aside>
-      )}
+          {error && <p className="case-error">{error}</p>}
+
+          {canPostHere ? (
+            <form className="case-composer" onSubmit={handleSubmit}>
+              <input
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder={thread === "coordinator" ? "Write a message to your coordinator…" : "Ask StayRight AI about this case…"}
+                disabled={sending}
+              />
+              <button type="submit" disabled={sending || !draft.trim()}>
+                {sending ? <span className="case-send-spinner" aria-hidden="true" /> : "Send message →"}
+              </button>
+            </form>
+          ) : (
+            <p className="case-readonly-note">Read-only — this is the guest's conversation with the AI assistant.</p>
+          )}
+        </section>
+
+        {caseInfo && (
+          <aside className="case-side guest-case-side">
+            <section className="case-side-card guest-case-details">
+              <header>
+                <h2>
+                  <span aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M7 3.75h8l3 3v13.5H7V3.75Zm8 0v3h3M10 11h5M10 15h5" /></svg>
+                  </span>
+                  Case Details
+                </h2>
+                <small>ID: CASE-{id?.slice(0, 8).toUpperCase()}</small>
+              </header>
+              <div className="guest-case-hotel">
+                <span aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M5 20.25V5.75h10v14.5M15 10.75h4v9.5M3 20.25h18M8 9h1M11 9h1M8 12h1M11 12h1M8 15h1M11 15h1" /></svg>
+                </span>
+                <div><small>Hotel</small><strong>{caseInfo.hotelName ?? "Not recorded"}</strong></div>
+              </div>
+              <dl className="case-side-list">
+                <div><dt>Disruption</dt><dd>{caseInfo.disruptionTitle ?? "Not recorded"}</dd></div>
+                <div><dt>Stay dates</dt><dd>{caseInfo.checkIn && caseInfo.checkOut ? `${caseInfo.checkIn} → ${caseInfo.checkOut}` : "Not recorded"}</dd></div>
+                <div><dt>Priority</dt><dd><span className={`guest-case-pill priority-${caseInfo.priority}`}>{caseInfo.priority}</span></dd></div>
+                <div><dt>Status</dt><dd><span className={`guest-case-pill status-${caseInfo.status}`}>{caseInfo.statusLabel}</span></dd></div>
+                <div><dt>Assigned coordinator</dt><dd>{caseInfo.assigneeNickname ?? "StayRight support team"}</dd></div>
+                <div><dt>Messages</dt><dd>{messages.length}</dd></div>
+              </dl>
+              {caseInfo.status === "closed" ? (
+                <p className="case-side-closed-note">This case is resolved. Check the conversation for the final outcome.</p>
+              ) : (
+                <button type="button" className="case-side-options-btn" onClick={() => navigate(`/cases/${id}/options`)}>
+                  Review Recovery Options →
+                </button>
+              )}
+            </section>
+
+            <section className="case-side-card case-side-tip">
+              {viewerRole === "guest" && faqQuestions.length > 0 ? (
+                <>
+                  <header className="guest-case-help-heading"><h2>Frequently asked</h2><small>Quick questions</small></header>
+                  <div className="case-faq-list">
+                    {faqQuestions.map((q) => (
+                      <button key={q.text} type="button" className="case-faq-chip" onClick={() => setDraft(q.text)}>{q.text}</button>
+                    ))}
+                  </div>
+                </>
+              ) : thread === "ai" ? (
+                <><h3>How replies work</h3><p>StayRight AI uses this case's policy and history. Complex requests are handed to a human coordinator automatically.</p></>
+              ) : (
+                <><h3>How replies work</h3><p>This is a private conversation with your assigned coordinator. The AI assistant does not reply here.</p></>
+              )}
+            </section>
+          </aside>
+        )}
       </div>
-    </AppShell>
+    </div>
+  );
+
+  return user.role === "guest" ? (
+    <GuestDashboardShell active="dashboard">{workspace}</GuestDashboardShell>
+  ) : (
+    <AppShell centerContent={<RoleTopNav role={user.role} />} showBack>{workspace}</AppShell>
   );
 }
 

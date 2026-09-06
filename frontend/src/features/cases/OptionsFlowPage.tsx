@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AppShell } from "../../shared/components/AppShell";
 import { RoleTopNav } from "../../shared/components/RoleTopNav";
 import { useAuth } from "../auth";
+import { GuestDashboardShell } from "../home/GuestDashboardShell";
 import * as api from "./api";
 import type { CaseOption, CaseSummary, ConfirmExecutionResult, OptionType, PolicySummary } from "./types";
 import "./OptionsFlowPage.css";
@@ -80,6 +81,25 @@ const OPTION_TITLES: Record<Exclude<OptionType, "custom">, string> = {
   alternate: "Move to an alternative stay",
   cancel: "Cancel & refund",
 };
+
+const OPTION_DESCRIPTIONS: Record<Exclude<OptionType, "custom">, string> = {
+  defer: "Move your stay dates while keeping the original hotel.",
+  alternate: "Relocate to a suitable partner hotel.",
+  cancel: "Cancel this booking and review the refund details.",
+};
+
+function OptionIcon({ type }: { type: OptionType }) {
+  if (type === "alternate") {
+    return <svg viewBox="0 0 24 24"><path d="M5 20.25V7.75h14v12.5M3 20.25h18M8 11h2M14 11h2M8 15h2M14 15h2M9 7.75v-3h6v3" /></svg>;
+  }
+  if (type === "defer") {
+    return <svg viewBox="0 0 24 24"><path d="M6 4.75v3M18 4.75v3M4 9.25h16M5 6.25h14v13H5zM8 13h3M8 16h5" /></svg>;
+  }
+  if (type === "cancel") {
+    return <svg viewBox="0 0 24 24"><path d="M12 3.75v16.5M16 7.25H9.75a2.75 2.75 0 0 0 0 5.5h4.5a2.75 2.75 0 0 1 0 5.5H8" /></svg>;
+  }
+  return <svg viewBox="0 0 24 24"><path d="M12 3.5 14.4 9l5.6.6-4.2 3.8 1.2 5.6-5-2.8L7 19l1.2-5.6L4 9.6 9.6 9 12 3.5Z" /></svg>;
+}
 
 function optionTitle(o: CaseOption) {
   return o.optionType === "custom" ? (o.customTitle ?? "Special offer") : OPTION_TITLES[o.optionType];
@@ -201,16 +221,56 @@ export function OptionsFlowPage() {
 
   if (!user) return null;
 
+  const renderPage = (content: ReactNode) => user.role === "guest" ? (
+    <GuestDashboardShell active="dashboard">{content}</GuestDashboardShell>
+  ) : (
+    <AppShell centerContent={<RoleTopNav role={user.role} />} showBack>{content}</AppShell>
+  );
+
+  const availableCount = options.filter((option) => option.availability !== "unavailable").length;
+  const contextHeader = (
+    <>
+      <button type="button" className="guest-options-back" onClick={() => navigate(`/cases/${caseId}`)}>
+        ← Back to Case Conversation (CASE-{caseId.slice(0, 8).toUpperCase()})
+      </button>
+      {caseInfo && (
+        <section className="guest-options-case-strip">
+          <div>
+            <small>Traveller</small>
+            <strong>{caseInfo.guestNickname ?? user.nickname}</strong>
+            <span>{caseInfo.confirmationNo ?? "Booking reference not recorded"}</span>
+          </div>
+          <div>
+            <small>Hotel</small>
+            <strong>{caseInfo.hotelName ?? "Not recorded"}</strong>
+            <span>{caseInfo.checkIn && caseInfo.checkOut ? `${caseInfo.checkIn} → ${caseInfo.checkOut}` : "Stay dates not recorded"}</span>
+          </div>
+          <div>
+            <small>Disruption</small>
+            <strong>{caseInfo.disruptionTitle ?? "Not recorded"}</strong>
+            <span className="guest-options-priority">{caseInfo.priority} priority</span>
+          </div>
+          <div>
+            <small>Available options</small>
+            <strong className="guest-options-count">{availableCount}</strong>
+            <span>{options.length} generated</span>
+          </div>
+        </section>
+      )}
+    </>
+  );
+
   // 案件已结案：方案环节已经走完，不能再让客人看到可点的 Select/Continue/Confirm——
   // 那是给"还在决策中"阶段用的操作入口，结案后继续暴露会让人以为还能改主意。
   if (!loading && caseInfo?.status === "closed") {
     const finalOption = options.find((o) => o.selected) ?? null;
-    return (
-      <AppShell centerContent={<RoleTopNav role={user.role} />} showBack>
-        <div className="options-flow">
-          <button type="button" className="flow-back-btn" onClick={() => navigate(`/cases/${caseId}`)}>
-            ← Back to conversation
-          </button>
+    return renderPage(
+      <div className="options-flow guest-options-workspace">
+          {contextHeader}
+          <div className="guest-options-heading">
+            <div><h1>Recovery Options</h1><p>A record of the solutions reviewed for this disruption.</p></div>
+            <StepIndicator current="confirm" />
+          </div>
 
           <div className="resolved-banner">
             <h2>This case is resolved</h2>
@@ -248,30 +308,26 @@ export function OptionsFlowPage() {
           {options.length > 0 && (
             <>
               <h3 className="resolved-recap-title">Everything that was compared</h3>
-              <div className="option-grid">
+              <div className="option-grid guest-option-grid">
                 {options.map((o) => {
                   const payload = parsePayload(o.payloadJson);
                   return (
                     <div
                       key={o.id}
-                      className={`option-card option-card-readonly ${o.selected ? "option-card-selected" : "option-card-not-picked"}`}
+                      className={`option-card guest-option-card option-card-readonly ${o.selected ? "option-card-selected" : "option-card-not-picked"}`}
                     >
-                      <h3>{optionTitle(o)}</h3>
-                      <span className={`tag tag-status ${o.selected ? "tag-status-closed" : "tag-status-muted"}`}>
-                        {o.selected ? "Final pick" : "Not chosen"}
-                      </span>
+                      <header className="guest-option-header">
+                        <div className={`guest-option-icon type-${o.optionType}`}><OptionIcon type={o.optionType} /></div>
+                        <div><h3>{optionTitle(o)}</h3><p>{o.optionType === "custom" ? "A tailored recovery option for this stay." : OPTION_DESCRIPTIONS[o.optionType]}</p></div>
+                        <span className={`guest-option-status ${o.selected ? "selected" : "muted"}`}>{o.selected ? "Final pick" : "Not chosen"}</span>
+                      </header>
                       {o.perkNames.length > 0 && <p className="option-line option-perks">Includes: {o.perkNames.join(", ")}</p>}
-                      {o.optionType !== "cancel" && o.optionType !== "custom" && (
-                        <p className="option-line">
-                          {payload.hotel ?? "Same hotel"}
-                          {payload.room_type ? ` · ${payload.room_type}` : ""}
-                        </p>
-                      )}
-                      {payload.refund_amount !== undefined && (
-                        <p className="option-line">
-                          Refund: {payload.refund_amount} {payload.currency}
-                        </p>
-                      )}
+                      <dl className="guest-option-detail-grid">
+                        {o.optionType !== "cancel" && o.optionType !== "custom" && <div><dt>Hotel</dt><dd>{payload.hotel ?? "Same hotel"}</dd></div>}
+                        {payload.room_type && <div><dt>Room type</dt><dd>{payload.room_type}</dd></div>}
+                        {payload.refund_amount !== undefined && <div><dt>Refund</dt><dd>{payload.refund_amount} {payload.currency}</dd></div>}
+                        {payload.fee_diff !== undefined && <div><dt>Fee difference</dt><dd>{payload.fee_diff} {payload.currency}</dd></div>}
+                      </dl>
                     </div>
                   );
                 })}
@@ -305,85 +361,69 @@ export function OptionsFlowPage() {
               </div>
             </div>
           </div>
-        </div>
-      </AppShell>
+      </div>
     );
   }
 
-  return (
-    <AppShell centerContent={<RoleTopNav role={user.role} />} showBack>
-      <div className="options-flow">
-        <StepIndicator current={step} />
+  return renderPage(
+    <>
+      <div className="options-flow guest-options-workspace">
+        {contextHeader}
+        <div className="guest-options-heading">
+          <div><h1>Recovery Options</h1><p>Compare the available solutions and choose what works best for your stay.</p></div>
+          <StepIndicator current={step} />
+        </div>
         {step === "compare" && (
           <>
-            <p className="flow-hint">Compare your options below. Only options confirmed or ready for review are shown.</p>
+            <p className="flow-hint guest-options-hint">Only options confirmed or ready for your review are shown.</p>
             {loading ? (
               <p className="flow-empty">Loading options…</p>
             ) : options.length === 0 ? (
               <p className="flow-empty">No options available yet — check back soon or ask in your conversation.</p>
             ) : (
-              <div className="option-grid">
+              <div className="option-grid guest-option-grid">
                 {options.map((o) => {
                   const payload = parsePayload(o.payloadJson);
                   const disabled = o.availability === "unavailable";
                   return (
-                    <div key={o.id} className={`option-card ${disabled ? "option-card-disabled" : ""} ${o.selected ? "option-card-selected" : ""}`}>
-                      <h3>{optionTitle(o)}</h3>
-                      <span className={`tag tag-status tag-status-${o.availability}`}>{feasibilityLabel(o.availability)}</span>
+                    <article key={o.id} className={`option-card guest-option-card type-${o.optionType} ${disabled ? "option-card-disabled" : ""} ${o.selected ? "option-card-selected" : ""}`}>
+                      <header className="guest-option-header">
+                        <div className={`guest-option-icon type-${o.optionType}`}><OptionIcon type={o.optionType} /></div>
+                        <div><h3>{optionTitle(o)}</h3><p>{o.optionType === "custom" ? "A tailored recovery option for this stay." : OPTION_DESCRIPTIONS[o.optionType]}</p></div>
+                        <span className={`guest-option-status status-${o.availability}`}>{feasibilityLabel(o.availability)}</span>
+                      </header>
                       {o.perkNames.length > 0 && (
                         <p className="option-line option-perks">Includes: {o.perkNames.join(", ")}</p>
                       )}
-
-                      {o.optionType !== "cancel" && o.optionType !== "custom" && (
-                        <p className="option-line">
-                          {payload.hotel ?? "Same hotel"}
-                          {payload.room_type ? ` · ${payload.room_type}` : ""}
-                        </p>
-                      )}
-                      {payload.distance_km !== undefined && <p className="option-line">{payload.distance_km} km from original hotel</p>}
-                      {payload.reason && <p className="option-line option-recommend-reason">{payload.reason}</p>}
-                      {payload.fee_diff !== undefined && (
-                        <p className="option-line">
-                          Fee difference: {payload.fee_diff >= 0 ? "+" : ""}
-                          {payload.fee_diff} {payload.currency}
-                        </p>
-                      )}
-                      {payload.refund_amount !== undefined && (
-                        <p className="option-line">
-                          Refund: {payload.refund_amount} {payload.currency} (fee {payload.cancellation_fee} {payload.currency})
-                        </p>
-                      )}
-                      {payload.eta_business_days !== undefined && <p className="option-line">ETA: {payload.eta_business_days} business days</p>}
-                      {o.optionType === "defer" &&
-                        payload.new_check_in_offset_days !== undefined &&
-                        payload.new_check_out_offset_days !== undefined &&
-                        caseInfo?.checkIn && (
-                          <p className="option-line">
-                            New dates: {addDaysToDate(caseInfo.checkIn, payload.new_check_in_offset_days)} →{" "}
-                            {addDaysToDate(caseInfo.checkIn, payload.new_check_out_offset_days)}
-                          </p>
-                        )}
+                      <dl className="guest-option-detail-grid">
+                        {o.optionType !== "cancel" && o.optionType !== "custom" && <div><dt>Hotel</dt><dd>{payload.hotel ?? "Same hotel"}</dd></div>}
+                        {payload.room_type && <div><dt>Room type</dt><dd>{payload.room_type}</dd></div>}
+                        {payload.distance_km !== undefined && <div><dt>Distance</dt><dd>{payload.distance_km} km</dd></div>}
+                        {payload.fee_diff !== undefined && <div><dt>Fee difference</dt><dd className={payload.fee_diff <= 0 ? "positive" : ""}>{payload.fee_diff >= 0 ? "+" : ""}{payload.fee_diff} {payload.currency}</dd></div>}
+                        {payload.refund_amount !== undefined && <div><dt>Refund amount</dt><dd>{payload.refund_amount} {payload.currency}</dd></div>}
+                        {payload.cancellation_fee !== undefined && <div><dt>Cancellation fee</dt><dd>{payload.cancellation_fee} {payload.currency}</dd></div>}
+                        {payload.eta_business_days !== undefined && <div><dt>Processing time</dt><dd>{payload.eta_business_days} business days</dd></div>}
+                        {o.optionType === "defer" && payload.new_check_in_offset_days !== undefined && caseInfo?.checkIn && <div><dt>New check-in</dt><dd>{addDaysToDate(caseInfo.checkIn, payload.new_check_in_offset_days)}</dd></div>}
+                        {o.optionType === "defer" && payload.new_check_out_offset_days !== undefined && caseInfo?.checkIn && <div><dt>New check-out</dt><dd>{addDaysToDate(caseInfo.checkIn, payload.new_check_out_offset_days)}</dd></div>}
+                        {payload.reason && <div><dt>Why we suggest this</dt><dd className="option-recommend-reason">{payload.reason}</dd></div>}
+                      </dl>
                       {disabled && <p className="option-reason">This option is no longer available.</p>}
 
                       <div className="option-actions">
-                        <button type="button" className="option-link-btn" onClick={() => void openPolicy(o.id)}>
-                          View policy &amp; fees
-                        </button>
-                        {o.optionType === "defer" && (
-                          <button type="button" className="option-link-btn" onClick={() => setProposeDatesTarget(o)}>
-                            Propose different dates
-                          </button>
-                        )}
+                        <div className="guest-option-secondary-actions">
+                          <button type="button" className="option-link-btn" onClick={() => void openPolicy(o.id)}>View policy &amp; fees</button>
+                          {o.optionType === "defer" && <button type="button" className="option-link-btn" onClick={() => setProposeDatesTarget(o)}>Propose different dates</button>}
+                        </div>
                         <button
                           type="button"
                           className={o.selected ? "option-select-btn option-select-btn-selected" : "option-select-btn"}
                           disabled={disabled}
                           onClick={() => void handleSelect(o.id)}
                         >
-                          {o.selected ? "Selected ✓ — cancel" : "Select"}
+                          {o.selected ? "Selected ✓ — change" : "Select this option"}
                         </button>
                       </div>
-                    </div>
+                    </article>
                   );
                 })}
               </div>
@@ -391,14 +431,19 @@ export function OptionsFlowPage() {
 
             {error && <p className="flow-error">{error}</p>}
 
-            <button
-              type="button"
-              className="flow-continue-btn"
-              disabled={!selectedOption}
-              onClick={() => setStep("confirm")}
-            >
-              Continue to confirm
-            </button>
+            <div className="guest-options-info-grid">
+              <section className="guest-selection-card">
+                <header><div><small>Your selection</small><h2>{selectedOption ? optionTitle(selectedOption) : "Choose a recovery option"}</h2></div><span>{selectedOption ? "Ready to review" : "No option selected"}</span></header>
+                <p>{selectedOption ? "Review your selected option before submitting it for final processing." : "Select one of the available options above to continue."}</p>
+                <button type="button" className="flow-continue-btn" disabled={!selectedOption} onClick={() => setStep("confirm")}>Continue to confirm →</button>
+              </section>
+
+              <section className="guest-options-help-card">
+                <header><h2>Need help deciding?</h2><small>StayRight support</small></header>
+                <p>Ask about policy, fees, availability or what happens after you confirm.</p>
+                <button type="button" onClick={() => navigate(`/cases/${caseId}`)}>Open case conversation →</button>
+              </section>
+            </div>
 
             <div className="flow-next-steps">
               <h3>What happens after you confirm</h3>
@@ -430,7 +475,7 @@ export function OptionsFlowPage() {
         )}
 
         {step === "policy" && activeOption && (
-          <div className="policy-panel">
+          <div className="policy-panel guest-options-focus-panel">
             <button type="button" className="flow-back-btn" onClick={() => setStep("compare")}>
               ← Back to options
             </button>
@@ -448,7 +493,7 @@ export function OptionsFlowPage() {
                   <p className="flow-empty">No specific policy excerpt matched — general terms apply.</p>
                 )}
                 <div className="fee-breakdown">
-                  {Object.entries(parsePayload(policy.payloadJson)).map(([key, value]) => (
+                  {Object.entries(parsePayload(policy.payloadJson)).filter(([key]) => key !== "hotel_id").map(([key, value]) => (
                     <div key={key} className="fee-row">
                       <span>{key.replace(/_/g, " ")}</span>
                       <span>{value ?? "Pending"}</span>
@@ -463,7 +508,7 @@ export function OptionsFlowPage() {
         )}
 
         {step === "confirm" && selectedOption && (
-          <div className="confirm-panel">
+          <div className="confirm-panel guest-options-focus-panel">
             <button type="button" className="flow-back-btn" onClick={() => setStep("compare")}>
               ← Back to options
             </button>
@@ -576,6 +621,6 @@ export function OptionsFlowPage() {
             />
           );
         })()}
-    </AppShell>
+    </>
   );
 }

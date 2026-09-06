@@ -6,6 +6,7 @@ import * as api from "./api";
 import { AppShell } from "../../shared/components/AppShell";
 import { RoleTopNav } from "../../shared/components/RoleTopNav";
 import { CoordinatorDashboardShell } from "../coordinator/CoordinatorDashboardShell";
+import { GuestDashboardShell } from "../home/GuestDashboardShell";
 import "./ProfilePage.css";
 
 const PHONE_RE = /^\+?[0-9]{7,15}$/;
@@ -17,10 +18,20 @@ const ROLE_BLURB: Record<AuthUser["role"], string> = {
 };
 
 function formatJoinDate(iso: string) {
-  return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+  return new Date(iso).toLocaleDateString("en-NZ", { year: "numeric", month: "long", day: "numeric" });
 }
 const DEFAULT_AVATAR =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='32' fill='%23cbd8e4'/%3E%3Ccircle cx='32' cy='24' r='12' fill='%23f7fafc'/%3E%3Cpath d='M10 58c4-14 16-20 22-20s18 6 22 20' fill='%23f7fafc'/%3E%3C/svg%3E";
+
+function ProfileSectionIcon({ type }: { type: "person" | "account" | "email" | "lock" }) {
+  const paths = {
+    person: <><circle cx="12" cy="8" r="3" /><path d="M6 21v-2a6 6 0 0 1 12 0v2" /></>,
+    account: <><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z" /><path d="m9 12 2 2 4-4" /></>,
+    email: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></>,
+    lock: <><rect x="4" y="10" width="16" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></>,
+  };
+  return <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[type]}</svg>;
+}
 
 /** 粗启发式(长度+字符类别数)，跟 RegisterPage 里那份逻辑一致但没抽公共 util——
    两边各自独立一个纯函数比为了 4 行逻辑新开一个共享模块更划算。 */
@@ -57,11 +68,19 @@ export function ProfilePage() {
       </CoordinatorDashboardShell>
     );
   }
+  if (user.role === "guest") {
+    return (
+      <GuestDashboardShell active="profile">
+        <div className="profile-guest-stage profile-coordinator-stage"><ProfilePageContent user={user} embedded /></div>
+      </GuestDashboardShell>
+    );
+  }
   return <ProfilePageContent user={user} />;
 }
 
 function ProfilePageContent({ user, embedded = false }: { user: AuthUser; embedded?: boolean }) {
   const { updateUser, logout } = useAuth();
+  const accountRole = user.role === "guest" ? "Traveller" : `${user.role.charAt(0).toUpperCase()}${user.role.slice(1)}`;
   const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl ?? undefined);
   const [nickname, setNickname] = useState(user.nickname);
   const [gender, setGender] = useState(user.gender);
@@ -177,8 +196,8 @@ function ProfilePageContent({ user, embedded = false }: { user: AuthUser; embedd
   const content = (
       <div className="profile-page">
         <header className="profile-page-hero">
-          <div><small>ACCOUNT</small><h1>Profile Settings</h1><p>Manage your personal details, email credentials, and account security.</p></div>
-          <span>Coordinator account</span>
+          <div><small>ACCOUNT</small><h1>Profile</h1><p>Manage your personal details, email credentials, and security preferences.</p></div>
+          <span>{user.role === "coordinator" ? "Authenticated Coordinator" : `${accountRole} account`}</span>
         </header>
         {user.mustChangePassword && (
           <div className="profile-force-password-banner">
@@ -189,7 +208,7 @@ function ProfilePageContent({ user, embedded = false }: { user: AuthUser; embedd
         <div className="profile-col">
         <section className="profile-card">
           <div className="profile-card-header-row">
-            <div className="profile-section-title"><i>♙</i><div><h2>Personal Profile</h2><p>Basic identity and operational information</p></div></div>
+            <div className="profile-section-title"><i><ProfileSectionIcon type="person" /></i><div><h2>Basic info</h2><p>{user.role === "guest" ? "Personal details and contact information" : "Basic identity and operational information"}</p></div></div>
             <div className="profile-completeness" title={`${completeness}% complete`}>
               <div className="profile-completeness-track">
                 <div className="profile-completeness-fill" style={{ width: `${completeness}%` }} />
@@ -238,7 +257,7 @@ function ProfilePageContent({ user, embedded = false }: { user: AuthUser; embedd
               </label>
               <label className="profile-field">
                 <span>Account type</span>
-                <input value={user.role} disabled />
+                <input value={accountRole} disabled />
               </label>
             </div>
 
@@ -247,20 +266,12 @@ function ProfilePageContent({ user, embedded = false }: { user: AuthUser; embedd
               {profileSaving ? <span className="profile-spinner" aria-hidden="true" /> : "Save Profile Changes"}
             </button>
           </form>
-          <div className="profile-inline-account">
-            <h3><span>◇</span> Account Summary</h3>
-            <dl className="profile-account-list">
-              <div><dt>Member since</dt><dd>{formatJoinDate(user.createdAt)}</dd></div>
-              <div><dt>Operational role</dt><dd className="profile-account-role">{user.role}</dd></div>
-            </dl>
-            <div className="profile-operational-scope"><strong>Operational Scope</strong><p>{ROLE_BLURB[user.role]}</p></div>
-          </div>
         </section>
         </div>
 
         <div className="profile-col">
         <section className="profile-card">
-          <div className="profile-section-title"><i>✉</i><div><h2>Email Management</h2><p>Primary notification and sign-in email</p></div></div>
+          <div className="profile-section-title"><i><ProfileSectionIcon type="email" /></i><div><h2>Email</h2><p>Primary notification and sign-in email</p></div></div>
           <div className="profile-current-email"><small>Current email</small><strong>{user.email}</strong></div>
           {emailStage === "idle" ? (
             <div className="profile-form">
@@ -293,7 +304,7 @@ function ProfilePageContent({ user, embedded = false }: { user: AuthUser; embedd
         </section>
 
         <section className="profile-card">
-          <div className="profile-section-title"><i>♙</i><div><h2>Security &amp; Password</h2><p>Manage authentication credentials</p></div></div>
+          <div className="profile-section-title"><i><ProfileSectionIcon type="lock" /></i><div><h2>Change password</h2><p>Manage authentication credentials</p></div></div>
           <form onSubmit={handlePasswordSubmit} className="profile-form">
             <label className="profile-field">
               <span>Current password</span>
@@ -319,6 +330,15 @@ function ProfilePageContent({ user, embedded = false }: { user: AuthUser; embedd
               {passwordSaving ? <span className="profile-spinner" aria-hidden="true" /> : "Update Password"}
             </button>
           </form>
+        </section>
+
+        <section className="profile-card profile-account-card">
+          <div className="profile-section-title"><i><ProfileSectionIcon type="account" /></i><div><h2>Account</h2><p>Membership and account access</p></div></div>
+          <dl className="profile-account-list">
+            <div><dt>Member since</dt><dd>{formatJoinDate(user.createdAt)}</dd></div>
+            <div><dt>Account type</dt><dd className="profile-account-role">{accountRole}</dd></div>
+          </dl>
+          <div className="profile-operational-scope"><strong>{user.role === "guest" ? "Traveller services" : "Operational Scope"}</strong><p>{ROLE_BLURB[user.role]}</p></div>
         </section>
 
         </div>
