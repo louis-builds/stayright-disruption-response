@@ -3,13 +3,18 @@ using Microsoft.AspNetCore.Http;
 using TravelDisruptionAgent.Api.Features.Cases;
 using TravelDisruptionAgent.Api.Features.Coordinator;
 using TravelDisruptionAgent.Api.Infrastructure.Data.Entities;
+using TravelDisruptionAgent.Api.Infrastructure.Storage;
 
 namespace TravelDisruptionAgent.Api.Features.HotelPortal;
 
-public class HotelService(IHotelRepository repo, ICaseService caseService, IOptionsAdminService optionsAdmin, RefundPolicyRuleExtractor ruleExtractor) : IHotelService
+public class HotelService(
+    IHotelRepository repo, ICaseService caseService, IOptionsAdminService optionsAdmin,
+    RefundPolicyRuleExtractor ruleExtractor, IPolicyDocumentStorage policyStorage,
+    ILogger<HotelService> logger) : IHotelService
 {
     // ponytail: 酒店响应超时阈值先写死 6 小时,没有单独配置项。
     private static readonly TimeSpan OverdueThreshold = TimeSpan.FromHours(6);
+    private static readonly TimeSpan SourceFileUrlExpiry = TimeSpan.FromHours(1);
 
     private async Task<Guid> RequireHotelIdAsync(Guid hotelUserId, CancellationToken ct) =>
         await repo.FindHotelIdForUserAsync(hotelUserId, ct) ?? throw new HotelNotFoundException();
@@ -279,12 +284,33 @@ public class HotelService(IHotelRepository repo, ICaseService caseService, IOpti
         var hotelId = await RequireHotelIdAsync(hotelUserId, ct);
         RefundPolicyParser.Validate(request.StructuredRulesJson);
 
-        await using var stream = file.OpenReadStream();
+        // 先缓存进内存：解析文本用一遍，归档 S3 再读一遍。政策文件都很小（上限 10MB），可接受。
+        await using var stream = new MemoryStream();
+        await file.CopyToAsync(stream, ct);
+        stream.Position = 0;
         var content = PolicyDocumentExtractor.Extract(stream, file.FileName, file.Length);
 
         var upsertRequest = new UpsertHotelRefundPolicyRequest(
             content, request.StructuredRulesJson, request.EffectiveFrom, request.EffectiveUntil, true);
         var policy = await repo.UpsertRefundPolicyAsync(hotelId, await WithAutoExtractedRulesAsync(upsertRequest, ct), ct);
+
+        // 原件归档是旁路：政策文本已入库，S3 失败只记日志不影响结果。
+        stream.Position = 0;
+        try
+        {
+            var key = await policyStorage.UploadAsync(hotelId, policy.Id, file.FileName, file.ContentType, stream, ct);
+            if (key is not null)
+            {
+                policy.SourceFileKey = key;
+                policy.SourceFileName = file.FileName;
+                await repo.SaveChangesAsync(ct);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Failed to archive policy file to S3 for hotel {HotelId}; policy saved without source file", hotelId);
+        }
+
         return ToRefundPolicyDto(policy);
     }
 
@@ -313,8 +339,10 @@ public class HotelService(IHotelRepository repo, ICaseService caseService, IOpti
         return await ruleExtractor.ExtractAsync(request.Content, ct);
     }
 
-    private static HotelRefundPolicyDto ToRefundPolicyDto(HotelRefundPolicy p) => new(
-        p.Id, p.Content, p.StructuredRulesJson, p.EffectiveFrom, p.EffectiveUntil, p.IsActive, p.UpdatedAt);
+    private HotelRefundPolicyDto ToRefundPolicyDto(HotelRefundPolicy p) => new(
+        p.Id, p.Content, p.StructuredRulesJson, p.EffectiveFrom, p.EffectiveUntil, p.IsActive, p.UpdatedAt,
+        p.SourceFileName,
+        p.SourceFileKey is null ? null : policyStorage.CreatePresignedGetUrl(p.SourceFileKey, SourceFileUrlExpiry));
 
     public async Task DeletePerkAsync(Guid hotelUserId, Guid perkId, CancellationToken ct = default)
     {

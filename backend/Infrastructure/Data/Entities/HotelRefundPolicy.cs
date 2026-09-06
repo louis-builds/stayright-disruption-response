@@ -9,6 +9,10 @@ public class HotelRefundPolicy
     public Guid HotelId { get; set; }
     public string Content { get; set; } = "";
     public string? StructuredRulesJson { get; set; }
+    // 上传文件路径的归档引用：SourceFileKey 是 S3 object key（纯文本直填时为空），
+    // SourceFileName 是原始文件名，仅展示用。
+    public string? SourceFileKey { get; set; }
+    public string? SourceFileName { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTimeOffset? EffectiveFrom { get; set; }
     public DateTimeOffset? EffectiveUntil { get; set; }
