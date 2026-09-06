@@ -60,7 +60,8 @@ public class CaseService(
         var guest = await users.FindByIdAsync(full.Booking!.GuestUserId, ct);
         var language = guest?.Language ?? "en";
         var hotelConfirmed = await cases.IsHotelConfirmedAsync(caseId, ct);
-        var opening = chat.BuildProactiveOpening(full, hotelConfirmed, language);
+        var isReturningGuest = (await hotelRepo.GetReturningGuestIdsAsync([full.Booking.GuestUserId], full.Booking.HotelId, ct)).Count > 0;
+        var opening = chat.BuildProactiveOpening(full, hotelConfirmed, language, isReturningGuest);
 
         var now = DateTimeOffset.UtcNow;
         await cases.AddMessageAsync(new Message
@@ -170,7 +171,11 @@ public class CaseService(
         // 不管这个案件有没有分配协调员都要落这个字段——协调员的 Escalation queue 页签靠它过滤
         // (CoordinatorService.EscalationFilterMap)，之前这里只发了个 Notification，从没真正设置过
         // 这个字段，队列一直是空的。是否发 Notification 单独判断 AssigneeCoordinatorId，两件事不绑定。
-        if (reply.Escalate) full.EscalationReason = reply.EscalationReason;
+        if (reply.Escalate)
+        {
+            full.EscalationReason = reply.EscalationReason;
+            full.EscalationTrigger = reply.EscalationTrigger;
+        }
 
         var now = DateTimeOffset.UtcNow;
         var aiMessage = new Message
@@ -322,13 +327,25 @@ public class CaseService(
         _ => status,
     };
 
+    private static string? PrimaryHotelImage(Case c)
+    {
+        var hotel = c.Booking?.Hotel;
+        if (hotel is null || hotel.ImageUrls.Count == 0) return null;
+        var index = Math.Clamp(hotel.PrimaryImageIndex, 0, hotel.ImageUrls.Count - 1);
+        return hotel.ImageUrls[index];
+    }
+
     public async Task<List<CaseSummaryDto>> GetMyCasesAsync(Guid guestUserId, bool includeClosed, CancellationToken ct = default)
     {
         var list = await cases.ListForGuestAsync(guestUserId, includeClosed, ct);
         return [.. list.Select(c => new CaseSummaryDto(
             c.Id, c.Status, StatusLabel(c.Status), c.Priority,
             c.Disruption?.Type, c.Disruption?.Title,
-            c.Booking?.Hotel?.Name, c.Booking?.CheckIn, c.Booking?.CheckOut, c.CreatedAt))];
+            c.Booking?.Hotel?.Name, c.Booking?.CheckIn, c.Booking?.CheckOut, c.CreatedAt,
+            DisruptionId: c.DisruptionId,
+            DisruptionDescription: c.Disruption?.RawSignalText,
+            ConfirmationNo: c.Booking?.ConfirmationNo,
+            HotelImageUrl: PrimaryHotelImage(c)))];
     }
 
     public async Task<CaseSummaryDto> GetCaseAsync(Guid caseId, Guid userId, string userRole, CancellationToken ct = default)
@@ -347,7 +364,24 @@ public class CaseService(
             c.EscalationReason is not null, unreadAi, unreadCoordinator,
             c.DisruptionId, c.Disruption?.RawSignalText, c.Booking?.ConfirmationNo,
             guest?.Nickname, guest?.AvatarUrl, guest?.Email, guest?.Phone,
-            c.AssigneeCoordinatorId, assignee?.Nickname);
+            c.AssigneeCoordinatorId, assignee?.Nickname,
+            HotelImageUrl: PrimaryHotelImage(c),
+            EscalationReason: c.EscalationReason, EscalationReviewedAsReasonable: c.EscalationReviewedAsReasonable, EscalationReviewNote: c.EscalationReviewNote);
+    }
+
+    /// <summary>协调员给这次AI转人工打分：合理还是不合理，不合理要说明原因。只有真的转过人工的
+    /// 案件才能复核——没转人工的案件没有"这次转人工对不对"这回事。</summary>
+    public async Task ReviewEscalationAsync(Guid caseId, Guid coordinatorUserId, bool reasonable, string? note, CancellationToken ct = default)
+    {
+        var c = await cases.FindFullAsync(caseId, ct) ?? throw new CaseNotFoundException();
+        if (c.EscalationReason is null) throw new EscalationNotFoundException();
+
+        c.EscalationReviewedAsReasonable = reasonable;
+        c.EscalationReviewNote = reasonable ? null : note;
+        c.EscalationReviewedByUserId = coordinatorUserId;
+        c.EscalationReviewedAt = DateTimeOffset.UtcNow;
+        c.UpdatedAt = DateTimeOffset.UtcNow;
+        await cases.SaveChangesAsync(ct);
     }
 
     // 案件详情页头部徽章:客人关心的是"进展到哪一步"，不是内部 Case.Status——那个字段从建案到结案
@@ -684,30 +718,18 @@ public class CaseService(
         _ => o.OptionType,
     };
 
-    /// <summary>退款政策要不要展示给客人得看政策文档怎么说，不能无脑跟 defer/alternate 一样直接推——
-    /// 优先读酒店自己的政策，没有才回退到平台默认 RagDocument 政策。再让 Gemini 读摘录给个是否建议展示的判断。
-    /// 没配 Gemini key 或摘录都找不到时保守放行（总比卡住客人、有退款权利却看不到强）。</summary>
+    /// <summary>退款政策要不要展示给客人得看这家酒店自己配没配政策——没配就代表这家酒店不支持退款，
+    /// 不回退到平台默认政策（那是给"取消费怎么算"这类通用问答兜底用的，不能替酒店做"支不支持退款"这个决定）。
+    /// 配了政策再让 Gemini 读摘录判断这份政策具体怎么说；没配 Gemini key 时保守放行（总比卡住客人、
+    /// 有退款权利却看不到强）。</summary>
     private async Task<bool> PolicyAllowsCancelAsync(Guid hotelId, CancellationToken ct)
     {
-        string? section = null;
-
         var hotelPolicy = await hotelRepo.GetActiveRefundPolicyAsync(hotelId, ct);
-        if (hotelPolicy is not null)
-        {
-            section = hotelPolicy.Content.Split("\n## ")
-                .FirstOrDefault(s => s.Contains("refund", StringComparison.OrdinalIgnoreCase))
-                ?? hotelPolicy.Content;
-        }
+        if (hotelPolicy is null) return false;
 
-        if (section is null)
-        {
-            var docs = await ragRepository.GetDefaultDocumentsAsync(ct);
-            var policyDoc = docs.FirstOrDefault(d => d.Name.Contains("policy", StringComparison.OrdinalIgnoreCase)
-                || d.Name.Contains("政策", StringComparison.OrdinalIgnoreCase));
-            section = policyDoc?.Content.Split("\n## ").FirstOrDefault(s => s.Contains("refund", StringComparison.OrdinalIgnoreCase));
-        }
-
-        if (section is null) return true;
+        var section = hotelPolicy.Content.Split("\n## ")
+            .FirstOrDefault(s => s.Contains("refund", StringComparison.OrdinalIgnoreCase))
+            ?? hotelPolicy.Content;
 
         var prompt = $"Cancellation policy excerpt:\n{section.Trim()}\n\nA guest's stay was disrupted through no fault of their own and " +
             "may want to cancel for a refund. Based only on the policy above, should we offer them a cancellation/refund option? " +

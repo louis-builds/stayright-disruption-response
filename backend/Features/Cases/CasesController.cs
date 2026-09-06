@@ -41,6 +41,27 @@ public class CasesController(ICaseService caseService) : ControllerBase
         }
     }
 
+    [HttpPost("{id:guid}/escalation-review")]
+    [Authorize(Roles = "coordinator")]
+    public async Task<ActionResult<ApiResponse<object?>>> ReviewEscalation(Guid id, ReviewEscalationRequest request, CancellationToken ct)
+    {
+        if (!request.Reasonable && string.IsNullOrWhiteSpace(request.Note))
+            return BadRequest(ApiResponse<object?>.Fail(400, "Explain why this escalation wasn't reasonable"));
+        try
+        {
+            await caseService.ReviewEscalationAsync(id, CurrentUserId, request.Reasonable, request.Note, ct);
+            return Ok(ApiResponse<object?>.Ok(null));
+        }
+        catch (CaseNotFoundException)
+        {
+            return NotFound(ApiResponse<object?>.Fail(404, "Case not found"));
+        }
+        catch (EscalationNotFoundException)
+        {
+            return Conflict(ApiResponse<object?>.Fail(409, "This case was never escalated to a coordinator"));
+        }
+    }
+
     [HttpGet("{id:guid}/messages")]
     public async Task<ActionResult<ApiResponse<PagedResult<MessageDto>>>> GetMessages(
         Guid id, [FromQuery] PagedRequest query, [FromQuery] string thread, CancellationToken ct)

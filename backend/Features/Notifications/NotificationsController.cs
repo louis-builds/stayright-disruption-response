@@ -15,9 +15,9 @@ public class NotificationsController(INotificationRepository notifications) : Co
 
     [HttpGet]
     public async Task<ActionResult<ApiResponse<PagedResult<NotificationDto>>>> List(
-        [FromQuery] PagedRequest query, CancellationToken ct)
+        [FromQuery] PagedRequest query, [FromQuery] bool unreadOnly, CancellationToken ct)
     {
-        var page = await notifications.ListForUserAsync(CurrentUserId, query.Page, query.PageSize, ct);
+        var page = await notifications.ListForUserAsync(CurrentUserId, query.Page, query.PageSize, unreadOnly, ct);
         var dtoList = page.List.Select(n => new NotificationDto(
             n.Id, n.Channel, n.Type, n.Title, n.Body, n.CaseId, n.SentAt, n.ReadAt, n.Success,
             n.Case?.Disruption?.Type, n.Case?.Disruption?.Title, n.Case?.Booking?.CheckIn, n.Case?.Status)).ToList();
@@ -41,6 +41,13 @@ public class NotificationsController(INotificationRepository notifications) : Co
         notification.ReadAt ??= DateTimeOffset.UtcNow;
         notification.UpdatedAt = DateTimeOffset.UtcNow;
         await notifications.SaveChangesAsync(ct);
+        return Ok(ApiResponse<object?>.Ok(null, "Marked as read"));
+    }
+
+    [HttpPost("case/{caseId:guid}/read")]
+    public async Task<ActionResult<ApiResponse<object?>>> MarkCaseRead(Guid caseId, CancellationToken ct)
+    {
+        await notifications.MarkCaseReadAsync(CurrentUserId, caseId, ct);
         return Ok(ApiResponse<object?>.Ok(null, "Marked as read"));
     }
 }

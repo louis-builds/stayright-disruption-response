@@ -13,7 +13,13 @@ public class BadCaseService(IBadCaseRepository repo, GeminiClient gemini) : IBad
             m.Case?.Booking?.GuestUser?.Nickname ?? "",
             m.Case?.Disruption?.Title ?? "",
             m.Content.Length > 140 ? m.Content[..140] + "…" : m.Content,
-            m.CreatedAt))];
+            m.CreatedAt, m.Escalated, m.MissedEscalationConfirmed))];
+    }
+
+    public async Task ConfirmMissedEscalationAsync(Guid messageId, bool confirmed, CancellationToken ct = default)
+    {
+        var found = await repo.SetMissedEscalationConfirmedAsync(messageId, confirmed, ct);
+        if (!found) throw new CaseNotFoundException();
     }
 
     public async Task<BadCaseReplayDto> ReplayAsync(Guid messageId, CancellationToken ct = default)

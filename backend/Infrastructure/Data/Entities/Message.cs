@@ -13,6 +13,10 @@ public class Message
     public string Content { get; set; } = "";
     public string? Vote { get; set; } // like|dislike|null，供 P9 差评分析
     public bool Escalated { get; set; } // AI 回复触发了转人工，供看板"转人工率"统计
+    /// <summary>协调员对"被踩+没转人工"的AI回复复核：这条其实该转人工吗。用来补
+    /// EscalationReviewedAsReasonable 那份反馈查不出的漏报（该转没转）——那份数据只覆盖真正转了
+    /// 人工的案子，测不出阈值定太高的一面。null=还没复核。</summary>
+    public bool? MissedEscalationConfirmed { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; } // 消息不可编辑，随 ReadAt 变化而更新，满足审计字段规范
     public DateTimeOffset? ReadAt { get; set; }

@@ -201,6 +201,26 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .HasColumnType("text")
                         .HasColumnName("escalation_reason");
 
+                    b.Property<string>("EscalationReviewNote")
+                        .HasColumnType("text")
+                        .HasColumnName("escalation_review_note");
+
+                    b.Property<bool?>("EscalationReviewedAsReasonable")
+                        .HasColumnType("boolean")
+                        .HasColumnName("escalation_reviewed_as_reasonable");
+
+                    b.Property<DateTimeOffset?>("EscalationReviewedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("escalation_reviewed_at");
+
+                    b.Property<Guid?>("EscalationReviewedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("escalation_reviewed_by_user_id");
+
+                    b.Property<string>("EscalationTrigger")
+                        .HasColumnType("text")
+                        .HasColumnName("escalation_trigger");
+
                     b.Property<string>("Priority")
                         .IsRequired()
                         .HasColumnType("text")
@@ -776,6 +796,14 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_active");
 
+                    b.Property<string>("SourceFileKey")
+                        .HasColumnType("text")
+                        .HasColumnName("source_file_key");
+
+                    b.Property<string>("SourceFileName")
+                        .HasColumnType("text")
+                        .HasColumnName("source_file_name");
+
                     b.Property<string>("StructuredRulesJson")
                         .HasColumnType("jsonb")
                         .HasColumnName("structured_rules");
@@ -873,6 +901,10 @@ namespace TravelDisruptionAgent.Api.Migrations
                     b.Property<bool>("Escalated")
                         .HasColumnType("boolean")
                         .HasColumnName("escalated");
+
+                    b.Property<bool?>("MissedEscalationConfirmed")
+                        .HasColumnType("boolean")
+                        .HasColumnName("missed_escalation_confirmed");
 
                     b.Property<DateTimeOffset?>("ReadAt")
                         .HasColumnType("timestamp with time zone")
@@ -1302,6 +1334,10 @@ namespace TravelDisruptionAgent.Api.Migrations
                     b.Property<DateTimeOffset?>("FaqProcessedThrough")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("faq_processed_through");
+
+                    b.Property<bool>("FrustrationEscalationEnabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("frustration_escalation_enabled");
 
                     b.Property<bool>("LowConfidenceEscalationEnabled")
                         .HasColumnType("boolean")

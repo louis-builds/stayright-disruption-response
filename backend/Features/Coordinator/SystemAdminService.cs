@@ -44,7 +44,7 @@ public class SystemAdminService(ISystemAdminRepository repo, ISystemSettingsRepo
     public async Task<SystemSettingsDto> GetSettingsAsync(CancellationToken ct = default)
     {
         var s = await settingsRepo.GetAsync(ct);
-        return new SystemSettingsDto(s.UnresolvedTurnThreshold, s.LowConfidenceEscalationEnabled);
+        return new SystemSettingsDto(s.UnresolvedTurnThreshold, s.LowConfidenceEscalationEnabled, s.FrustrationEscalationEnabled);
     }
 
     public async Task<SystemSettingsDto> UpdateSettingsAsync(SystemSettingsDto request, CancellationToken ct = default)
@@ -52,9 +52,10 @@ public class SystemAdminService(ISystemAdminRepository repo, ISystemSettingsRepo
         var s = await settingsRepo.GetAsync(ct);
         s.UnresolvedTurnThreshold = request.UnresolvedTurnThreshold;
         s.LowConfidenceEscalationEnabled = request.LowConfidenceEscalationEnabled;
+        s.FrustrationEscalationEnabled = request.FrustrationEscalationEnabled;
         s.UpdatedAt = DateTimeOffset.UtcNow;
         await settingsRepo.SaveChangesAsync(ct);
-        return new SystemSettingsDto(s.UnresolvedTurnThreshold, s.LowConfidenceEscalationEnabled);
+        return new SystemSettingsDto(s.UnresolvedTurnThreshold, s.LowConfidenceEscalationEnabled, s.FrustrationEscalationEnabled);
     }
 
     private static string GenerateTempPassword()

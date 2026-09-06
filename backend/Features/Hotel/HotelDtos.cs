@@ -50,7 +50,8 @@ public record CreateCustomOptionRequest(string Title, List<string> PerkNames);
 public record HotelRefundPolicyDto(
     Guid Id, string Content, string? StructuredRulesJson,
     DateTimeOffset? EffectiveFrom, DateTimeOffset? EffectiveUntil,
-    bool IsActive, DateTimeOffset UpdatedAt);
+    bool IsActive, DateTimeOffset UpdatedAt,
+    string? SourceFileName, string? SourceFileUrl);
 
 public record UpsertHotelRefundPolicyRequest(
     string Content, string? StructuredRulesJson,

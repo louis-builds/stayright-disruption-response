@@ -7,3 +7,5 @@ public class CaseAccessDeniedException() : Exception("You do not have permission
 public class CaseAlreadyClosedException() : Exception("This case is already closed");
 
 public class RefundNotConfirmedException() : Exception("Confirm the refund amount before closing with this reason");
+
+public class EscalationNotFoundException() : Exception("This case was never escalated to a coordinator");
