@@ -62,6 +62,11 @@ export function BadCasesPanel() {
     }
   }
 
+  async function confirmMissed(messageId: string, confirmed: boolean) {
+    await api.confirmMissedEscalation(messageId, confirmed);
+    setItems((prev) => prev.map((it) => (it.messageId === messageId ? { ...it, missedEscalationConfirmed: confirmed } : it)));
+  }
+
   return (
     <div className="bad-cases-page">
       <div className="coord-queue-stats">
@@ -151,6 +156,26 @@ export function BadCasesPanel() {
                 <span className="bad-case-step-label">LLM analysis</span>
                 <p>{replay.analysis}</p>
               </div>
+              {(() => {
+                const selected = items.find((it) => it.messageId === selectedId);
+                if (!selected || selected.escalated) return null;
+                if (selected.missedEscalationConfirmed !== null) {
+                  return (
+                    <p className="bad-case-missed-verdict">
+                      {selected.missedEscalationConfirmed ? "Confirmed: this should have escalated." : "Confirmed: escalation was not needed."}
+                    </p>
+                  );
+                }
+                return (
+                  <div className="bad-case-missed-review">
+                    <span>Should this have escalated to a coordinator?</span>
+                    <div>
+                      <button type="button" onClick={() => void confirmMissed(selected.messageId, true)}>Yes, missed it</button>
+                      <button type="button" onClick={() => void confirmMissed(selected.messageId, false)}>No, fine as-is</button>
+                    </div>
+                  </div>
+                );
+              })()}
               <button type="button" className="coord-btn-link" onClick={() => navigate(`/cases/${replay.caseId}`)}>
                 Open this case's conversation →
               </button>

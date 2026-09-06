@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TravelDisruptionAgent.Api.Infrastructure.Data;
@@ -12,9 +13,11 @@ using TravelDisruptionAgent.Api.Infrastructure.Data;
 namespace TravelDisruptionAgent.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260905063433_AddFrustrationEscalationEnabled")]
+    partial class AddFrustrationEscalationEnabled
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -795,14 +798,6 @@ namespace TravelDisruptionAgent.Api.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean")
                         .HasColumnName("is_active");
-
-                    b.Property<string>("SourceFileKey")
-                        .HasColumnType("text")
-                        .HasColumnName("source_file_key");
-
-                    b.Property<string>("SourceFileName")
-                        .HasColumnType("text")
-                        .HasColumnName("source_file_name");
 
                     b.Property<string>("StructuredRulesJson")
                         .HasColumnType("jsonb")

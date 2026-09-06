@@ -25,6 +25,10 @@ export interface CaseSummary {
   assigneeCoordinatorId: string | null;
   assigneeNickname: string | null;
   hotelImageUrl: string | null;
+  // 转人工原因文本(比如"客人情绪激动")，配合下面两个字段给协调员用来复核这次转人工转得对不对。
+  escalationReason: string | null;
+  escalationReviewedAsReasonable: boolean | null;
+  escalationReviewNote: string | null;
 }
 
 export type SenderRole = "system" | "ai" | "guest" | "coordinator";

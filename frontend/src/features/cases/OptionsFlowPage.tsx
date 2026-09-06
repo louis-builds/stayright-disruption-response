@@ -15,6 +15,7 @@ interface OptionPayload {
   fee_diff?: number;
   currency?: string;
   distance_km?: number;
+  reason?: string;
   refund_amount?: number;
   cancellation_fee?: number;
   eta_business_days?: number;
@@ -404,6 +405,7 @@ export function OptionsFlowPage() {
                         {payload.eta_business_days !== undefined && <div><dt>Processing time</dt><dd>{payload.eta_business_days} business days</dd></div>}
                         {o.optionType === "defer" && payload.new_check_in_offset_days !== undefined && caseInfo?.checkIn && <div><dt>New check-in</dt><dd>{addDaysToDate(caseInfo.checkIn, payload.new_check_in_offset_days)}</dd></div>}
                         {o.optionType === "defer" && payload.new_check_out_offset_days !== undefined && caseInfo?.checkIn && <div><dt>New check-out</dt><dd>{addDaysToDate(caseInfo.checkIn, payload.new_check_out_offset_days)}</dd></div>}
+                        {payload.reason && <div><dt>Why we suggest this</dt><dd className="option-recommend-reason">{payload.reason}</dd></div>}
                       </dl>
                       {disabled && <p className="option-reason">This option is no longer available.</p>}
 

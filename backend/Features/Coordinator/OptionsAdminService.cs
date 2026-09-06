@@ -49,6 +49,20 @@ public class OptionsAdminService(IOptionsAdminRepository repo, IBookingRepositor
             + (double)candidateRoom.PriceAmount / 100;
     }
 
+    // 跟 ScoreAlternate 用同一批信号,只是从"打分"换成"挑一句人话说明"——按信号强弱排优先级,
+    // 不用 Gemini 现编:这段文案只是把已经算出来的数字翻译成一句话,没有语义生成需求，
+    // 犯不着为了一句话再搭一次网络调用(既慢又多一个失败点)。
+    private static string BuildAlternateReason(Hotel candidateHotel, RoomType candidateRoom, RoomType? originalRoom,
+        HashSet<Guid> guestPreviousHotelIds, double? distanceKm)
+    {
+        if (guestPreviousHotelIds.Contains(candidateHotel.Id)) return "You've stayed here before.";
+        if (distanceKm is { } km && km <= 1) return "Right next to your original hotel.";
+        if (distanceKm is { } km2 && km2 <= 20) return $"Only {Math.Round(km2)} km from your original hotel.";
+        if (originalRoom is not null && candidateRoom.Capacity == originalRoom.Capacity) return "Same room size as your original booking.";
+        if (originalRoom is not null && candidateRoom.Amenities.Intersect(originalRoom.Amenities).Any()) return "Shares amenities with your original room.";
+        return "The closest match we could find among available hotels.";
+    }
+
     private async Task<List<Option>> BuildDraftOptionsAsync(Case c, IEnumerable<string> typesToBuild, CancellationToken ct)
     {
         var booking = c.Booking!;
@@ -78,13 +92,16 @@ public class OptionsAdminService(IOptionsAdminRepository repo, IBookingRepositor
             var candidates = await repo.ListAlternateCandidatesAsync(booking.HotelId, ct);
             var alreadyOfferedHotelIds = await repo.ListOfferedAlternateHotelIdsAsync(c.Id, ct);
             // 排除已经推荐过的酒店；但如果候选已经被排到一个都不剩(比如就两三家在营酒店，
-            // 全被推荐过了)，宁可重复推荐也不要一个方案都不给客人。
+            // 全被推荐过了)，宁可重复推荐也不要一个方案都不给客人——不过要跟客人说清楚这是重复推荐，
+            // 不能让 TA 以为这是一个新方案。
             var unseenCandidates = candidates.Where(cand => !alreadyOfferedHotelIds.Contains(cand.Hotel.Id)).ToList();
+            var ranOutOfNewOptions = candidates.Count > 0 && unseenCandidates.Count == 0;
             if (unseenCandidates.Count > 0) candidates = unseenCandidates;
             (Hotel Hotel, RoomType RoomType)? alt = null;
+            var previousHotelIds = new HashSet<Guid>();
             if (candidates.Count > 0)
             {
-                var previousHotelIds = (await bookingRepo.ListForGuestAsync(booking.GuestUserId, ct))
+                previousHotelIds = (await bookingRepo.ListForGuestAsync(booking.GuestUserId, ct))
                     .Select(b => b.HotelId).ToHashSet();
                 alt = candidates.MinBy(cand => ScoreAlternate(cand.Hotel, cand.RoomType, booking.Hotel, booking.RoomType, previousHotelIds));
             }
@@ -105,12 +122,26 @@ public class OptionsAdminService(IOptionsAdminRepository repo, IBookingRepositor
                     fee_diff = feeDiff,
                     currency = booking.Currency,
                     distance_km = distanceKm,
+                    reason = BuildAlternateReason(hotel, roomType, booking.RoomType, previousHotelIds, distanceKm),
                 });
                 built.Add(new Option
                 {
                     Id = Guid.NewGuid(), CaseId = c.Id, OptionType = "alternate", PayloadJson = altPayload,
                     Availability = "pending", CreatedAt = now, UpdatedAt = now,
                 });
+
+                if (ranOutOfNewOptions)
+                {
+                    var language = booking.GuestUser?.Language ?? "en";
+                    var noNewOptionsText = language == "zh"
+                        ? "这附近能推荐的酒店暂时没有新的了，还是这一家——如果想让人工再看看，直接在这里说一声就行。"
+                        : "We don't have a new hotel to suggest right now, so here's the same recommendation again — just say so here if you'd like a coordinator to take another look.";
+                    await repo.AddMessageAsync(new Message
+                    {
+                        Id = Guid.NewGuid(), CaseId = c.Id, SenderRole = "system", Thread = "ai",
+                        Content = noNewOptionsText, CreatedAt = now, UpdatedAt = now,
+                    }, ct);
+                }
             }
         }
 

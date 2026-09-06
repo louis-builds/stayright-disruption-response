@@ -18,6 +18,7 @@ public interface IOptionsAdminRepository
     /// <summary>这个案件历史上给客人推荐过的所有备用酒店(跨多次 Regenerate)，打分选新候选时要排除。</summary>
     Task<HashSet<Guid>> ListOfferedAlternateHotelIdsAsync(Guid caseId, CancellationToken ct = default);
     Task AddAlternateOfferAsync(Guid caseId, Guid hotelId, CancellationToken ct = default);
+    Task AddMessageAsync(Message message, CancellationToken ct = default);
     Task AddNotificationAsync(Notification notification, CancellationToken ct = default);
     Task<Notification?> FindLatestOptionsPushAsync(Guid caseId, bool successfulOnly, CancellationToken ct = default);
     Task<DateTimeOffset?> FindLatestOptionUpdateAsync(Guid caseId, CancellationToken ct = default);
