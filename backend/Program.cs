@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Serilog;
 using TravelDisruptionAgent.Api.Features.Auth;
 using TravelDisruptionAgent.Api.Features.Bookings;
+using TravelDisruptionAgent.Api.Features.Calls;
 using TravelDisruptionAgent.Api.Features.Cases;
 using TravelDisruptionAgent.Api.Features.Chat;
 using TravelDisruptionAgent.Api.Features.Coordinator;
@@ -18,6 +19,7 @@ using TravelDisruptionAgent.Api.Infrastructure;
 using TravelDisruptionAgent.Api.Infrastructure.Auth;
 using TravelDisruptionAgent.Api.Infrastructure.Data;
 using TravelDisruptionAgent.Api.Infrastructure.Email;
+using TravelDisruptionAgent.Api.Infrastructure.Storage;
 
 // 项目根目录的 .env 是后端配置来源（Gemini/DeepSeek/Google Maps/SMTP/数据库连接），
 // dotnet run 默认从 backend/ 目录起，所以 .env 在上一级。
@@ -99,6 +101,7 @@ builder.Services.AddScoped<ICaseRepository, CaseRepository>();
 builder.Services.AddScoped<ICaseService, CaseService>();
 builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 builder.Services.AddSingleton<CaseActionTokenService>();
+builder.Services.AddSingleton<IPolicyDocumentStorage, S3PolicyDocumentStorage>();
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<IRagRepository, RagRepository>();
 builder.Services.AddScoped<GeminiClient>();
@@ -125,6 +128,10 @@ builder.Services.AddScoped<RefundPolicyRuleExtractor>();
 builder.Services.AddScoped<IHotelService, HotelService>();
 builder.Services.AddScoped<IFaqRepository, FaqRepository>();
 builder.Services.AddScoped<IFaqService, FaqService>();
+builder.Services.AddScoped<ICallRepository, CallRepository>();
+builder.Services.AddScoped<ICallService, CallService>();
+builder.Services.AddScoped<ITelephonyProvider, MockTelephonyProvider>();
+builder.Services.AddScoped<IAsrProvider, MockAsrProvider>();
 builder.Services.AddHostedService<FaqClusteringJob>();
 builder.Services.AddHostedService<HandoffIngestJob>();
 
@@ -148,6 +155,10 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseHttpsRedirection();
 }
+
+// Mock 电话录音文件走静态托管(wwwroot/mock-recordings)——真实 Twilio 接入后录音会存在对象存储，
+// 这块直接删掉换成真实 URL 即可，不用鉴权保护(跟真实录音 URL 惯例一致，通常是带签名的临时直链)。
+app.UseStaticFiles();
 
 app.UseCors(FrontendCorsPolicy);
 app.UseAuthentication();

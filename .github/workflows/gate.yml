@@ -8,9 +8,12 @@ on:
 
 jobs:
   python:
-    name: Python (src/, tests/)
+    name: Python (detect/)
     runs-on: ubuntu-latest
     if: github.event_name != 'pull_request' || github.head_ref == 'Dev-Zachary'
+    defaults:
+      run:
+        working-directory: detect
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

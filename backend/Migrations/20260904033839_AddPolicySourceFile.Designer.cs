@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TravelDisruptionAgent.Api.Infrastructure.Data;
@@ -12,9 +13,11 @@ using TravelDisruptionAgent.Api.Infrastructure.Data;
 namespace TravelDisruptionAgent.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260904033839_AddPolicySourceFile")]
+    partial class AddPolicySourceFile
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -162,118 +165,6 @@ namespace TravelDisruptionAgent.Api.Migrations
                     b.ToTable("bookings", (string)null);
                 });
 
-            modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.Call", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<string>("CalleeType")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("callee_type");
-
-                    b.Property<Guid>("CaseId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("case_id");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<DateTimeOffset?>("EndedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("ended_at");
-
-                    b.Property<Guid>("InitiatedByCoordinatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("initiated_by_coordinator_id");
-
-                    b.Property<DateTimeOffset>("StartedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("started_at");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("status");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.HasKey("Id")
-                        .HasName("pk_calls");
-
-                    b.HasIndex("CaseId")
-                        .HasDatabaseName("ix_calls_case_id");
-
-                    b.HasIndex("InitiatedByCoordinatorId")
-                        .HasDatabaseName("ix_calls_initiated_by_coordinator_id");
-
-                    b.ToTable("calls", (string)null);
-                });
-
-            modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.CallRecording", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<string>("AiSummary")
-                        .HasColumnType("text")
-                        .HasColumnName("ai_summary");
-
-                    b.Property<Guid>("CallId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("call_id");
-
-                    b.Property<string>("CoordinatorNote")
-                        .HasColumnType("text")
-                        .HasColumnName("coordinator_note");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<int>("DurationSeconds")
-                        .HasColumnType("integer")
-                        .HasColumnName("duration_seconds");
-
-                    b.Property<string>("FileUrl")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("file_url");
-
-                    b.Property<string>("ProcessingStatus")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("processing_status");
-
-                    b.Property<bool>("Reviewed")
-                        .HasColumnType("boolean")
-                        .HasColumnName("reviewed");
-
-                    b.Property<string>("TranscriptText")
-                        .HasColumnType("text")
-                        .HasColumnName("transcript_text");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.HasKey("Id")
-                        .HasName("pk_call_recordings");
-
-                    b.HasIndex("CallId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_call_recordings_call_id");
-
-                    b.ToTable("call_recordings", (string)null);
-                });
-
             modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.Case", b =>
                 {
                     b.Property<Guid>("Id")
@@ -312,26 +203,6 @@ namespace TravelDisruptionAgent.Api.Migrations
                     b.Property<string>("EscalationReason")
                         .HasColumnType("text")
                         .HasColumnName("escalation_reason");
-
-                    b.Property<string>("EscalationReviewNote")
-                        .HasColumnType("text")
-                        .HasColumnName("escalation_review_note");
-
-                    b.Property<bool?>("EscalationReviewedAsReasonable")
-                        .HasColumnType("boolean")
-                        .HasColumnName("escalation_reviewed_as_reasonable");
-
-                    b.Property<DateTimeOffset?>("EscalationReviewedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("escalation_reviewed_at");
-
-                    b.Property<Guid?>("EscalationReviewedByUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("escalation_reviewed_by_user_id");
-
-                    b.Property<string>("EscalationTrigger")
-                        .HasColumnType("text")
-                        .HasColumnName("escalation_trigger");
 
                     b.Property<string>("Priority")
                         .IsRequired()
@@ -1014,10 +885,6 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("escalated");
 
-                    b.Property<bool?>("MissedEscalationConfirmed")
-                        .HasColumnType("boolean")
-                        .HasColumnName("missed_escalation_confirmed");
-
                     b.Property<DateTimeOffset?>("ReadAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("read_at");
@@ -1447,10 +1314,6 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("faq_processed_through");
 
-                    b.Property<bool>("FrustrationEscalationEnabled")
-                        .HasColumnType("boolean")
-                        .HasColumnName("frustration_escalation_enabled");
-
                     b.Property<bool>("LowConfidenceEscalationEnabled")
                         .HasColumnType("boolean")
                         .HasColumnName("low_confidence_escalation_enabled");
@@ -1644,30 +1507,6 @@ namespace TravelDisruptionAgent.Api.Migrations
                     b.Navigation("Hotel");
 
                     b.Navigation("RoomType");
-                });
-
-            modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.Call", b =>
-                {
-                    b.HasOne("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.Case", "Case")
-                        .WithMany()
-                        .HasForeignKey("CaseId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_calls_cases_case_id");
-
-                    b.Navigation("Case");
-                });
-
-            modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.CallRecording", b =>
-                {
-                    b.HasOne("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.Call", "Call")
-                        .WithOne("Recording")
-                        .HasForeignKey("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.CallRecording", "CallId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_call_recordings_calls_call_id");
-
-                    b.Navigation("Call");
                 });
 
             modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.Case", b =>
@@ -1890,11 +1729,6 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .HasConstraintName("fk_users_hotels_hotel_id");
 
                     b.Navigation("Hotel");
-                });
-
-            modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.Call", b =>
-                {
-                    b.Navigation("Recording");
                 });
 
             modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.Case", b =>

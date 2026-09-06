@@ -44,3 +44,6 @@ obj/
 .idea/
 .vscode/
 .zcode/
+
+# 第三方 AI agent 的会话状态目录（非本项目产物）
+.mimosa/
