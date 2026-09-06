@@ -12,6 +12,16 @@
 
 技术栈已定，AWS 环境已搭好并通过冒烟验收（2026-08-21）。
 
+**目录结构与实际代码的对应关系**（2026-08-31 核对代码后补充）：
+
+| 目录 | 内容 | 对应 CI job |
+|---|---|---|
+| `detect/` | Python 3.12 采集器/检测逻辑（`src/`、`tests/`、`requirements.txt`、`pyproject.toml`） | `gate.yml` 的 `python` job |
+| `backend/` | .NET 服务（`backend.sln`、`Program.cs`、`Controllers/`、`Features/` 等） | `gate.yml` 的 `backend` job |
+| `frontend/` | React + TypeScript + Vite 运营台（`package.json` 含 `lint`/`build`） | `gate.yml` 的 `frontend` job |
+
+⚠️ **与下方「技术栈」表存在落差，待 Zachary 确认**：技术栈表只列了 Python 后端，未提及 `backend/` 下的 .NET 服务；这是架构表述滞后于代码演进，还是 `backend/` 属于非核心/待淘汰模块，需要 Zachary 明确后回填本文件，不要自行假设。
+
 ## 技术栈（已定，非提案）
 
 | 项 | 选型 |
