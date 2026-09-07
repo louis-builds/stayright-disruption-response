@@ -7,6 +7,7 @@ import { AppShell } from "../../shared/components/AppShell";
 import { RoleTopNav } from "../../shared/components/RoleTopNav";
 import { CoordinatorDashboardShell } from "../coordinator/CoordinatorDashboardShell";
 import { GuestDashboardShell } from "../home/GuestDashboardShell";
+import { HotelDashboardShell } from "../hotel/HotelDashboardShell";
 import "./ProfilePage.css";
 
 const PHONE_RE = /^\+?[0-9]{7,15}$/;
@@ -73,6 +74,13 @@ export function ProfilePage() {
       <GuestDashboardShell active="profile">
         <div className="profile-guest-stage profile-coordinator-stage"><ProfilePageContent user={user} embedded /></div>
       </GuestDashboardShell>
+    );
+  }
+  if (user.role === "hotel") {
+    return (
+      <HotelDashboardShell active="profile" onNavigate={() => navigate("/hotel/home")} onSearch={() => navigate("/hotel/home")}>
+        <div className="profile-coordinator-stage"><ProfilePageContent user={user} embedded /></div>
+      </HotelDashboardShell>
     );
   }
   return <ProfilePageContent user={user} />;
