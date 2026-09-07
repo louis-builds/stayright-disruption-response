@@ -25,6 +25,7 @@ export interface CaseQueueItem {
   assigneeNickname: string | null;
   overdue: boolean;
   isHighValueGuest: boolean;
+  awaitingHotelConfirmation: boolean;
 }
 
 export interface CoordinatorOption {
@@ -247,10 +248,11 @@ export interface AdminOption {
   customTitle: string | null;
   perkNames: string[];
   coordinatorVisibilityOverride: boolean | null;
+  executionRequestedAt: string | null;
 }
 
 export interface PushOptionsStatus {
   canPush: boolean;
-  state: "ready" | "sent" | "updated" | "retry";
+  state: "ready" | "sent" | "updated" | "retry" | "guest_confirmed";
   lastAttemptAt: string | null;
 }

@@ -71,6 +71,10 @@ public class CoordinatorController(ICoordinatorService coordinatorService) : Con
         {
             return Conflict(ApiResponse<object?>.Fail(409, "Confirm the refund amount via /api/cases/{id}/refund/confirm before closing with this reason"));
         }
+        catch (HotelConfirmationPendingException)
+        {
+            return Conflict(ApiResponse<object?>.Fail(409, "The guest selected an option that is still awaiting hotel confirmation"));
+        }
         catch (CaseAlreadyClosedException)
         {
             return Conflict(ApiResponse<object?>.Fail(409, "This case is already closed"));

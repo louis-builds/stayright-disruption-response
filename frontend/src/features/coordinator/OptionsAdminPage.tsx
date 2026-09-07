@@ -28,6 +28,24 @@ function parsePayload(json: string): Record<string, unknown> {
   }
 }
 
+function addDaysToDate(dateValue: string | null, days: number): string | null {
+  if (!dateValue || !Number.isFinite(days)) return null;
+  const parts = dateValue.split("-").map(Number);
+  if (parts.length !== 3 || parts.some((part) => !Number.isFinite(part))) return null;
+  const date = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toLocaleDateString("en-NZ", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+function formatStoredDate(dateValue: string | null): string | null {
+  return addDaysToDate(dateValue, 0);
+}
+
 function UnavailableModal({ onCancel, onConfirm }: { onCancel: () => void; onConfirm: (reason: string) => void }) {
   const [reason, setReason] = useState("");
   return (
@@ -74,7 +92,15 @@ function UnlockModal({ onCancel, onConfirm }: { onCancel: () => void; onConfirm:
   );
 }
 
-function OptionCard({ option, caseId, readOnly, onChanged }: { option: AdminOption; caseId: string; readOnly: boolean; onChanged: () => void }) {
+function OptionCard({ option, caseId, readOnly, caseClosed, bookingCheckIn, bookingCheckOut, onChanged }: {
+  option: AdminOption;
+  caseId: string;
+  readOnly: boolean;
+  caseClosed: boolean;
+  bookingCheckIn: string | null;
+  bookingCheckOut: string | null;
+  onChanged: () => void;
+}) {
   const [fields, setFields] = useState<Record<string, string>>({});
   const [showUnavailable, setShowUnavailable] = useState(false);
   const [showUnlock, setShowUnlock] = useState(false);
@@ -96,12 +122,22 @@ function OptionCard({ option, caseId, readOnly, onChanged }: { option: AdminOpti
     onChanged();
   }
 
+  const showConcreteDeferDates = readOnly && option.optionType === "defer";
+  const checkInOffset = Number(fields.new_check_in_offset_days);
+  const checkOutOffset = Number(fields.new_check_out_offset_days);
+  const concreteCheckIn = caseClosed
+    ? formatStoredDate(bookingCheckIn)
+    : addDaysToDate(bookingCheckIn, checkInOffset);
+  const concreteCheckOut = caseClosed
+    ? formatStoredDate(bookingCheckOut)
+    : addDaysToDate(bookingCheckIn, checkOutOffset);
+
   return (
     <div className={`option-admin-card ${option.availability === "unavailable" ? "option-admin-card-unavailable" : ""}`}>
       <div className="option-admin-header">
         <div className="option-admin-title"><i>{OPTION_ICONS[option.optionType] ?? "◇"}</i><div><h3>{option.optionType === "custom" ? (option.customTitle ?? "Custom option") : (OPTION_TITLES[option.optionType] ?? option.optionType)}</h3><p>{OPTION_DESCRIPTIONS[option.optionType] ?? "Coordinator-created option for this case."}</p></div></div>
         <div className="option-admin-tags">
-          <span className={`tag tag-status-${option.availability === "unavailable" ? "overdue" : "normal"}`}>{option.availability}</span>
+          <span className={`tag tag-status-${option.availability === "unavailable" ? "overdue" : "normal"}`}>{option.executionRequestedAt ? "guest submitted" : option.availability}</span>
           {option.locked && <span className="tag tag-status-warn">locked</span>}
         </div>
       </div>
@@ -133,7 +169,9 @@ function OptionCard({ option, caseId, readOnly, onChanged }: { option: AdminOpti
         <p className="option-admin-reason">Unavailable: {option.unavailableReason}</p>
       ) : (
         <div className="option-admin-fields">
-          {Object.entries(fields).map(([key, value]) => (
+          {Object.entries(fields)
+            .filter(([key]) => !showConcreteDeferDates || !["new_check_in_offset_days", "new_check_out_offset_days"].includes(key))
+            .map(([key, value]) => (
             <label key={key} className="coord-field">
               <span>{key.replace(/_/g, " ")}</span>
               <input
@@ -143,12 +181,24 @@ function OptionCard({ option, caseId, readOnly, onChanged }: { option: AdminOpti
               />
             </label>
           ))}
+          {showConcreteDeferDates && (
+            <>
+              <label className="coord-field">
+                <span>New check-in date</span>
+                <input value={concreteCheckIn ?? "Date unavailable"} disabled />
+              </label>
+              <label className="coord-field">
+                <span>New check-out date</span>
+                <input value={concreteCheckOut ?? "Date unavailable"} disabled />
+              </label>
+            </>
+          )}
         </div>
       )}
 
       <div className="option-admin-actions">
         {readOnly ? (
-          <span className="coord-row-meta">Case closed — read-only</span>
+          <span className="coord-row-meta">{caseClosed ? "Case closed — read-only" : "Guest submitted — read-only"}</span>
         ) : (
           <>
             {option.availability !== "unavailable" && (
@@ -274,12 +324,20 @@ export function OptionsAdminPage() {
     }
   }
 
-  const allUnavailable = options.length > 0 && options.every((o) => o.availability === "unavailable");
+  const submittedOption = options.find((option) => option.selected && option.executionRequestedAt) ?? null;
+  const displayedOptions = submittedOption ? [submittedOption] : options;
+  const selectionSubmitted = submittedOption !== null;
+  const allUnavailable = displayedOptions.length > 0 && displayedOptions.every((o) => o.availability === "unavailable");
   const isClosed = caseSummary?.status === "closed";
+  const awaitingHotelConfirmation = Boolean(
+    !isClosed && submittedOption &&
+    (submittedOption.optionType === "defer" || submittedOption.optionType === "alternate") &&
+    submittedOption.availability === "pending",
+  );
 
   if (!user) return null;
 
-  const availableCount = options.filter((option) => option.availability !== "unavailable").length;
+  const availableCount = displayedOptions.filter((option) => option.availability !== "unavailable").length;
 
   return (
     <CoordinatorDashboardShell
@@ -304,7 +362,7 @@ export function OptionsAdminPage() {
             <div><small>Guest</small><strong><i className="options-summary-icon">♙</i>{caseSummary.guestNickname ?? "Guest not recorded"}</strong><span>{caseSummary.confirmationNo ?? "No booking reference"}</span></div>
             <div><small>Hotel</small><strong><i className="options-summary-icon">▦</i>{caseSummary.hotelName ?? "Not recorded"}</strong><span>{caseSummary.checkIn && caseSummary.checkOut ? `▣ ${caseSummary.checkIn} → ${caseSummary.checkOut}` : "Dates not recorded"}</span></div>
             <div><small>Disruption</small><strong><i className="options-summary-icon warning">△</i>{caseSummary.disruptionTitle ?? "Not recorded"}</strong><span className="options-summary-priority">● {caseSummary.priority} priority</span></div>
-            <div><small>Available options</small><strong className="options-count">{availableCount}</strong><span>{options.length} generated</span></div>
+            <div><small>{selectionSubmitted ? "Confirmed option" : "Available options"}</small><strong className="options-count">{availableCount}</strong><span>{selectionSubmitted ? "submitted by guest" : `${options.length} generated`}</span></div>
           </section>
         )}
 
@@ -322,27 +380,60 @@ export function OptionsAdminPage() {
           </div>
         )}
 
+        {selectionSubmitted && !isClosed && (
+          <div className="options-admin-closed-note">
+            {awaitingHotelConfirmation
+              ? "The guest has selected this option. The booking will remain unchanged until the hotel confirms availability."
+              : "The guest has submitted this option. It is now read-only and ready for final processing."}
+          </div>
+        )}
+
         <div className="options-section-heading">
-          <div><h2>Generated options</h2><p>Edit only the details that require coordinator review.</p></div>
+          <div><h2>{selectionSubmitted ? "Guest confirmed option" : "Generated options"}</h2><p>{selectionSubmitted ? "Only the guest’s final submitted choice is shown." : "Edit only the details that require coordinator review."}</p></div>
           <div className="coord-toolbar">
-          <button type="button" className="coord-btn-secondary" disabled={regenerating || isClosed} onClick={() => void regenerate()}>
-            {regenerating ? "Regenerating…" : "Regenerate unlocked options"}
-          </button>
-          <button type="button" className="coord-btn-primary" disabled={pushing || options.length === 0 || isClosed || pushStatus?.canPush === false} onClick={() => void push()}>
-            {pushing ? "Pushing…" : pushStatus?.state === "sent" ? "Sent to guest" : pushStatus?.state === "updated" ? "Send updated options" : pushStatus?.state === "retry" ? "Retry sending" : "Push options to guest"}
-          </button>
+          {isClosed ? (
+            <button type="button" className="coord-btn-primary" onClick={() => navigate(`/coordinator/cases/${caseId}/escalation`)}>
+              View completed case →
+            </button>
+          ) : awaitingHotelConfirmation ? (
+            <button type="button" className="coord-btn-secondary" disabled>
+              Awaiting hotel confirmation
+            </button>
+          ) : selectionSubmitted ? (
+            <button type="button" className="coord-btn-primary" onClick={() => navigate(`/coordinator/cases/${caseId}/escalation`)}>
+              Continue to case decision →
+            </button>
+          ) : (
+            <>
+              <button type="button" className="coord-btn-secondary" disabled={regenerating || selectionSubmitted} onClick={() => void regenerate()}>
+                {regenerating ? "Regenerating…" : "Regenerate unlocked options"}
+              </button>
+              <button type="button" className="coord-btn-primary" disabled={pushing || options.length === 0 || pushStatus?.canPush === false} onClick={() => void push()}>
+                {pushing ? "Pushing…" : pushStatus?.state === "guest_confirmed" ? "Guest choice submitted" : pushStatus?.state === "sent" ? "Sent to guest" : pushStatus?.state === "updated" ? "Send updated options" : pushStatus?.state === "retry" ? "Retry sending" : "Push options to guest"}
+              </button>
+            </>
+          )}
           </div>
         </div>
         {pushResult && <p className="options-admin-push-result">{pushResult}</p>}
 
         {loading ? (
           <p className="coord-empty">Loading…</p>
-        ) : options.length === 0 ? (
+        ) : displayedOptions.length === 0 ? (
           <p className="coord-empty">No options for this case.</p>
         ) : (
           <div className="option-admin-grid">
-            {options.map((o) => (
-              <OptionCard key={o.id} option={o} caseId={caseId} readOnly={isClosed} onChanged={() => void refresh()} />
+            {displayedOptions.map((o) => (
+              <OptionCard
+                key={o.id}
+                option={o}
+                caseId={caseId}
+                readOnly={Boolean(isClosed || selectionSubmitted)}
+                caseClosed={Boolean(isClosed)}
+                bookingCheckIn={caseSummary?.checkIn ?? null}
+                bookingCheckOut={caseSummary?.checkOut ?? null}
+                onChanged={() => void refresh()}
+              />
             ))}
           </div>
         )}
@@ -366,7 +457,7 @@ export function OptionsAdminPage() {
               <div>
                 <dt>Options</dt>
                 <dd>
-                  {availableCount} available / {options.length} total
+                  {selectionSubmitted ? "Guest submitted 1 option" : `${availableCount} available / ${options.length} total`}
                 </dd>
               </div>
             </dl>

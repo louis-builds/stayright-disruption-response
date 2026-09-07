@@ -47,7 +47,11 @@ function OptionSnapshot({ option }: { option: AdminOption }) {
     <div className="escalation-option-snapshot">
       <div className="option-admin-header">
         <div className="escalation-option-title"><i>{meta.icon}</i><div><h4>{meta.title}</h4><p>{meta.description}</p></div></div>
-        <span className={`tag tag-status-${option.availability === "unavailable" ? "overdue" : "normal"}`}>{option.availability}</span>
+        <span className={`tag tag-status-${option.availability === "unavailable" ? "overdue" : "normal"}`}>
+          {option.executionRequestedAt && option.availability === "pending" && (option.optionType === "defer" || option.optionType === "alternate")
+            ? "awaiting hotel"
+            : option.executionRequestedAt ? "guest submitted" : option.availability}
+        </span>
       </div>
       {option.availability === "unavailable" ? (
         <p className="option-admin-reason">Unavailable: {option.unavailableReason}</p>
@@ -146,7 +150,7 @@ export function EscalationDeskPage() {
     if (!amount || !description.trim()) return;
     setConfirmingRefund(true);
     setError(null);
-    await api.confirmRefund(caseId, amount, description.trim());
+    await api.confirmRefund(caseId, amount, description.trim(), submittedOption?.id ?? null);
     setConfirmingRefund(false);
     await refresh();
   }
@@ -173,9 +177,16 @@ export function EscalationDeskPage() {
 
   if (!user) return null;
 
-  const canClose = !isRefund || refundStatus?.confirmed;
   const optionOrder: Record<string, number> = { alternate: 0, defer: 1, cancel: 2, custom: 3 };
   const orderedOptions = [...options].sort((a, b) => (optionOrder[a.optionType] ?? 9) - (optionOrder[b.optionType] ?? 9));
+  const submittedOption = orderedOptions.find((option) => option.selected && option.executionRequestedAt) ?? null;
+  const displayedOptions = submittedOption ? [submittedOption] : orderedOptions;
+  const awaitingHotelConfirmation = Boolean(
+    caseSummary?.status !== "closed" && submittedOption &&
+    (submittedOption.optionType === "defer" || submittedOption.optionType === "alternate") &&
+    submittedOption.availability === "pending",
+  );
+  const canClose = (!isRefund || Boolean(refundStatus?.confirmed)) && !awaitingHotelConfirmation;
   const notificationsPerPage = 5;
   const orderedNotifications = [...notifications].sort((a, b) => {
     const aTime = new Date(a.sentAt).getTime();
@@ -207,12 +218,12 @@ export function EscalationDeskPage() {
             <div className="escalation-desk-layout">
             <div className="escalation-desk-main">
             <div className="escalation-section">
-              <div className="escalation-section-heading"><div><h3>Options Shared with Guest</h3><p>Current recovery proposals and their latest availability.</p></div><span>{options.length} options</span></div>
+              <div className="escalation-section-heading"><div><h3>{submittedOption ? "Guest Confirmed Option" : "Options Shared with Guest"}</h3><p>{submittedOption ? "The guest’s final submitted choice for coordinator processing." : "Current recovery proposals and their latest availability."}</p></div><span>{displayedOptions.length} {displayedOptions.length === 1 ? "option" : "options"}</span></div>
               {options.length === 0 ? (
                 <p className="coord-empty">No options were generated for this case.</p>
               ) : (
                 <div className="escalation-snapshot-grid">
-                  {orderedOptions.map((o) => (
+                  {displayedOptions.map((o) => (
                     <OptionSnapshot key={o.id} option={o} />
                   ))}
                 </div>
@@ -275,6 +286,8 @@ export function EscalationDeskPage() {
               {resultMsg && <p className="escalation-refund-confirmed">{resultMsg}</p>}
               {caseSummary?.status === "closed" ? (
                 <p className="coord-empty">This case is already closed.</p>
+              ) : awaitingHotelConfirmation ? (
+                <p className="coord-empty">The guest has selected this option. Final resolution will become available after the hotel confirms it.</p>
               ) : (
                 <>
                   <label className="coord-field">

@@ -17,7 +17,7 @@ public class OptionsAdminService(IOptionsAdminRepository repo, IBookingRepositor
 
     private static AdminOptionDto ToDto(Option o) =>
         new(o.Id, o.OptionType, o.Availability, o.Selected, o.Locked, o.UnavailableReason, o.PayloadJson, o.CreatedAt, o.CustomTitle, o.PerkNames,
-            o.CoordinatorVisibilityOverride);
+            o.CoordinatorVisibilityOverride, o.ExecutionRequestedAt);
 
     private static double HaversineKm(double lat1, double lng1, double lat2, double lng2)
     {
@@ -271,6 +271,9 @@ public class OptionsAdminService(IOptionsAdminRepository repo, IBookingRepositor
     public async Task<PushOptionsStatusDto> GetPushStatusAsync(Guid caseId, CancellationToken ct = default)
     {
         if (await repo.FindCaseStatusAsync(caseId, ct) is null) throw new CaseNotFoundException();
+        var options = await repo.ListOptionsAsync(caseId, ct);
+        if (options.Any(o => o.Selected && o.ExecutionRequestedAt.HasValue))
+            return new PushOptionsStatusDto(false, "guest_confirmed", null);
         var latestOptionUpdate = await repo.FindLatestOptionUpdateAsync(caseId, ct);
         var latestSuccess = await repo.FindLatestOptionsPushAsync(caseId, successfulOnly: true, ct);
         var latestAttempt = await repo.FindLatestOptionsPushAsync(caseId, successfulOnly: false, ct);
@@ -291,6 +294,9 @@ public class OptionsAdminService(IOptionsAdminRepository repo, IBookingRepositor
         if (!await repo.LockCaseForUpdateAsync(caseId, ct)) throw new CaseNotFoundException();
         var c = await repo.FindCaseWithContextAsync(caseId, ct) ?? throw new CaseNotFoundException();
         if (c.Status == "closed") throw new CaseClosedException();
+        var options = await repo.ListOptionsAsync(caseId, ct);
+        if (options.Any(o => o.Selected && o.ExecutionRequestedAt.HasValue))
+            throw new GuestSelectionSubmittedException();
         var latestOptionUpdate = await repo.FindLatestOptionUpdateAsync(caseId, ct);
         var latestSuccess = await repo.FindLatestOptionsPushAsync(caseId, successfulOnly: true, ct);
         if (latestOptionUpdate is null) throw new NoOptionsToPushException();
@@ -332,3 +338,4 @@ public class OptionsAdminService(IOptionsAdminRepository repo, IBookingRepositor
 
 public sealed class OptionsAlreadyPushedException : Exception { }
 public sealed class NoOptionsToPushException : Exception { }
+public sealed class GuestSelectionSubmittedException : Exception { }

@@ -194,4 +194,7 @@ public class HotelRepository(AppDbContext db) : IHotelRepository
     }
 
     public Task SaveChangesAsync(CancellationToken ct = default) => db.SaveChangesAsync(ct);
+
+    public Task<string?> FindHotelNameAsync(Guid hotelId, CancellationToken ct = default) =>
+        db.Hotels.Where(h => h.Id == hotelId).Select(h => h.Name).FirstOrDefaultAsync(ct);
 }

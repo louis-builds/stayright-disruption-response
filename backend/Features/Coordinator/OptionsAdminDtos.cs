@@ -3,7 +3,7 @@ namespace TravelDisruptionAgent.Api.Features.Coordinator;
 public record AdminOptionDto(
     Guid Id, string OptionType, string Availability, bool Selected, bool Locked, string? UnavailableReason,
     string PayloadJson, DateTimeOffset CreatedAt, string? CustomTitle, List<string> PerkNames,
-    bool? CoordinatorVisibilityOverride);
+    bool? CoordinatorVisibilityOverride, DateTimeOffset? ExecutionRequestedAt);
 
 public record UpdateOptionPayloadRequest(Dictionary<string, object> Payload);
 

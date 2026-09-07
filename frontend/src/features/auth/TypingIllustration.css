@@ -6,21 +6,21 @@
 }
 
 .ti-desk {
-  fill: #24507a;
+  fill: #7130dc;
 }
 
 .ti-monitor-frame {
-  fill: #1a3a5c;
-  stroke: #3d7aa8;
+  fill: #342452;
+  stroke: #9362ec;
   stroke-width: 1.5;
 }
 
 .ti-screen {
-  fill: #0c2138;
+  fill: #181329;
 }
 
 .ti-screen-line {
-  fill: #6fd3a8;
+  fill: #34d1ad;
   animation: ti-screen-blink 3.6s ease-in-out infinite;
 }
 
@@ -38,21 +38,21 @@
 }
 
 .ti-chair {
-  fill: #1a3a5c;
+  fill: #342452;
 }
 
 .ti-person {
-  fill: #a9d3f2;
+  fill: #d8ccf4;
 }
 
 .ti-keyboard {
-  fill: #143152;
-  stroke: #3d7aa8;
+  fill: #24183e;
+  stroke: #9362ec;
   stroke-width: 1;
 }
 
 .ti-arm {
-  fill: #a9d3f2;
+  fill: #d8ccf4;
   transform-box: fill-box;
   transform-origin: top center;
 }

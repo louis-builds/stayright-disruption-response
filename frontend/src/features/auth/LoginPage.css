@@ -15,15 +15,15 @@
   justify-content: center;
   gap: 1.25rem;
   overflow: hidden;
-  background: radial-gradient(circle at 20% 20%, #143152 0%, #0a1c33 55%, #060f1e 100%);
-  color: #dceeff;
+  background: radial-gradient(circle at 20% 20%, #422879 0%, #24183f 55%, #151126 100%);
+  color: #f1ebff;
   padding: 2rem;
 }
 
 .login-visual-glow {
   position: absolute;
   inset: -20%;
-  background: conic-gradient(from 0deg, rgba(46, 111, 150, 0.25), rgba(15, 47, 79, 0) 30%, rgba(46, 111, 150, 0.2) 60%, rgba(15, 47, 79, 0) 90%);
+  background: conic-gradient(from 0deg, rgba(118, 40, 232, 0.3), rgba(43, 25, 77, 0) 30%, rgba(52, 120, 246, 0.2) 60%, rgba(43, 25, 77, 0) 90%);
   animation: login-glow-spin 22s linear infinite;
 }
 
@@ -48,8 +48,8 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #dceeff;
-  box-shadow: 0 0 4px rgba(220, 238, 255, 0.6);
+  background: #f1ebff;
+  box-shadow: 0 0 4px rgba(241, 235, 255, 0.6);
   animation-name: login-snow-fall;
   animation-timing-function: linear;
   animation-iteration-count: infinite;
@@ -67,8 +67,8 @@
 .login-typer {
   position: relative;
   z-index: 1;
-  background: rgba(8, 22, 40, 0.55);
-  border: 1px solid rgba(220, 238, 255, 0.12);
+  background: rgba(20, 14, 37, 0.58);
+  border: 1px solid rgba(241, 235, 255, 0.14);
   border-radius: 12px;
   padding: 1.5rem 1.75rem;
   min-width: min(420px, 80vw);
@@ -79,7 +79,7 @@
   margin: 0.4rem 0;
   font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
   font-size: 0.95rem;
-  color: #a9d3f2;
+  color: #d8ccf4;
   opacity: 0;
   animation: login-type-in 4.5s ease-in-out infinite;
 }
@@ -87,7 +87,7 @@
 .login-typer-caret {
   display: inline-block;
   animation: login-caret-blink 0.9s steps(1) infinite;
-  color: #6fd3a8;
+  color: #34d1ad;
 }
 
 @keyframes login-type-in {
@@ -110,7 +110,7 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   font-size: 0.8rem;
-  color: #6f9fc4;
+  color: #b9a7dc;
 }
 
 .login-status {
@@ -121,14 +121,14 @@
   gap: 0.45rem;
   margin-top: 1.1rem;
   font-size: 0.75rem;
-  color: #8fb6d6;
+  color: #c8bae5;
 }
 
 .login-status-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #8fa9bd;
+  background: #a99bc7;
   transition: background-color 0.3s ease, box-shadow 0.3s ease;
 }
 
@@ -138,8 +138,8 @@
 }
 
 .login-status-dot-up {
-  background: #4fd18b;
-  box-shadow: 0 0 6px rgba(79, 209, 139, 0.7);
+  background: #12a982;
+  box-shadow: 0 0 6px rgba(18, 169, 130, 0.7);
 }
 
 .login-status-dot-down {
@@ -159,9 +159,9 @@
   align-items: center;
   justify-content: center;
   padding: 1rem 2rem;
-  background: #f7fafc;
+  background: #f5f7fb;
   background-image:
-    radial-gradient(circle, rgba(46, 111, 150, 0.09) 1.4px, transparent 1.4px);
+    radial-gradient(circle, rgba(118, 40, 232, 0.08) 1.4px, transparent 1.4px);
   background-size: 26px 26px;
   /* hidden 会在极端矮视口下把居中失效的表单直接切掉，用户连滚动都看不到——auto 保底，
      正常情况下内容够矮不会出现滚动条，真出现了也比内容被吃掉强。 */
@@ -180,7 +180,7 @@
   height: 60vw;
   max-width: 720px;
   max-height: 720px;
-  background: radial-gradient(circle, rgba(46, 111, 150, 0.08) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(118, 40, 232, 0.08) 0%, transparent 70%);
   pointer-events: none;
 }
 
@@ -196,7 +196,7 @@
 
 .login-route-path {
   fill: none;
-  stroke: rgba(46, 111, 150, 0.16);
+  stroke: rgba(118, 40, 232, 0.17);
   stroke-width: 0.35;
   stroke-dasharray: 1.6 1.4;
 }
@@ -206,7 +206,7 @@
    自己的时间线跟 beginElement() 调用时机对不上）。CSS 动画跟这页其它稳定生效的动效
    （雪花、打字机行）走同一套引擎，样式一应用就播，没有这层不确定性。 */
 .login-route-dot {
-  fill: #2e6f96;
+  fill: #7628e8;
   opacity: 0.55;
   offset-path: path("M -5 78 C 25 58, 40 92, 68 55 S 95 15, 108 22");
   animation: login-route-dot-move 9s linear infinite;
@@ -269,7 +269,7 @@
 }
 
 .login-feature:hover {
-  background: rgba(46, 111, 150, 0.07);
+  background: rgba(118, 40, 232, 0.07);
   transform: translateY(-2px);
 }
 
@@ -282,13 +282,13 @@
   margin: 0 0 0.15rem;
   font-size: 0.85rem;
   font-weight: 600;
-  color: #1f2d3d;
+  color: #202438;
 }
 
 .login-feature-body {
   margin: 0;
   font-size: 0.78rem;
-  color: #64798d;
+  color: #777b8e;
   line-height: 1.4;
 }
 
@@ -306,12 +306,12 @@
 .login-card h1 {
   margin: 0 0 0.25rem;
   font-size: 1.75rem;
-  color: #10243c;
+  color: #202438;
 }
 
 .login-subtitle {
   margin: 0 0 1.5rem;
-  color: #5c7690;
+  color: #777b8e;
   font-size: 0.9rem;
 }
 
@@ -326,29 +326,29 @@
   flex-direction: column;
   gap: 0.35rem;
   font-size: 0.85rem;
-  color: #2c3e50;
+  color: #202438;
 }
 
 .login-field input {
   padding: 0.6rem 0.75rem;
-  border: 1px solid #cbd8e4;
+  border: 1px solid #e1e4ec;
   border-radius: 8px;
   font-size: 0.95rem;
   background: #ffffff;
-  color: #1f2d3d;
+  color: #202438;
   color-scheme: light;
   transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
 }
 
 .login-field input:hover:not(:focus) {
-  border-color: #a9c2d6;
-  background: #fbfdfe;
+  border-color: #c9b5f2;
+  background: #fdfcff;
 }
 
 .login-field input:focus {
   outline: none;
-  border-color: #2e6f96;
-  box-shadow: 0 0 0 3px rgba(46, 111, 150, 0.15);
+  border-color: #7628e8;
+  box-shadow: 0 0 0 3px rgba(118, 40, 232, 0.14);
 }
 
 .login-row {
@@ -362,7 +362,7 @@
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  color: #3d5266;
+  color: #555a6e;
   border-radius: 6px;
   padding: 0.15rem 0.3rem;
   margin: -0.15rem -0.3rem;
@@ -370,13 +370,13 @@
 }
 
 .login-checkbox:hover {
-  background: rgba(46, 111, 150, 0.08);
+  background: rgba(118, 40, 232, 0.08);
 }
 
 .login-link {
   background: none;
   border: none;
-  color: #2e6f96;
+  color: #7628e8;
   cursor: pointer;
   padding: 0;
   font-size: 0.85rem;
@@ -385,7 +385,7 @@
 
 .login-link:hover {
   text-decoration: underline;
-  color: #1c4d73;
+  color: #6220ca;
 }
 
 .login-link:active {
@@ -394,7 +394,7 @@
 
 .login-success {
   margin: 0 0 1rem;
-  color: #3d7a4f;
+  color: #118568;
   font-size: 0.85rem;
   animation: login-fade-in 0.2s ease;
 }
@@ -411,7 +411,7 @@
   padding: 0.7rem;
   border: none;
   border-radius: 8px;
-  background: linear-gradient(135deg, #1c4d73, #2e6f96);
+  background: linear-gradient(135deg, #7628e8, #5f4df3);
   color: white;
   font-size: 0.95rem;
   font-weight: 600;
@@ -420,7 +420,7 @@
 }
 
 .login-submit:hover:not(:disabled) {
-  box-shadow: 0 6px 16px rgba(46, 111, 150, 0.3);
+  box-shadow: 0 6px 16px rgba(118, 40, 232, 0.28);
   transform: translateY(-1px);
 }
 
@@ -434,7 +434,7 @@
 }
 
 .login-submit-success {
-  background: linear-gradient(135deg, #2f9563, #4fd18b);
+  background: linear-gradient(135deg, #0f8d70, #34d1ad);
   opacity: 1;
   cursor: default;
 }
@@ -464,8 +464,8 @@
   width: 13px;
   height: 13px;
   border-width: 2px;
-  border-color: rgba(46, 111, 150, 0.3);
-  border-top-color: #2e6f96;
+  border-color: rgba(118, 40, 232, 0.3);
+  border-top-color: #7628e8;
 }
 
 @keyframes login-spin {
@@ -475,7 +475,7 @@
 .login-forgot {
   margin-top: 1rem;
   padding-top: 1rem;
-  border-top: 1px dashed #d3e0ea;
+  border-top: 1px dashed #e1e4ec;
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
@@ -500,10 +500,10 @@
 .login-forgot-submit {
   align-self: flex-start;
   padding: 0.45rem 0.9rem;
-  border: 1px solid #2e6f96;
+  border: 1px solid #7628e8;
   border-radius: 6px;
   background: white;
-  color: #2e6f96;
+  color: #7628e8;
   cursor: pointer;
   font-size: 0.85rem;
   transition: background-color 0.15s ease, transform 0.1s ease;
@@ -514,7 +514,7 @@
 }
 
 .login-forgot-submit:hover:not(:disabled) {
-  background: rgba(46, 111, 150, 0.08);
+  background: rgba(118, 40, 232, 0.08);
 }
 
 .login-forgot-submit:active:not(:disabled) {
@@ -524,17 +524,17 @@
 .login-forgot-status {
   margin: 0;
   font-size: 0.8rem;
-  color: #3d7a4f;
+  color: #118568;
 }
 
 .login-footer {
   margin-top: 1.5rem;
   font-size: 0.85rem;
-  color: #5c7690;
+  color: #777b8e;
 }
 
 .login-footer a {
-  color: #2e6f96;
+  color: #7628e8;
   font-weight: 600;
 }
 

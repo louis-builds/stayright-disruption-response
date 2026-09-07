@@ -298,7 +298,8 @@ public class HotelService(
         stream.Position = 0;
         try
         {
-            var key = await policyStorage.UploadAsync(hotelId, policy.Id, file.FileName, file.ContentType, stream, ct);
+            var hotelName = await repo.FindHotelNameAsync(hotelId, ct);
+            var key = await policyStorage.UploadAsync(hotelId, hotelName, policy.Id, file.FileName, file.ContentType, stream, ct);
             if (key is not null)
             {
                 policy.SourceFileKey = key;
