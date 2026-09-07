@@ -4,8 +4,9 @@ namespace TravelDisruptionAgent.Api.Infrastructure.Storage;
 /// 未配置 S3_POLICY_BUCKET 时全部方法退化为 no-op（返回 null），本地无 AWS 环境也能跑。</summary>
 public interface IPolicyDocumentStorage
 {
-    /// <summary>上传原始文件，返回 S3 object key；未配置桶时返回 null。</summary>
-    Task<string?> UploadAsync(Guid hotelId, Guid policyId, string fileName, string? contentType, Stream content, CancellationToken ct = default);
+    /// <summary>上传原始文件，返回 S3 object key；未配置桶时返回 null。key 形如
+    /// hotel-policies/{hotelId}-{酒店名slug}/{yyyyMMdd}/{policyId}-{文件名}，slug 仅供人辨认，唯一性靠 id。</summary>
+    Task<string?> UploadAsync(Guid hotelId, string? hotelName, Guid policyId, string fileName, string? contentType, Stream content, CancellationToken ct = default);
 
     /// <summary>生成预签名 GET URL；无 key 或未配置桶时返回 null。</summary>
     string? CreatePresignedGetUrl(string key, TimeSpan expiry);

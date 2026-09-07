@@ -4,6 +4,7 @@ import { AppShell } from "../../shared/components/AppShell";
 import { RoleTopNav } from "../../shared/components/RoleTopNav";
 import { useAuth } from "../auth";
 import { GuestDashboardShell } from "../home/GuestDashboardShell";
+import { HotelDashboardShell } from "../hotel/HotelDashboardShell";
 import * as api from "./api";
 import type { CaseOption, CaseSummary, ConfirmExecutionResult, OptionType, PolicySummary } from "./types";
 import "./OptionsFlowPage.css";
@@ -221,11 +222,20 @@ export function OptionsFlowPage() {
 
   if (!user) return null;
 
-  const renderPage = (content: ReactNode) => user.role === "guest" ? (
-    <GuestDashboardShell active="dashboard">{content}</GuestDashboardShell>
-  ) : (
-    <AppShell centerContent={<RoleTopNav role={user.role} />} showBack>{content}</AppShell>
-  );
+  const renderPage = (content: ReactNode) => {
+    if (user.role === "hotel") {
+      return (
+        <HotelDashboardShell active="todo" onNavigate={() => navigate("/hotel/home")} onSearch={() => navigate("/hotel/home")}>
+          {content}
+        </HotelDashboardShell>
+      );
+    }
+    return user.role === "guest" ? (
+      <GuestDashboardShell active="dashboard">{content}</GuestDashboardShell>
+    ) : (
+      <AppShell centerContent={<RoleTopNav role={user.role} />} showBack>{content}</AppShell>
+    );
+  };
 
   const availableCount = options.filter((option) => option.availability !== "unavailable").length;
   const contextHeader = (
