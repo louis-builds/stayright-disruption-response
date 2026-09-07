@@ -159,6 +159,10 @@ public class OptionsAdminController(IOptionsAdminService optionsAdmin) : Control
         {
             return Conflict(ApiResponse<object?>.Fail(409, "There are no options to send"));
         }
+        catch (GuestSelectionSubmittedException)
+        {
+            return Conflict(ApiResponse<object?>.Fail(409, "The guest has already submitted a final choice"));
+        }
     }
 
     [HttpGet("push-status")]

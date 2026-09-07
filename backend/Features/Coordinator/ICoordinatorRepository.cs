@@ -25,6 +25,8 @@ public interface ICoordinatorRepository
     Task<(Guid Id, string Title, int AffectedCount)?> FindBiggestImpactDisruptionAsync(CancellationToken ct = default);
 
     Task<bool> HasRefundConfirmationAsync(Guid caseId, CancellationToken ct = default);
+    Task<bool> HasPendingHotelConfirmationAsync(Guid caseId, CancellationToken ct = default);
+    Task<HashSet<Guid>> GetPendingHotelConfirmationCaseIdsAsync(IEnumerable<Guid> caseIds, CancellationToken ct = default);
     Task<Guid?> FindHotelAccountUserIdAsync(Guid hotelId, CancellationToken ct = default);
     Task<List<Notification>> ListCaseNotificationsAsync(Guid caseId, CancellationToken ct = default);
     Task<Notification?> FindNotificationAsync(Guid notificationId, CancellationToken ct = default);

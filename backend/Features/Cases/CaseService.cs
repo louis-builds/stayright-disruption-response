@@ -329,6 +329,10 @@ public class CaseService(
 
     private static string? PrimaryHotelImage(Case c)
     {
+        var roomType = c.Booking?.RoomType;
+        if (roomType is not null && roomType.ImageUrls.Count > 0)
+            return roomType.ImageUrls[0];
+
         var hotel = c.Booking?.Hotel;
         if (hotel is null || hotel.ImageUrls.Count == 0) return null;
         var index = Math.Clamp(hotel.PrimaryImageIndex, 0, hotel.ImageUrls.Count - 1);
@@ -542,10 +546,22 @@ public class CaseService(
             return new ConfirmExecutionResultDto("failed", "This case has already been resolved — no further changes can be made here.", null, null, null);
         }
 
+        // Selected 只代表客人在比较页里的临时选择；ExecutionRequestedAt 才代表客人已经在
+        // 最终确认页提交。重复提交时直接返回当前处理状态，避免重复通知酒店或协调员。
+        if (option.ExecutionRequestedAt.HasValue)
+        {
+            var message = option.OptionType == "cancel"
+                ? "Your cancellation is already awaiting coordinator confirmation."
+                : "Your choice has already been submitted and is awaiting final processing.";
+            return new ConfirmExecutionResultDto("processing", message, null, null, null);
+        }
+
         if (option.OptionType == "cancel")
         {
             // 退款强制规则：这里绝不直接把退款标记完成，只落一条"待协调员确认"的信号（升级通知），
             // 真正生效要等 CasesController 的 /refund/confirm（Task 6）。
+            option.ExecutionRequestedAt = now;
+            option.UpdatedAt = now;
             if (full.AssigneeCoordinatorId.HasValue)
             {
                 await cases.AddNotificationAsync(new Notification
@@ -586,6 +602,8 @@ public class CaseService(
         }
 
         // Availability == "available": 已确认可直接生效。
+        option.ExecutionRequestedAt = now;
+        option.UpdatedAt = now;
         return await ExecuteOptionAsync(full, option, ct);
     }
 

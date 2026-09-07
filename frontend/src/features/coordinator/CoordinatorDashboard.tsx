@@ -175,7 +175,22 @@ export function DisruptionOperationsDashboard({ data, syncedAt, onOpenDisruption
       <aside className="entry-handoff entry-handoff-details"><header><div><h2>AI Handoff Details</h2><p>{selectedBooking ? `${selectedBooking.confirmationNo || caseCode(selectedBooking.caseId)} · ${selectedBooking.guestNickname}` : "Select an affected booking"}</p></div></header>{selectedBooking ? <><section><b>Guest's request</b><p className="unavailable">Not available in the dashboard API.</p></section><section><b>What AI tried</b><p className="unavailable">Not available in the dashboard API.</p></section><section><b>Why AI escalated</b><p>{selectedBooking.escalationReason ?? "No AI escalation reason was recorded."}</p></section><section><b>Missing or conflicting information</b><p className="unavailable">Not available in the dashboard API.</p></section><section><b>Suggested first action</b><p>Open the Case Workspace and review the conversation history and confirmed case evidence.</p></section><button onClick={() => onOpenCase(selectedBooking.caseId)}>Open Case Workspace →</button></> : <p className="entry-empty">Select a booking to view its AI handoff.</p>}</aside>
     </div>
 
-    <section className="entry-recent"><header><div><h2>Recent Resolutions</h2><p>Cases closed during the last seven days</p></div></header><div>{recent.length === 0 ? <p className="entry-empty">No recent resolutions.</p> : recent.map((item) => <button key={item.caseId} onClick={() => onOpenCase(item.caseId)}><span><b>{item.confirmationNo || caseCode(item.caseId)}</b><small>{item.guestNickname}</small></span><em>{item.disruptionTitle}</em><strong>Resolved</strong><i>View history →</i></button>)}</div></section>
+    <section className="entry-recent">
+      <header><div><h2>Recent Resolutions</h2><p>Cases closed during the last seven days</p></div></header>
+      <div className="entry-recent-list">
+        {recent.length === 0 ? <p className="entry-empty">No recent resolutions.</p> : <>
+          <div className="entry-recent-head"><span>Booking &amp; guest</span><span>Disruption</span><span>Status</span><span>Action</span></div>
+          {recent.map((item) => (
+            <button className="entry-recent-row" key={item.caseId} onClick={() => onOpenCase(item.caseId)}>
+              <span className="entry-recent-booking"><b>{item.confirmationNo || caseCode(item.caseId)}</b><small>{item.guestNickname}</small></span>
+              <span className="entry-recent-disruption">{item.disruptionTitle}</span>
+              <strong>Resolved</strong>
+              <i>View details →</i>
+            </button>
+          ))}
+        </>}
+      </div>
+    </section>
   </div>;
 }
 

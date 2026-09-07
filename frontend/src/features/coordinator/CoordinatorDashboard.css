@@ -57,6 +57,16 @@
 .entry-work-grid{grid-template-columns:minmax(680px,1.5fr) minmax(360px,.72fr);gap:16px;margin-top:16px}.entry-table-head,.entry-case-row{grid-template-columns:125px 115px minmax(155px,1fr) 105px minmax(175px,1.1fr) 100px;min-width:820px}
 .entry-handoff>section{margin:14px;border-radius:9px}.entry-handoff>button{width:calc(100% - 28px);margin:0 14px 14px;border-radius:7px}
 .entry-recent{margin-top:16px;background:transparent;border-color:transparent;box-shadow:none;overflow:visible}.entry-recent header{padding:10px 4px;border:0}.entry-recent>div{gap:14px;padding:0}.entry-recent>div>button{min-height:105px;border-radius:10px;background:#fff;box-shadow:0 3px 12px rgba(48,42,82,.04)}
+.entry-recent .entry-recent-list{display:block;padding:0;overflow:hidden;border:1px solid #e7eaf1;border-radius:12px;background:#fff;box-shadow:0 3px 12px rgba(48,42,82,.04)}
+.entry-recent-head,.entry-recent-row{display:grid;grid-template-columns:minmax(180px,.8fr) minmax(280px,1.5fr) 120px 120px;align-items:center;gap:18px;padding:12px 18px}
+.entry-recent-head{background:#f7f8fc;color:#7e8294;font-size:11px;font-weight:700;letter-spacing:.035em;text-transform:uppercase}
+.entry-recent .entry-recent-row{width:100%;min-height:68px;border:0;border-top:1px solid #eceef4;border-radius:0;background:#fff;box-shadow:none;color:#202438;text-align:left;cursor:pointer}
+.entry-recent .entry-recent-row:hover{background:#faf8ff}
+.entry-recent-booking{display:flex;min-width:0;flex-direction:column;gap:4px}.entry-recent .entry-recent-booking b{font-size:14px}.entry-recent .entry-recent-booking small{font-size:12px}
+.entry-recent-disruption{overflow:hidden;color:#4e5365;font-size:13px;text-overflow:ellipsis;white-space:nowrap}
+.entry-recent .entry-recent-row>strong{justify-self:start;width:auto;padding:5px 10px;border-radius:999px;background:#e4faf4;color:#079b78;font-size:11px;text-transform:uppercase}
+.entry-recent .entry-recent-row>i{grid-column:auto;justify-self:end;color:#7628e8;font-size:12px;font-style:normal;font-weight:700}
+@media(max-width:760px){.entry-recent .entry-recent-list{overflow-x:auto}.entry-recent-head,.entry-recent-row{min-width:700px}}
 @media(max-width:1350px){.entry-top-grid,.entry-work-grid{grid-template-columns:1fr}.entry-map{min-height:370px}}
 
 /* Disruption -> map -> affected booking -> AI handoff interaction. */
