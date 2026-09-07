@@ -1,0 +1,46 @@
+using Microsoft.EntityFrameworkCore;
+using TravelDisruptionAgent.Api.Infrastructure.Data;
+using TravelDisruptionAgent.Api.Infrastructure.Data.Entities;
+using TravelDisruptionAgent.Api.Infrastructure.Paging;
+
+namespace TravelDisruptionAgent.Api.Features.Calls;
+
+public class CallRepository(AppDbContext db) : ICallRepository
+{
+    public async Task AddAsync(Call call, CancellationToken ct = default) =>
+        await db.Calls.AddAsync(call, ct);
+
+    public Task<Call?> FindAsync(Guid id, CancellationToken ct = default) =>
+        db.Calls.FirstOrDefaultAsync(c => c.Id == id, ct);
+
+    public Task<List<Call>> ListForCaseAsync(Guid caseId, CancellationToken ct = default) =>
+        db.Calls.Where(c => c.CaseId == caseId).OrderByDescending(c => c.StartedAt).ToListAsync(ct);
+
+    public Task<PagedResult<Call>> ListForCoordinatorAsync(
+        Guid coordinatorUserId, Guid? caseId, string? calleeType, string? status,
+        DateTimeOffset? from, DateTimeOffset? to, int page, int pageSize, CancellationToken ct = default)
+    {
+        var query = db.Calls
+            .Include(c => c.Case).ThenInclude(c => c!.Booking).ThenInclude(b => b!.GuestUser)
+            .Include(c => c.Case).ThenInclude(c => c!.Booking).ThenInclude(b => b!.Hotel)
+            .Where(c => c.InitiatedByCoordinatorId == coordinatorUserId);
+        if (caseId is { } cid) query = query.Where(c => c.CaseId == cid);
+        if (!string.IsNullOrWhiteSpace(calleeType)) query = query.Where(c => c.CalleeType == calleeType);
+        if (!string.IsNullOrWhiteSpace(status)) query = query.Where(c => c.Status == status);
+        if (from is { } f) query = query.Where(c => c.StartedAt >= f);
+        if (to is { } t) query = query.Where(c => c.StartedAt <= t);
+
+        return query.OrderByDescending(c => c.StartedAt).ToPagedResultAsync(page, pageSize, ct);
+    }
+
+    public async Task AddRecordingAsync(CallRecording recording, CancellationToken ct = default) =>
+        await db.CallRecordings.AddAsync(recording, ct);
+
+    public Task<CallRecording?> FindRecordingAsync(Guid id, CancellationToken ct = default) =>
+        db.CallRecordings.FirstOrDefaultAsync(r => r.Id == id, ct);
+
+    public Task<CallRecording?> FindRecordingByCallIdAsync(Guid callId, CancellationToken ct = default) =>
+        db.CallRecordings.FirstOrDefaultAsync(r => r.CallId == callId, ct);
+
+    public Task SaveChangesAsync(CancellationToken ct = default) => db.SaveChangesAsync(ct);
+}

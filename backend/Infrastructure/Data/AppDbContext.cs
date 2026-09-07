@@ -37,6 +37,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<SystemSettings> SystemSettings => Set<SystemSettings>();
     public DbSet<FaqQuestion> FaqQuestions => Set<FaqQuestion>();
     public DbSet<CaseWorkflowStateHistory> CaseWorkflowStateHistories => Set<CaseWorkflowStateHistory>();
+    public DbSet<Call> Calls => Set<Call>();
+    public DbSet<CallRecording> CallRecordings => Set<CallRecording>();
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
@@ -237,6 +239,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<UserStatusAudit>(e =>
         {
             e.HasIndex(x => x.UserId);
+        });
+
+        modelBuilder.Entity<Call>(e =>
+        {
+            e.HasIndex(x => x.CaseId);
+            e.HasIndex(x => x.InitiatedByCoordinatorId);
+        });
+
+        modelBuilder.Entity<CallRecording>(e =>
+        {
+            e.HasIndex(x => x.CallId).IsUnique();
         });
 
         modelBuilder.Entity<AlertAcknowledgement>(e =>

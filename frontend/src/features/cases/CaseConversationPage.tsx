@@ -9,6 +9,7 @@ import type { CaseMessage, SenderRole, Thread } from "./types";
 import "./CaseConversationPage.css";
 import { CoordinatorCaseWorkspacePage } from "../coordinator/CoordinatorCaseWorkspacePage";
 import { GuestDashboardShell } from "../home/GuestDashboardShell";
+import { HotelDashboardShell } from "../hotel/HotelDashboardShell";
 
 const ROLE_META: Record<SenderRole, { label: string; avatar: string }> = {
   guest: { label: "You", avatar: "🧳" },
@@ -393,6 +394,13 @@ export function LegacyCaseConversationPage() {
     </div>
   );
 
+  if (user.role === "hotel") {
+    return (
+      <HotelDashboardShell active="todo" onNavigate={() => navigate("/hotel/home")} onSearch={() => navigate("/hotel/home")}>
+        {workspace}
+      </HotelDashboardShell>
+    );
+  }
   return user.role === "guest" ? (
     <GuestDashboardShell active="dashboard">{workspace}</GuestDashboardShell>
   ) : (

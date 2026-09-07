@@ -1,21 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { AppShell } from "../../shared/components/AppShell";
-import { HotelTopNav, type HotelTab } from "../../shared/components/HotelTopNav";
+import type { HotelTab } from "../../shared/components/HotelTopNav";
 import { Pagination, usePagination } from "../../shared/components/Pagination";
 import { useAuth } from "../auth";
 import * as api from "./api";
+import { HotelDashboardShell } from "./HotelDashboardShell";
 import { HotelProfilePanel } from "./HotelProfilePanel";
 import type { HotelPerk, InquiryItem, SelectedOptionItem } from "./types";
 import "../coordinator/CoordinatorHomePage.css";
 import "./HotelHomePage.css";
 
 type Tab = HotelTab;
-
-const TASK_TABS: { key: Tab; label: string }[] = [
-  { key: "todo", label: "My to-dos" },
-  { key: "done", label: "Done" },
-];
 
 function matchesHotelFilter(needle: string, ...fields: (string | undefined)[]) {
   if (!needle.trim()) return true;
@@ -245,8 +240,6 @@ export function HotelHomePage() {
     await refresh({ silent: true });
   }
 
-  const isTaskTab = tab === "todo" || tab === "done";
-
   // 合并展示：跟下面 Done 列表同理——酒店只关心"我现在要处理哪些请求"，不关心背后是
   // 延期请求(以前叫 H1)还是候补方案(以前叫 H2)。分两块列表容易让人以为漏了数据。
   type TodoItem = { kind: "inquiry"; item: InquiryItem } | { kind: "option"; item: SelectedOptionItem };
@@ -339,35 +332,9 @@ export function HotelHomePage() {
   if (!user) return null;
 
   return (
-    <AppShell centerContent={<HotelTopNav activeTab={tab} onSelectTab={setTab} />}>
+    <HotelDashboardShell active={tab} onNavigate={setTab} onSearch={setTaskFilter}>
       <div className="coord-home">
         <div className="coord-panel">
-          {isTaskTab && (
-            <div className="hotel-panel-toolbar">
-              <div className="coord-tabs">
-                {TASK_TABS.map((t) => (
-                  <button
-                    key={t.key}
-                    type="button"
-                    className={`coord-tab ${tab === t.key ? "coord-tab-active" : ""}`}
-                    onClick={() => setTab(t.key)}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-              <input
-                className="coord-search-input hotel-toolbar-search"
-                placeholder={
-                  tab === "todo"
-                    ? "Filter by confirmation no / guest / disruption / option type"
-                    : "Filter by confirmation no / guest / disruption / status / option type"
-                }
-                value={taskFilter}
-                onChange={(e) => setTaskFilter(e.target.value)}
-              />
-            </div>
-          )}
           {tab === "todo" && (
             <div className="hotel-dashboard-header">
               <div className="hotel-dashboard-title">
@@ -694,6 +661,6 @@ export function HotelHomePage() {
           onConfirm={(title, p) => void offerCustomOption(title, p)}
         />
       )}
-    </AppShell>
+    </HotelDashboardShell>
   );
 }
