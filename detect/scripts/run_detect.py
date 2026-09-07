@@ -43,11 +43,13 @@ SOURCE_CHOICES = ["weather", "volcano", "flight", "road", "all"]
 
 def _sim_forecast(lat, lng):
     hours = [(datetime.now(timezone.utc) + timedelta(hours=h)).strftime("%Y-%m-%dT%H:00") for h in range(6)]
+    # weather_code: 3=overcast, 63=moderate rain, 95=thunderstorm, 82=violent showers.
+    # Only the 95 / 82 hours clear SEVERE_WEATHER_CODES.
     return {
         "hourly": {
             "time": hours,
-            "wind_gusts_10m": [40, 95, 150, 120, 60, 30],
-            "precipitation": [0, 2, 5, 3, 0, 0],
+            "weather_code": [3, 63, 95, 95, 82, 3],
+            "precipitation": [0, 2, 5, 8, 12, 1],
             "snowfall": [0, 0, 0, 0, 0, 0],
         }
     }
@@ -107,7 +109,7 @@ def _print_events(events: list) -> None:
 def _run_weather(show_raw: bool, simulate: bool) -> None:
     print("\n===== WEATHER (Open-Meteo) =====")
     if simulate:
-        print("--- simulated forecast (gusts peak at 150 km/h) ---")
+        print("--- simulated forecast (weather_code 95/82: thunderstorm + violent rain showers) ---")
         _print_events(detect_events(fetch=_sim_forecast))
         return
     if show_raw:

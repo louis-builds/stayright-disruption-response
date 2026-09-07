@@ -15,14 +15,22 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from dotenv import load_dotenv
 load_dotenv()
 
+from functools import lru_cache
+
 from langchain.tools import tool
 from langchain.chat_models import init_chat_model
 
-model = init_chat_model(
-    "gemini-2.5-flash",
-    model_provider="google_genai",
-    temperature=0
-)
+
+# 延迟初始化：init_chat_model 在构造时就要 GEMINI_API_KEY，放模块级会让「只想 import
+# 这个模块跑 identify / 路由测试」的场景也被逼着配 key。真正用到 LLM 的节点再取。
+@lru_cache(maxsize=1)
+def get_model():
+    return init_chat_model("gemini-2.5-flash", model_provider="google_genai", temperature=0)
+
+
+@lru_cache(maxsize=1)
+def get_model_with_tools():
+    return get_model().bind_tools(tools)
 
 
 # 这两个工具给 rank_and_explain 节点用：
@@ -65,7 +73,6 @@ def get_cancellation_policy(property_id: str) -> str:
 
 tools = [search_alternative_properties, get_cancellation_policy]
 tools_by_name = {tool.name: tool for tool in tools}
-model_with_tools = model.bind_tools(tools)
 
 
 # ---------- Step 2: 定义 State ----------
@@ -89,6 +96,7 @@ class DisruptionState(TypedDict):
 
 # ---------- Step 3: 定义各节点 ----------
 from langchain.messages import SystemMessage, ToolMessage
+from langchain_core.runnables import RunnableConfig
 
 from src.detect.models import DisruptionEvent
 from src.identify.db import get_connection
@@ -111,7 +119,7 @@ def _serialise_booking(row: dict) -> dict:
     }
 
 
-def identify_bookings(state: DisruptionState, config: dict | None = None) -> dict:
+def identify_bookings(state: DisruptionState, config: RunnableConfig | None = None) -> dict:
     """按 DisruptionEvent 的地理 + 时间范围查受影响订单（复用 src/identify，不走 LLM）。
 
     连接工厂从 config["configurable"]["connect"] 取，默认 src.identify.db.get_connection；
@@ -145,7 +153,7 @@ def rank_and_explain(state: DisruptionState) -> dict:
     生成排序后的推荐方案和解释文案"""
     return {
         "messages": [
-            model_with_tools.invoke(
+            get_model_with_tools().invoke(
                 [
                     SystemMessage(
                         content=(
@@ -176,7 +184,7 @@ def rank_tool_node(state: DisruptionState) -> dict:
 def generate_message(state: DisruptionState) -> dict:
     """LLM 节点：生成发给客人的最终通知文案（不需要工具，直接总结）"""
     return {
-        "final_message": model.invoke(
+        "final_message": get_model().invoke(
             [
                 SystemMessage(content="Write a warm, clear message to the guest summarising the rebooking outcome.")
             ]
@@ -259,32 +267,74 @@ agent_builder.add_edge("escalate_to_human", END)
 # 编译
 agent = agent_builder.compile()
 
-# ---------- Step 6: 画图 ----------
-try:
-    png_bytes = agent.get_graph(xray=True).draw_mermaid_png()
-    with open("kakapa_graph.png", "wb") as f:
-        f.write(png_bytes)
-    print("Saved graph diagram to kakapa_graph.png")
-except Exception as e:
-    print(f"Could not render graph diagram: {e}")
+# ---------- 供采集管线调用的入口 ----------
+from datetime import datetime, timedelta, timezone
 
-# ---------- Step 7: 试跑一次（占位输入） ----------
 from langchain.messages import HumanMessage
 
-initial_state = {
-    "disruption_event": {
-        "type": "severe_weather",
-        "region": "Queenstown",
-        "affected_dates": ["2026-08-10", "2026-08-12"],
-    },
-    "messages": [
-        HumanMessage(
-            content="Queenstown storm has grounded flights on 10-12 Aug. "
-                    "Find alternative accommodation options for affected guests."
-        )
-    ],
-}
 
-result = agent.invoke(initial_state)
-for m in result["messages"]:
-    m.pretty_print()
+def build_initial_state(event: DisruptionEvent) -> DisruptionState:
+    """把一个 DisruptionEvent（探测器产出）转成图的初始 state。
+
+    disruption_event 存成 JSON 形态（identify_bookings 里再 model_validate 回来），
+    这样将来过 checkpointer 也能序列化。
+    """
+    window = event.affects_window
+    return {
+        "disruption_event": event.model_dump(mode="json"),
+        "messages": [
+            HumanMessage(
+                content=(
+                    f"A {event.severity.value}-severity {event.source.value} disruption "
+                    f"({event.event_type}) near ({event.geo.center.lat:.4f}, "
+                    f"{event.geo.center.lng:.4f}), radius {event.geo.radius_km:g} km, "
+                    f"affecting {window.start:%Y-%m-%d} to {window.end:%Y-%m-%d}. "
+                    "Find alternative accommodation options for affected guests."
+                )
+            )
+        ],
+    }
+
+
+# 直接跑本模块时用的样例事件：Queenstown Lakeview Hotel 坐标，窗口 now..+30d
+# （种子订单入住日按灌库时间相对偏移，写死日期不一定命中，见 scripts/run_demo.py 的
+# DEMO_WINDOW_HOURS 同样处理）。
+_NOW = datetime.now(timezone.utc)
+sample_event = DisruptionEvent(
+    source="weather",
+    event_type="storm",
+    severity="high",
+    detected_at=_NOW,
+    affects_window={"start": _NOW, "end": _NOW + timedelta(days=30)},
+    geo={
+        "type": "point",
+        "center": {"lat": -45.0312, "lng": 168.6626},
+        "radius_km": 30.0,
+    },
+    raw_payload={"note": "hand-built sample event"},
+)
+
+initial_state = build_initial_state(sample_event)
+
+
+def _render_graph_png(path: str = "kakapa_graph.png") -> None:
+    try:
+        png_bytes = agent.get_graph(xray=True).draw_mermaid_png()
+        with open(path, "wb") as f:
+            f.write(png_bytes)
+        print(f"Saved graph diagram to {path}")
+    except Exception as e:
+        print(f"Could not render graph diagram: {e}")
+
+
+if __name__ == "__main__":
+    _render_graph_png()
+
+    # 真实运行用默认的 get_connection；测试时传 {"configurable": {"connect": lambda: mock_conn}}
+    result = agent.invoke(initial_state)
+    print(f"\nidentify_bookings -> {len(result.get('affected_bookings') or [])} affected booking(s)")
+    for booking in result.get("affected_bookings") or []:
+        print(f"  - {booking['booking_id']} / guest {booking['guest_id']} / {booking['hotel_name']} "
+              f"({booking['check_in']} -> {booking['check_out']})")
+    for m in result["messages"]:
+        m.pretty_print()
