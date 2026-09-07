@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Pgvector;
 using TravelDisruptionAgent.Api.Features.Chat;
 using TravelDisruptionAgent.Api.Infrastructure.Data.Entities;
 
@@ -30,7 +31,7 @@ public static class RagChunkBackfill
                 db.RagDocumentChunks.Add(new RagDocumentChunk
                 {
                     Id = Guid.NewGuid(), RagDocumentId = doc.Id, ChunkIndex = i, Content = sections[i],
-                    Embedding = embedding, CreatedAt = now,
+                    Embedding = embedding is { Length: > 0 } ? new Vector(embedding) : null, CreatedAt = now,
                 });
             }
         }
