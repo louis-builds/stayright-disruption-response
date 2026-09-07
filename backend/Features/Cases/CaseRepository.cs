@@ -17,6 +17,7 @@ public class CaseRepository(AppDbContext db) : ICaseRepository
         var query = db.Cases
             .Include(c => c.Disruption)
             .Include(c => c.Booking).ThenInclude(b => b!.Hotel)
+            .Include(c => c.Booking).ThenInclude(b => b!.RoomType)
             .Where(c => c.Booking!.GuestUserId == guestUserId);
 
         if (!includeClosed) query = query.Where(c => c.Status != "closed");
@@ -28,6 +29,7 @@ public class CaseRepository(AppDbContext db) : ICaseRepository
         db.Cases
             .Include(c => c.Disruption)
             .Include(c => c.Booking).ThenInclude(b => b!.Hotel)
+            .Include(c => c.Booking).ThenInclude(b => b!.RoomType)
             .FirstOrDefaultAsync(c => c.Id == caseId, ct);
 
     public Task<bool> IsHotelConfirmedAsync(Guid caseId, CancellationToken ct = default) =>

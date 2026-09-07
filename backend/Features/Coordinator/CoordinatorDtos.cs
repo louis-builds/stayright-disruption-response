@@ -9,7 +9,8 @@ public record OverviewDto(
 public record CaseQueueItemDto(
     Guid CaseId, string ConfirmationNo, string GuestNickname, string DisruptionTitle,
     string? EscalationReason, TimeSpan WaitTime, string Priority, string Status,
-    Guid? AssigneeCoordinatorId, string? AssigneeNickname, bool Overdue, bool IsHighValueGuest);
+    Guid? AssigneeCoordinatorId, string? AssigneeNickname, bool Overdue, bool IsHighValueGuest,
+    bool AwaitingHotelConfirmation);
 
 public record CoordinatorOptionDto(Guid Id, string Nickname);
 

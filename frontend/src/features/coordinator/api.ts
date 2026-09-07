@@ -121,8 +121,8 @@ export function fetchRefundStatus(caseId: string) {
   return apiGet<RefundStatus>(`/api/cases/${caseId}/refund`);
 }
 
-export function confirmRefund(caseId: string, amount: number, reason: string) {
-  return apiPost<null>(`/api/cases/${caseId}/refund/confirm`, { amount, reason, optionId: null });
+export function confirmRefund(caseId: string, amount: number, reason: string, optionId: string | null = null) {
+  return apiPost<null>(`/api/cases/${caseId}/refund/confirm`, { amount, reason, optionId });
 }
 
 export function fetchCaseNotifications(caseId: string) {

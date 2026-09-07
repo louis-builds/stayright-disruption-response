@@ -112,6 +112,23 @@ public class CoordinatorRepository(AppDbContext db) : ICoordinatorRepository
     public Task<bool> HasRefundConfirmationAsync(Guid caseId, CancellationToken ct = default) =>
         db.RefundConfirmations.AnyAsync(r => r.CaseId == caseId, ct);
 
+    public Task<bool> HasPendingHotelConfirmationAsync(Guid caseId, CancellationToken ct = default) =>
+        db.Options.AnyAsync(o => o.CaseId == caseId && o.Case!.Status != "closed" && o.Selected && o.ExecutionRequestedAt != null &&
+            o.Availability == "pending" && (o.OptionType == "defer" || o.OptionType == "alternate"), ct);
+
+    public async Task<HashSet<Guid>> GetPendingHotelConfirmationCaseIdsAsync(IEnumerable<Guid> caseIds, CancellationToken ct = default)
+    {
+        var ids = caseIds.Distinct().ToList();
+        if (ids.Count == 0) return [];
+        var pendingIds = await db.Options
+            .Where(o => ids.Contains(o.CaseId) && o.Case!.Status != "closed" && o.Selected && o.ExecutionRequestedAt != null &&
+                o.Availability == "pending" && (o.OptionType == "defer" || o.OptionType == "alternate"))
+            .Select(o => o.CaseId)
+            .Distinct()
+            .ToListAsync(ct);
+        return [.. pendingIds];
+    }
+
     public Task<Guid?> FindHotelAccountUserIdAsync(Guid hotelId, CancellationToken ct = default) =>
         db.Users.Where(u => u.Role == "hotel" && u.HotelId == hotelId).Select(u => (Guid?)u.Id).FirstOrDefaultAsync(ct);
 

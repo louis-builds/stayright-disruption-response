@@ -47,7 +47,8 @@ public class CoordinatorService(ICoordinatorRepository repo, IEmailService email
         }
         var names = await CoordinatorNamesAsync(ct);
         var highValue = await HighValueGuestIdsAsync(list, ct);
-        return [.. list.Select(c => ToQueueItemDto(c, names, highValue))];
+        var awaitingHotel = await repo.GetPendingHotelConfirmationCaseIdsAsync(list.Select(c => c.Id), ct);
+        return [.. list.Select(c => ToQueueItemDto(c, names, highValue, awaitingHotel))];
     }
 
     public async Task<List<CaseQueueItemDto>> GetByDisruptionAsync(Guid disruptionId, CancellationToken ct = default)
@@ -55,7 +56,8 @@ public class CoordinatorService(ICoordinatorRepository repo, IEmailService email
         var list = await repo.ListByDisruptionAsync(disruptionId, ct);
         var names = await CoordinatorNamesAsync(ct);
         var highValue = await HighValueGuestIdsAsync(list, ct);
-        return [.. list.Select(c => ToQueueItemDto(c, names, highValue))];
+        var awaitingHotel = await repo.GetPendingHotelConfirmationCaseIdsAsync(list.Select(c => c.Id), ct);
+        return [.. list.Select(c => ToQueueItemDto(c, names, highValue, awaitingHotel))];
     }
 
     public async Task<List<CaseQueueItemDto>> GetMineAsync(Guid coordinatorId, string status, CancellationToken ct = default)
@@ -63,7 +65,8 @@ public class CoordinatorService(ICoordinatorRepository repo, IEmailService email
         var list = await repo.ListMineAsync(coordinatorId, status, ct);
         var names = await CoordinatorNamesAsync(ct);
         var highValue = await HighValueGuestIdsAsync(list, ct);
-        return [.. list.Select(c => ToQueueItemDto(c, names, highValue))];
+        var awaitingHotel = await repo.GetPendingHotelConfirmationCaseIdsAsync(list.Select(c => c.Id), ct);
+        return [.. list.Select(c => ToQueueItemDto(c, names, highValue, awaitingHotel))];
     }
 
     public async Task<List<CaseQueueItemDto>> GetClosedAsync(int days, CancellationToken ct = default)
@@ -71,7 +74,8 @@ public class CoordinatorService(ICoordinatorRepository repo, IEmailService email
         var list = await repo.ListClosedAsync(days, ct);
         var names = await CoordinatorNamesAsync(ct);
         var highValue = await HighValueGuestIdsAsync(list, ct);
-        return [.. list.Select(c => ToQueueItemDto(c, names, highValue))];
+        var awaitingHotel = await repo.GetPendingHotelConfirmationCaseIdsAsync(list.Select(c => c.Id), ct);
+        return [.. list.Select(c => ToQueueItemDto(c, names, highValue, awaitingHotel))];
     }
 
     public async Task<List<CaseQueueItemDto>> SearchAsync(string query, CancellationToken ct = default)
@@ -79,7 +83,8 @@ public class CoordinatorService(ICoordinatorRepository repo, IEmailService email
         var list = await repo.SearchAsync(query, ct);
         var names = await CoordinatorNamesAsync(ct);
         var highValue = await HighValueGuestIdsAsync(list, ct);
-        return [.. list.Select(c => ToQueueItemDto(c, names, highValue))];
+        var awaitingHotel = await repo.GetPendingHotelConfirmationCaseIdsAsync(list.Select(c => c.Id), ct);
+        return [.. list.Select(c => ToQueueItemDto(c, names, highValue, awaitingHotel))];
     }
 
     private async Task<Dictionary<Guid, string>> CoordinatorNamesAsync(CancellationToken ct) =>
@@ -88,12 +93,14 @@ public class CoordinatorService(ICoordinatorRepository repo, IEmailService email
     private Task<HashSet<Guid>> HighValueGuestIdsAsync(IEnumerable<Case> cases, CancellationToken ct) =>
         repo.GetHighValueGuestIdsAsync(cases.Where(c => c.Booking is not null).Select(c => c.Booking!.GuestUserId), ct);
 
-    private static CaseQueueItemDto ToQueueItemDto(Case c, Dictionary<Guid, string> coordinatorNames, HashSet<Guid> highValueGuestIds) => new(
+    private static CaseQueueItemDto ToQueueItemDto(Case c, Dictionary<Guid, string> coordinatorNames, HashSet<Guid> highValueGuestIds,
+        HashSet<Guid> awaitingHotelCaseIds) => new(
         c.Id, c.Booking?.ConfirmationNo ?? "", c.Booking?.GuestUser?.Nickname ?? "", c.Disruption?.Title ?? "",
         c.EscalationReason, DateTimeOffset.UtcNow - c.CreatedAt, c.Priority, c.Status,
         c.AssigneeCoordinatorId,
         c.AssigneeCoordinatorId.HasValue && coordinatorNames.TryGetValue(c.AssigneeCoordinatorId.Value, out var n) ? n : null,
-        IsOverdue(c), c.Booking is not null && highValueGuestIds.Contains(c.Booking.GuestUserId));
+        IsOverdue(c), c.Booking is not null && highValueGuestIds.Contains(c.Booking.GuestUserId),
+        awaitingHotelCaseIds.Contains(c.Id));
 
     public async Task<List<CoordinatorOptionDto>> ListCoordinatorsAsync(CancellationToken ct = default) =>
         [.. (await repo.ListCoordinatorsAsync(ct)).Select(u => new CoordinatorOptionDto(u.Id, u.Nickname))];
@@ -146,6 +153,13 @@ public class CoordinatorService(ICoordinatorRepository repo, IEmailService email
     {
         var c = await repo.FindByIdAsync(caseId, ct) ?? throw new CaseNotFoundException();
         if (c.Status == "closed") throw new CaseAlreadyClosedException();
+
+        // A submitted defer/alternate is not a completed rebooking until the hotel accepts it.
+        // Keep this guard in the API as well as the UI so a direct request cannot close the case early.
+        if (await repo.HasPendingHotelConfirmationAsync(caseId, ct))
+        {
+            throw new HotelConfirmationPendingException();
+        }
 
         // 退款强制规则(Task 6):退款类结案必须先有协调员退款确认记录,不能靠这里直接把状态标完成绕过去。
         if (RefundCloseReasons.Contains(request.CloseReason) && !await repo.HasRefundConfirmationAsync(caseId, ct))
