@@ -1,12 +1,15 @@
 """Weather anomaly detection: fetch an Open-Meteo hourly forecast and
-normalise the hours that clear the risk thresholds into a DisruptionEvent
-whose affects_window reflects when the location is actually forecast to
-be at risk — not a flat placeholder offset from "now".
+normalise the hours the API itself flags as severe weather into a
+DisruptionEvent whose affects_window reflects when the location is
+actually forecast to be at risk — not a flat placeholder offset from "now".
 
-The risk thresholds in `classify` are a placeholder, same as the old
-prototype's `is_risky()` — they exist so the pipeline can be exercised
-end to end, not as approved alerting policy. Replace them with real
-thresholds before this goes anywhere near production.
+`classify` triggers only on Open-Meteo's WMO `weather_code`: an hour counts
+as a disruption when the forecast explicitly categorises it as a
+thunderstorm, heavy/violent rain, or heavy snow. Raw wind speed is
+deliberately not considered — a high gust reading on its own is not
+"obviously bad weather" and produced too many false positives. The
+code→(type, severity) mapping in `SEVERE_WEATHER_CODES` is still an MVP
+call, not approved alerting policy.
 """
 
 from __future__ import annotations
@@ -30,9 +33,20 @@ DEFAULT_RADIUS_KM = 30.0
 # which is the honest limit of what a weather forecast can tell you.
 DEFAULT_FORECAST_DAYS = 7
 
-WIND_GUST_STORM_KMH = 90.0
-PRECIPITATION_FLOOD_MM = 10.0
-SNOWFALL_HEAVY_SNOW_CM = 5.0
+# WMO 4677 weather codes (Open-Meteo `weather_code`) that count as a
+# regional weather disruption, mapped to our event type + severity.
+# Anything not listed here — plain high wind, moderate rain, fog, light
+# snow — is ignored: the forecast has to name the hour as severe itself.
+SEVERE_WEATHER_CODES: dict[int, tuple[str, Severity]] = {
+    65: ("flood", Severity.MEDIUM),     # rain: heavy intensity
+    67: ("flood", Severity.HIGH),       # freezing rain: heavy intensity
+    82: ("flood", Severity.HIGH),       # rain showers: violent
+    75: ("heavy_snow", Severity.HIGH),  # snow fall: heavy intensity
+    86: ("heavy_snow", Severity.HIGH),  # snow showers: heavy
+    95: ("storm", Severity.MEDIUM),     # thunderstorm: slight or moderate
+    96: ("storm", Severity.HIGH),       # thunderstorm with slight hail
+    99: ("storm", Severity.HIGH),       # thunderstorm with heavy hail
+}
 
 
 class Location(NamedTuple):
@@ -59,8 +73,7 @@ def fetch_weather(lat: float, lng: float, *, timeout: float = 10.0) -> dict[str,
     params = {
         "latitude": lat,
         "longitude": lng,
-        "current": "wind_gusts_10m,precipitation,snowfall",
-        "wind_speed_unit": "kmh",
+        "current": "weather_code,precipitation,snowfall",
         "precipitation_unit": "mm",
         "forecast_days": 1,
     }
@@ -74,8 +87,7 @@ def fetch_forecast(lat: float, lng: float, *, forecast_days: int = DEFAULT_FOREC
     params = {
         "latitude": lat,
         "longitude": lng,
-        "hourly": "wind_gusts_10m,precipitation,snowfall",
-        "wind_speed_unit": "kmh",
+        "hourly": "weather_code,precipitation,snowfall",
         "precipitation_unit": "mm",
         "forecast_days": forecast_days,
         "timezone": "UTC",
@@ -87,25 +99,23 @@ def fetch_forecast(lat: float, lng: float, *, forecast_days: int = DEFAULT_FOREC
 
 def classify(raw_payload: dict[str, Any]) -> Classification:
     """Classify a single reading, shaped like Open-Meteo's `current` block
-    (`{"current": {"wind_gusts_10m": ..., "precipitation": ..., "snowfall": ...}}`).
+    (`{"current": {"weather_code": ..., "precipitation": ..., "snowfall": ...}}`).
 
-    Placeholder thresholds only — see module docstring.
+    Risky only if `weather_code` is in `SEVERE_WEATHER_CODES` — i.e. the
+    forecast itself labels the hour a thunderstorm / heavy rain / heavy
+    snow. Wind speed is not looked at. See module docstring.
     """
     current = raw_payload.get("current", {})
-    wind_gusts = current.get("wind_gusts_10m", 0) or 0
-    precipitation = current.get("precipitation", 0) or 0
-    snowfall = current.get("snowfall", 0) or 0
+    code = current.get("weather_code")
+    if code is None:
+        return Classification(False, "none", Severity.LOW)
 
-    if snowfall >= SNOWFALL_HEAVY_SNOW_CM:
-        return Classification(True, "heavy_snow", Severity.HIGH)
-    if precipitation >= PRECIPITATION_FLOOD_MM:
-        severity = Severity.HIGH if precipitation >= PRECIPITATION_FLOOD_MM * 2 else Severity.MEDIUM
-        return Classification(True, "flood", severity)
-    if wind_gusts >= WIND_GUST_STORM_KMH:
-        severity = Severity.HIGH if wind_gusts >= WIND_GUST_STORM_KMH * 1.5 else Severity.MEDIUM
-        return Classification(True, "storm", severity)
+    match = SEVERE_WEATHER_CODES.get(int(code))
+    if match is None:
+        return Classification(False, "none", Severity.LOW)
 
-    return Classification(False, "none", Severity.LOW)
+    event_type, severity = match
+    return Classification(True, event_type, severity)
 
 
 _SEVERITY_RANK = {Severity.LOW: 0, Severity.MEDIUM: 1, Severity.HIGH: 2}
@@ -128,16 +138,16 @@ def find_risky_window(raw_forecast: dict[str, Any]) -> RiskyWindow | None:
     """
     hourly = raw_forecast.get("hourly", {})
     times = hourly.get("time", [])
-    gusts = hourly.get("wind_gusts_10m", [])
+    codes = hourly.get("weather_code", [])
     precipitation = hourly.get("precipitation", [])
     snowfall = hourly.get("snowfall", [])
 
     risky_hours = []
     for i, time_str in enumerate(times):
         reading = {"current": {
-            "wind_gusts_10m": gusts[i],
-            "precipitation": precipitation[i],
-            "snowfall": snowfall[i],
+            "weather_code": codes[i] if i < len(codes) else None,
+            "precipitation": precipitation[i] if i < len(precipitation) else None,
+            "snowfall": snowfall[i] if i < len(snowfall) else None,
         }}
         classification = classify(reading)
         if classification.is_risky:

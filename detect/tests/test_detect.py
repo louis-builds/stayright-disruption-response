@@ -30,7 +30,7 @@ def _valid_event_kwargs(**overrides):
         detected_at=now,
         affects_window=TimeWindow(start=now, end=now + timedelta(hours=6)),
         geo=Geo(type=GeoType.POINT, center=GeoPoint(lat=-45.03, lng=168.66), radius_km=30),
-        raw_payload={"wind_gusts_10m": 90},
+        raw_payload={"weather_code": 95},
     )
     kwargs.update(overrides)
     return kwargs
@@ -72,31 +72,40 @@ class TestDisruptionEventSchema:
 
 
 class TestClassify:
-    def test_calm_weather_is_not_risky(self):
-        result = classify({"current": {"wind_gusts_10m": 10, "precipitation": 0, "snowfall": 0}})
+    def test_calm_weather_code_is_not_risky(self):
+        result = classify({"current": {"weather_code": 3, "precipitation": 0, "snowfall": 0}})
         assert result.is_risky is False
 
-    def test_high_wind_gusts_classified_as_storm(self):
-        result = classify({"current": {"wind_gusts_10m": 100, "precipitation": 0, "snowfall": 0}})
+    def test_high_wind_alone_is_not_risky(self):
+        # No severe weather_code -> ignored, however windy the raw reading.
+        result = classify({"current": {"weather_code": 2, "wind_gusts_10m": 150}})
+        assert result.is_risky is False
+
+    def test_thunderstorm_code_classified_as_storm(self):
+        result = classify({"current": {"weather_code": 95}})
         assert result.is_risky is True
         assert result.event_type == "storm"
         assert result.severity == Severity.MEDIUM
 
-    def test_extreme_wind_gusts_are_high_severity(self):
-        result = classify({"current": {"wind_gusts_10m": 150, "precipitation": 0, "snowfall": 0}})
+    def test_thunderstorm_with_hail_is_high_severity(self):
+        result = classify({"current": {"weather_code": 96}})
         assert result.severity == Severity.HIGH
 
-    def test_heavy_precipitation_classified_as_flood(self):
-        result = classify({"current": {"wind_gusts_10m": 0, "precipitation": 15, "snowfall": 0}})
+    def test_violent_rain_showers_classified_as_flood(self):
+        result = classify({"current": {"weather_code": 82}})
         assert result.is_risky is True
         assert result.event_type == "flood"
 
-    def test_snowfall_classified_as_heavy_snow(self):
-        result = classify({"current": {"wind_gusts_10m": 0, "precipitation": 0, "snowfall": 8}})
+    def test_heavy_snow_code_classified_as_heavy_snow(self):
+        result = classify({"current": {"weather_code": 75}})
         assert result.is_risky is True
         assert result.event_type == "heavy_snow"
 
-    def test_missing_fields_default_to_calm(self):
+    def test_moderate_rain_code_is_not_risky(self):
+        result = classify({"current": {"weather_code": 63}})
+        assert result.is_risky is False
+
+    def test_missing_weather_code_defaults_to_calm(self):
         result = classify({"current": {}})
         assert result.is_risky is False
 
@@ -104,10 +113,10 @@ class TestClassify:
 class TestBuildDisruptionEvent:
     def test_builds_valid_event_from_risky_reading(self):
         location = Location("Queenstown", -45.0312, 168.6626)
-        classification = classify({"current": {"wind_gusts_10m": 90, "precipitation": 0, "snowfall": 0}})
+        classification = classify({"current": {"weather_code": 95}})
         start = datetime.now(timezone.utc)
         end = start + timedelta(hours=3)
-        raw_reading = {"wind_gusts_10m": 90, "precipitation": 0, "snowfall": 0}
+        raw_reading = {"weather_code": 95, "precipitation": 4, "snowfall": 0}
 
         event = build_disruption_event(location, classification, start, end, raw_reading)
 
@@ -118,15 +127,15 @@ class TestBuildDisruptionEvent:
         assert event.affects_window.start == start
         assert event.affects_window.end == end
         assert event.raw_payload["location"] == "Queenstown"
-        assert event.raw_payload["wind_gusts_10m"] == 90
+        assert event.raw_payload["weather_code"] == 95
 
 
-def _hourly_forecast(times, gusts=None, precipitation=None, snowfall=None):
+def _hourly_forecast(times, codes=None, precipitation=None, snowfall=None):
     n = len(times)
     return {
         "hourly": {
             "time": times,
-            "wind_gusts_10m": gusts or [0] * n,
+            "weather_code": codes or [3] * n,  # 3 = overcast, not severe
             "precipitation": precipitation or [0] * n,
             "snowfall": snowfall or [0] * n,
         }
@@ -135,12 +144,12 @@ def _hourly_forecast(times, gusts=None, precipitation=None, snowfall=None):
 
 class TestFindRiskyWindow:
     def test_no_risky_hours_returns_none(self):
-        forecast = _hourly_forecast(["2026-01-01T00:00", "2026-01-01T01:00"], gusts=[10, 15])
+        forecast = _hourly_forecast(["2026-01-01T00:00", "2026-01-01T01:00"], codes=[3, 61])
         assert find_risky_window(forecast) is None
 
     def test_single_risky_hour_window_spans_that_hour(self):
         forecast = _hourly_forecast(
-            ["2026-01-01T00:00", "2026-01-01T01:00", "2026-01-01T02:00"], gusts=[10, 100, 15]
+            ["2026-01-01T00:00", "2026-01-01T01:00", "2026-01-01T02:00"], codes=[3, 95, 61]
         )
         window = find_risky_window(forecast)
 
@@ -152,7 +161,7 @@ class TestFindRiskyWindow:
     def test_window_spans_first_to_last_risky_hour(self):
         forecast = _hourly_forecast(
             ["2026-01-01T00:00", "2026-01-01T01:00", "2026-01-01T02:00", "2026-01-01T03:00"],
-            gusts=[10, 95, 100, 15],
+            codes=[3, 95, 82, 61],
         )
         window = find_risky_window(forecast)
 
@@ -160,14 +169,14 @@ class TestFindRiskyWindow:
         assert window.end == datetime(2026, 1, 1, 3, tzinfo=timezone.utc)
 
     def test_uses_worst_severity_hour_for_overall_classification(self):
-        # Hour 1 clears MEDIUM storm, hour 2 clears HIGH storm -> window should report HIGH.
+        # Hour 1 is a MEDIUM storm (95), hour 2 a HIGH storm (96) -> window reports HIGH.
         forecast = _hourly_forecast(
-            ["2026-01-01T00:00", "2026-01-01T01:00"], gusts=[95, 150]
+            ["2026-01-01T00:00", "2026-01-01T01:00"], codes=[95, 96]
         )
         window = find_risky_window(forecast)
 
         assert window.classification.severity == Severity.HIGH
-        assert window.peak_reading["wind_gusts_10m"] == 150
+        assert window.peak_reading["weather_code"] == 96
 
     def test_empty_forecast_returns_none(self):
         forecast = _hourly_forecast([])
@@ -176,8 +185,8 @@ class TestFindRiskyWindow:
 
 class TestDetectEvents:
     def test_only_risky_locations_produce_events(self):
-        calm_forecast = _hourly_forecast(["2026-01-01T00:00"], gusts=[5])
-        storm_forecast = _hourly_forecast(["2026-01-01T00:00", "2026-01-01T01:00"], gusts=[90, 95])
+        calm_forecast = _hourly_forecast(["2026-01-01T00:00"], codes=[3])
+        storm_forecast = _hourly_forecast(["2026-01-01T00:00", "2026-01-01T01:00"], codes=[95, 96])
 
         def fake_fetch(lat, lng):
             return storm_forecast if lat < -44 else calm_forecast

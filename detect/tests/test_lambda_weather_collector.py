@@ -6,23 +6,23 @@ from src.runtimes.lambda_weather_collector import handler, ingest_disruption
 
 QUEENSTOWN = DEFAULT_LOCATIONS[0]
 
-STORM_READING = {"wind_gusts_10m": 150, "precipitation": 0, "snowfall": 0}
+STORM_READING = {"weather_code": 96, "precipitation": 20, "snowfall": 0}
 
 
-def _hourly_forecast(times, gusts=None, precipitation=None, snowfall=None):
+def _hourly_forecast(times, codes=None, precipitation=None, snowfall=None):
     n = len(times)
     return {
         "hourly": {
             "time": times,
-            "wind_gusts_10m": gusts or [0] * n,
+            "weather_code": codes or [3] * n,  # 3 = overcast, not severe
             "precipitation": precipitation or [0] * n,
             "snowfall": snowfall or [0] * n,
         }
     }
 
 
-CALM_FORECAST = _hourly_forecast(["2026-08-25T00:00", "2026-08-25T01:00"], gusts=[5, 10])
-STORM_FORECAST = _hourly_forecast(["2026-08-25T00:00", "2026-08-25T01:00"], gusts=[150, 100])
+CALM_FORECAST = _hourly_forecast(["2026-08-25T00:00", "2026-08-25T01:00"], codes=[3, 2])
+STORM_FORECAST = _hourly_forecast(["2026-08-25T00:00", "2026-08-25T01:00"], codes=[96, 95])
 
 
 def _fake_cfg(key: str) -> str:

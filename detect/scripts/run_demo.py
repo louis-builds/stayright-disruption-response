@@ -46,9 +46,9 @@ from src.identify.db import get_connection
 from src.identify.handoff import build_handoff_payloads, write_handoff_messages
 from src.identify.matcher import find_affected_bookings
 
-# Comfortably past the storm thresholds in open_meteo.py so classify()
-# always calls this a high-severity storm.
-MOCK_STORM_PAYLOAD = {"current": {"wind_gusts_10m": 150, "precipitation": 0, "snowfall": 0}}
+# weather_code 96 = thunderstorm with hail -> classify() calls this a
+# high-severity storm (see SEVERE_WEATHER_CODES in open_meteo.py).
+MOCK_STORM_PAYLOAD = {"current": {"weather_code": 96, "precipitation": 20, "snowfall": 0}}
 
 # Wide enough to reliably overlap the C# backend's seed bookings (their
 # check-in dates are relative offsets from whenever they were last seeded,
