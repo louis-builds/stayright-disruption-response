@@ -151,24 +151,42 @@ def notify_affected_guest(state: DisruptionState) -> dict:
 def rank_and_explain(state: DisruptionState) -> dict:
     """LLM 节点：结合客人偏好，调用工具搜索替代房源 + 查真实政策，
     生成排序后的推荐方案和解释文案"""
-    return {
-        "messages": [
-            get_model_with_tools().invoke(
-                [
-                    SystemMessage(
-                        content=(
-                            "You are a travel disruption assistant for StayRight NZ. "
-                            "Use the tools to search real alternative properties and "
-                            "check their real cancellation policy before recommending "
-                            "anything to the guest. Never invent policy terms."
-                        )
-                    )
-                ]
-                + state["messages"]
+    bookings = state.get("affected_bookings") or []
+    bookings_summary = "\n".join(
+        f"- Booking {b['booking_id']}: {b['hotel_name']}, {b['check_in']} to {b['check_out']}"
+        for b in bookings
+    ) or "(no affected bookings identified)"
+
+    response = get_model_with_tools().invoke(
+        [
+            SystemMessage(
+                content=(
+                    "You are a travel disruption assistant for StayRight NZ. "
+                    "Use the tools to search real alternative properties and "
+                    "check their real cancellation policy before recommending "
+                    "anything to the guest. Never invent policy terms.\n\n"
+                    "Affected bookings:\n" + bookings_summary + "\n\n"
+                    "Infer the city from each hotel's name when calling "
+                    "search_alternative_properties. The guest's budget isn't "
+                    "tracked yet, so use a reasonable mid-range NZD nightly rate "
+                    "for the property type as budget_max."
+                )
             )
-        ],
+        ]
+        + state["messages"]
+    )
+
+    result: dict = {
+        "messages": [response],
         "llm_calls": state.get("llm_calls", 0) + 1,
     }
+    if not response.tool_calls:
+        # LLM 决定不再调用工具了——如果这整轮下来一次工具都没调过，说明它是凭空回答，
+        # 没有真实房源/政策数据兜底，不该被当成可信推荐，交给 route_after_rank 的
+        # 置信度检查转人工（在此之前 ranking_confidence 从来没被赋值过，那条检查形同虚设）。
+        used_real_data = any(isinstance(m, ToolMessage) for m in state["messages"])
+        result["ranking_confidence"] = 0.9 if used_real_data else 0.3
+    return result
 
 
 def rank_tool_node(state: DisruptionState) -> dict:
@@ -182,15 +200,21 @@ def rank_tool_node(state: DisruptionState) -> dict:
 
 
 def generate_message(state: DisruptionState) -> dict:
-    """LLM 节点：生成发给客人的最终通知文案（不需要工具，直接总结）"""
-    return {
-        "final_message": get_model().invoke(
-            [
-                SystemMessage(content="Write a warm, clear message to the guest summarising the rebooking outcome.")
-            ]
-            + state["messages"]
-        ).content
-    }
+    """LLM 节点：生成发给客人的最终通知文案（不需要工具，直接总结）。
+
+    gemini-2.5-flash 在这个节点上实测有相当高概率(接近一半)返回 finish_reason=STOP 但
+    output_tokens=0 的空结果——不是网络错误也不是被安全过滤挡了，就是没写。试过用
+    thinking_budget=0 关掉思考预算，复现率没变化，不是思考预算吃满输出配额的问题，原因
+    不明。重试几次基本能拿到非空结果；真的一直空，退到一句兜底文案，不能让客人收到空消息。
+    """
+    prompt = [SystemMessage(content="Write a warm, clear message to the guest summarising the rebooking outcome.")] + state["messages"]
+
+    for _ in range(3):
+        content = get_model().invoke(prompt).content
+        if content:
+            return {"final_message": content}
+
+    return {"final_message": "We've found some rebooking options for your affected stay and will follow up shortly with the details."}
 
 
 def coordinate_booking(state: DisruptionState) -> dict:

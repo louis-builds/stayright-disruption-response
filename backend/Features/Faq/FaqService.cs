@@ -1,3 +1,4 @@
+using Pgvector;
 using TravelDisruptionAgent.Api.Features.Chat;
 using TravelDisruptionAgent.Api.Features.Coordinator;
 using TravelDisruptionAgent.Api.Infrastructure.Data.Entities;
@@ -17,8 +18,6 @@ public class FaqService(IFaqRepository repo, ISystemSettingsRepository settingsR
         var questions = await repo.ListUnprocessedGuestQuestionsAsync(settings.FaqProcessedThrough, ct);
         if (questions.Count == 0) return;
 
-        var clusters = await repo.ListClustersAsync(ct);
-
         foreach (var message in questions)
         {
             var embedding = await gemini.EmbedAsync(message.Content, ct);
@@ -28,34 +27,27 @@ public class FaqService(IFaqRepository repo, ISystemSettingsRepository settingsR
                 continue;
             }
 
-            FaqQuestion? best = null;
-            var bestScore = 0.0;
-            foreach (var cluster in clusters)
-            {
-                var score = CosineSimilarity(embedding, cluster.Embedding);
-                if (score > bestScore)
-                {
-                    bestScore = score;
-                    best = cluster;
-                }
-            }
+            var query = new Vector(embedding);
+            var nearest = await repo.FindNearestClusterAsync(query, ct);
+            var similarity = nearest is null ? 0 : 1 - nearest.Value.Distance;
 
-            if (best is not null && bestScore >= SimilarityThreshold)
+            if (nearest is not null && similarity >= SimilarityThreshold)
             {
-                best.AskCount++;
-                best.LastAskedAt = message.CreatedAt;
-                best.UpdatedAt = DateTimeOffset.UtcNow;
+                nearest.Value.Cluster.AskCount++;
+                nearest.Value.Cluster.LastAskedAt = message.CreatedAt;
+                nearest.Value.Cluster.UpdatedAt = DateTimeOffset.UtcNow;
             }
             else
             {
                 var now = DateTimeOffset.UtcNow;
                 var newCluster = new FaqQuestion
                 {
-                    Id = Guid.NewGuid(), QuestionText = message.Content, Embedding = embedding,
+                    Id = Guid.NewGuid(), QuestionText = message.Content, Embedding = query,
                     AskCount = 1, LastAskedAt = message.CreatedAt, CreatedAt = now, UpdatedAt = now,
                 };
                 await repo.AddClusterAsync(newCluster, ct);
-                clusters.Add(newCluster);
+                // 同一批后续问题要能命中刚建的簇，必须先落库，pgvector 才能用 <=> 搜到。
+                await repo.SaveChangesAsync(ct);
             }
         }
 
@@ -69,19 +61,5 @@ public class FaqService(IFaqRepository repo, ISystemSettingsRepository settingsR
     {
         var top = await repo.ListTopAsync(3, ct);
         return [.. top.Select(f => new FaqQuestionDto(f.QuestionText, f.AskCount))];
-    }
-
-    private static double CosineSimilarity(float[] a, float[] b)
-    {
-        var len = Math.Min(a.Length, b.Length);
-        double dot = 0, normA = 0, normB = 0;
-        for (var i = 0; i < len; i++)
-        {
-            dot += a[i] * b[i];
-            normA += a[i] * a[i];
-            normB += b[i] * b[i];
-        }
-        if (normA == 0 || normB == 0) return 0;
-        return dot / (Math.Sqrt(normA) * Math.Sqrt(normB));
     }
 }

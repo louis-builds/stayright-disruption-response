@@ -2,10 +2,12 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
+using Pgvector.EntityFrameworkCore;
 using Serilog;
 using TravelDisruptionAgent.Api.Features.Auth;
 using TravelDisruptionAgent.Api.Features.Bookings;
 using TravelDisruptionAgent.Api.Features.Calls;
+using TravelDisruptionAgent.Api.Features.Tags;
 using TravelDisruptionAgent.Api.Features.Cases;
 using TravelDisruptionAgent.Api.Features.Chat;
 using TravelDisruptionAgent.Api.Features.Coordinator;
@@ -43,7 +45,7 @@ builder.Host.UseSerilog((context, services, config) =>
 
 var connectionString = BuildConnectionString(builder.Configuration);
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(connectionString).UseSnakeCaseNamingConvention());
+    options.UseNpgsql(connectionString, o => o.UseVector()).UseSnakeCaseNamingConvention());
 
 const string FrontendCorsPolicy = "Frontend";
 var frontendOrigin = Environment.GetEnvironmentVariable("FRONTEND_ORIGIN") ?? "http://localhost:5173";
@@ -132,6 +134,8 @@ builder.Services.AddScoped<ICallRepository, CallRepository>();
 builder.Services.AddScoped<ICallService, CallService>();
 builder.Services.AddScoped<ITelephonyProvider, MockTelephonyProvider>();
 builder.Services.AddScoped<IAsrProvider, MockAsrProvider>();
+builder.Services.AddScoped<ITagRepository, TagRepository>();
+builder.Services.AddScoped<ITagService, TagService>();
 builder.Services.AddHostedService<FaqClusteringJob>();
 builder.Services.AddHostedService<HandoffIngestJob>();
 

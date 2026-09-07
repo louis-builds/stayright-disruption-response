@@ -3,9 +3,9 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
-using Pgvector;
 using TravelDisruptionAgent.Api.Infrastructure.Data;
 
 #nullable disable
@@ -13,16 +13,17 @@ using TravelDisruptionAgent.Api.Infrastructure.Data;
 namespace TravelDisruptionAgent.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260907010832_AddGuestTags")]
+    partial class AddGuestTags
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
                 .HasAnnotation("ProductVersion", "9.0.9")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
-            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "vector");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.AlertAcknowledgement", b =>
@@ -697,9 +698,9 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
-                    b.Property<Vector>("Embedding")
+                    b.PrimitiveCollection<float[]>("Embedding")
                         .IsRequired()
-                        .HasColumnType("vector(1024)")
+                        .HasColumnType("real[]")
                         .HasColumnName("embedding");
 
                     b.Property<DateTimeOffset>("LastAskedAt")
@@ -1380,8 +1381,8 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
-                    b.Property<Vector>("Embedding")
-                        .HasColumnType("vector(1024)")
+                    b.PrimitiveCollection<float[]>("Embedding")
+                        .HasColumnType("real[]")
                         .HasColumnName("embedding");
 
                     b.Property<Guid>("RagDocumentId")

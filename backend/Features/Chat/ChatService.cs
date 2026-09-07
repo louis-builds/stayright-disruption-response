@@ -1,4 +1,5 @@
 using System.Text;
+using Pgvector;
 using TravelDisruptionAgent.Api.Features.Coordinator;
 using TravelDisruptionAgent.Api.Features.HotelPortal;
 using TravelDisruptionAgent.Api.Infrastructure.Data.Entities;
@@ -231,41 +232,12 @@ public class ChatService(GeminiClient gemini, IRagRepository ragRepository, ISys
     // 不因为一个切片缺向量就整体退回关键字匹配。
     private async Task<(string Content, string DocName, int Version)?> FindRelevantSnippetAsync(string userMessage, Guid? guestUserId, CancellationToken ct)
     {
-        var chunks = await ragRepository.GetSearchableChunksAsync(guestUserId, ct);
-        var embeddable = chunks.Where(c => c.Embedding is { Length: > 0 }).ToList();
-        if (embeddable.Count == 0) return null;
-
         var queryEmbedding = await gemini.EmbedAsync(userMessage, ct);
         if (queryEmbedding is null) return null;
 
-        RagDocumentChunk? best = null;
-        var bestScore = -1.0;
-        foreach (var chunk in embeddable)
-        {
-            var score = CosineSimilarity(queryEmbedding, chunk.Embedding!);
-            if (score > bestScore)
-            {
-                bestScore = score;
-                best = chunk;
-            }
-        }
-
-        // 相似度太低说明语料里没有相关内容，别硬塞一段不相关的进提示词。
-        if (best is null || bestScore < 0.5) return null;
-        return (best.Content, best.RagDocument?.Name ?? "", best.RagDocument?.Version ?? 0);
-    }
-
-    private static double CosineSimilarity(float[] a, float[] b)
-    {
-        var len = Math.Min(a.Length, b.Length);
-        double dot = 0, normA = 0, normB = 0;
-        for (var i = 0; i < len; i++)
-        {
-            dot += a[i] * b[i];
-            normA += a[i] * a[i];
-            normB += b[i] * b[i];
-        }
-        if (normA == 0 || normB == 0) return 0;
-        return dot / (Math.Sqrt(normA) * Math.Sqrt(normB));
+        var nearest = await ragRepository.FindNearestSnippetAsync(guestUserId, new Vector(queryEmbedding), ct);
+        // 余弦距离 = 1 - 余弦相似度。相似度太低说明语料里没有相关内容，别硬塞一段不相关的进提示词。
+        if (nearest is null || 1 - nearest.Value.Distance < 0.5) return null;
+        return (nearest.Value.Content, nearest.Value.DocName, nearest.Value.Version);
     }
 }

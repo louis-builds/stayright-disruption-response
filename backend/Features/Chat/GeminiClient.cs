@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Amazon.BedrockRuntime;
 using Amazon.BedrockRuntime.Model;
+using TravelDisruptionAgent.Api.Infrastructure.Data;
 
 namespace TravelDisruptionAgent.Api.Features.Chat;
 
@@ -121,7 +122,11 @@ public class GeminiClient(IHttpClientFactory httpClientFactory, ILogger<GeminiCl
         }
 
         var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key={apiKey}";
-        var requestBody = new { content = new { parts = new[] { new { text } } } };
+        var requestBody = new
+        {
+            content = new { parts = new[] { new { text } } },
+            outputDimensionality = EmbeddingVector.Dimensions,
+        };
 
         try
         {
@@ -137,7 +142,16 @@ public class GeminiClient(IHttpClientFactory httpClientFactory, ILogger<GeminiCl
 
             using var stream = await response.Content.ReadAsStreamAsync(ct);
             using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
-            return [.. doc.RootElement.GetProperty("embedding").GetProperty("values").EnumerateArray().Select(v => v.GetSingle())];
+            var values = doc.RootElement.GetProperty("embedding").GetProperty("values")
+                .EnumerateArray().Select(v => v.GetSingle()).ToArray();
+            if (values.Length > EmbeddingVector.Dimensions)
+                values = values[..EmbeddingVector.Dimensions];
+            if (values.Length != EmbeddingVector.Dimensions)
+            {
+                logger.LogWarning("Gemini embedding size {Length} != {Expected}", values.Length, EmbeddingVector.Dimensions);
+                return null;
+            }
+            return values;
         }
         catch (Exception ex)
         {

@@ -39,6 +39,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<CaseWorkflowStateHistory> CaseWorkflowStateHistories => Set<CaseWorkflowStateHistory>();
     public DbSet<Call> Calls => Set<Call>();
     public DbSet<CallRecording> CallRecordings => Set<CallRecording>();
+    public DbSet<CustomTag> CustomTags => Set<CustomTag>();
+    public DbSet<GuestCustomTag> GuestCustomTags => Set<GuestCustomTag>();
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
@@ -103,6 +105,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     {
         // 开发规范.md 第3节：表名/字段名走 EFCore.NamingConventions 的 snake_case（见 Program.cs 注册），
         // 这里只补充索引、唯一约束、jsonb 列类型等 Fluent 配置。
+        modelBuilder.HasPostgresExtension("vector");
 
         modelBuilder.Entity<User>(e =>
         {
@@ -252,6 +255,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasIndex(x => x.CallId).IsUnique();
         });
 
+        modelBuilder.Entity<CustomTag>(e =>
+        {
+            e.HasIndex(x => new { x.OwnerRole, x.HotelId });
+        });
+
+        modelBuilder.Entity<GuestCustomTag>(e =>
+        {
+            e.HasIndex(x => new { x.CustomTagId, x.GuestUserId }).IsUnique();
+            e.HasIndex(x => x.GuestUserId);
+        });
+
         modelBuilder.Entity<AlertAcknowledgement>(e =>
         {
             e.HasIndex(x => new { x.AlertKey, x.AcknowledgedDate }).IsUnique();
@@ -261,6 +275,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             e.HasIndex(x => x.RagDocumentId);
             e.HasOne(x => x.RagDocument).WithMany(d => d.Chunks).HasForeignKey(x => x.RagDocumentId).OnDelete(DeleteBehavior.Cascade);
+            e.Property(x => x.Embedding).HasColumnType($"vector({EmbeddingVector.Dimensions})");
+        });
+
+        modelBuilder.Entity<FaqQuestion>(e =>
+        {
+            e.Property(x => x.Embedding).HasColumnType($"vector({EmbeddingVector.Dimensions})");
         });
 
         modelBuilder.Entity<GoldenTestRunItem>(e =>
