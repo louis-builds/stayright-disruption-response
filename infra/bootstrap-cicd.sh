@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# 一次性搭建 CI/CD 骨架：CodeStar Connection（GitHub）+ IAM 角色 +
-# CodeBuild 项目（gate / deploy-backend / deploy-frontend）+ CodePipeline。
+# 一次性搭建 CI/CD：CodeStar Connection（GitHub）+ IAM 角色 + CodeBuild 项目
+# （gate / gate-pr / deploy-backend / deploy-frontend）+ CodePipeline。
 #
-# 背景：这个仓库所在的 GitHub 组织在组织层面关掉了 Actions
-# （repo 级 `actions/permissions` API 返回 409 "disabled by the
-# organization"），.github/workflows/gate.yml 从写完那天起就没在 GitHub 上
-# 真正跑过。这条路走不通之前，用 AWS 原生的 CodePipeline + CodeBuild 代替——
-# 完全在你自己账号权限范围内，不需要组织 admin 批准任何东西。
+# 背景：这个仓库所在的 GitHub 组织把 Actions 的 allowed_actions 限制成
+# `local_only`——只允许本仓库内定义的 action，任何 `actions/*`（checkout /
+# setup-python / setup-node / setup-dotnet）都不放行，.github/workflows/gate.yml
+# 每次触发都是 startup_failure。这个策略在组织层强制、repo 层改不了
+# （2026-09-09 Zachary 拍板：不再等组织放开，CI/CD 全部走 AWS）。
+# .github/workflows/gate.yml 已随这次决策删除。
 #
-# 这个脚本做的事全部可逆（IAM 角色 / CodeBuild 项目 / CodePipeline 都能用
-# `aws iam delete-role` / `aws codebuild delete-project` /
-# `aws codepipeline delete-pipeline` 撤掉），不改动任何现有资源
+# 这个脚本做的事全部可逆（IAM 角色 / CodeBuild 项目 / webhook / CodePipeline
+# 都能用对应的 `aws ... delete-*` 撤掉），不改动任何现有资源
 # （EC2/S3/CloudFront/SAM 栈原样不动）。
 #
 # 跑完这个脚本后，唯一需要你去 AWS 控制台手动点一下的步骤：
@@ -18,17 +18,13 @@
 #   GitHub OAuth 授权握手才会变 AVAILABLE——这一步 AWS 出于安全设计不允许
 #   纯 CLI 完成，脚本跑完会打印控制台链接。
 #
-# 触发方式：手动触发（2026-09-08，Zachary 拍板）。Source 阶段的
-# `DetectChanges: false` 关掉了 push 自动触发，pipeline 只有你主动执行
-# `aws codepipeline start-pipeline-execution` 或在控制台点 "Release change"
-# 才会跑一次。
-#
-# 【部署待决策点】后续计划改成：Test 分支 PR 到 main 分支合并后自动触发
-# （而不是现在这种任何 push 到 Test 都可能触发）。这个决策还没定，涉及
-# main/Test 两个分支的定位要不要调整（现在 main 落后 Test 几十个 commit，
-# 基本不用）。定了之后把 DetectChanges 改回 true（或用 CodePipeline V2 的
-# 显式 triggers 配置指到 main 分支），并同步改这里的注释和
-# docs/AWS_SDK_SPEC.md 的部署方式章节。
+# 分支模型与触发（2026-09-09 Zachary 拍板）：
+#   开发分支 --PR--> Test（集成） --PR--> main（发布）
+#   - PR 进 Test / main    → CodeBuild `stayright-gate-pr` 经 GitHub webhook 跑
+#                            gate，结果回写 PR 的 commit status（合并前拦截）
+#   - 提交进 main（合并后） → CodePipeline 自动跑：Gate → 人工审批 → 部署
+#                            （DetectChanges=true，盯 main 分支）
+#   Test 分支自身不触发部署——只有 PR gate。部署只从 main 出。
 #
 # 用法：./infra/bootstrap-cicd.sh
 
@@ -42,7 +38,8 @@ CF_DIST_ID="E3CNDKHDSY3D1I"
 EC2_INSTANCE_ID="i-0d71260ab44ceb0c3"
 GITHUB_OWNER="CS778-S2-2026-AWS-Challenge"
 GITHUB_REPO="Kakapo"
-GITHUB_BRANCH="Test"
+GITHUB_BRANCH="main"                 # pipeline 盯的分支：合并进 main 即触发部署流程
+PR_GATE_BASE_REFS="^refs/heads/(Test|main)$"   # PR gate webhook 覆盖的目标分支
 CONNECTION_NAME="stayright-github"
 PIPELINE_ARTIFACT_PREFIX="codepipeline-artifacts"
 
@@ -142,6 +139,16 @@ cat > /tmp/codebuild-deploy-policy.json <<EOF
       "Effect": "Allow",
       "Action": ["ssm:GetCommandInvocation", "ssm:ListCommandInvocations"],
       "Resource": "*"
+    },
+    {
+      "Sid": "GitHubConnectionForPrGate",
+      "Effect": "Allow",
+      "Action": [
+        "codestar-connections:UseConnection",
+        "codeconnections:UseConnection",
+        "codeconnections:GetConnectionToken"
+      ],
+      "Resource": "$CONNECTION_ARN"
     }
   ]
 }
@@ -239,6 +246,43 @@ create_or_update_project "stayright-deploy-backend" ".codebuild/buildspec-deploy
 create_or_update_project "stayright-deploy-frontend" ".codebuild/buildspec-deploy-frontend.yml"
 
 # ---------------------------------------------------------------------------
+say "4b. CodeBuild 项目 stayright-gate-pr —— PR 阶段 gate（GitHub webhook 触发）"
+# ---------------------------------------------------------------------------
+# 与 stayright-gate 同一套 buildspec，区别是 source 直接连 GitHub（走同一个
+# CodeStar/CodeConnections 连接），不经过 CodePipeline。webhook 只对「PR 目标
+# 分支是 Test 或 main」的 PR 事件触发；reportBuildStatus=true 把结果回写成
+# 该 commit 的 GitHub status，PR 页面能直接看到通过/失败。
+GATE_PR_SOURCE="type=GITHUB,location=https://github.com/$GITHUB_OWNER/$GITHUB_REPO.git,buildspec=.codebuild/buildspec-gate.yml,reportBuildStatus=true,auth={type=CODECONNECTIONS,resource=$CONNECTION_ARN}"
+
+if aws codebuild batch-get-projects --names stayright-gate-pr --query 'projects[0].name' --output text 2>/dev/null | grep -q stayright-gate-pr; then
+  echo "项目 stayright-gate-pr 已存在，更新 source"
+  aws codebuild update-project --name stayright-gate-pr \
+    --source "$GATE_PR_SOURCE" \
+    --artifacts "type=NO_ARTIFACTS" \
+    --environment "type=LINUX_CONTAINER,image=aws/codebuild/standard:7.0,computeType=BUILD_GENERAL1_SMALL" \
+    --service-role "$CODEBUILD_ROLE_ARN" --region "$REGION" >/dev/null
+else
+  aws codebuild create-project --name stayright-gate-pr \
+    --source "$GATE_PR_SOURCE" \
+    --artifacts "type=NO_ARTIFACTS" \
+    --environment "type=LINUX_CONTAINER,image=aws/codebuild/standard:7.0,computeType=BUILD_GENERAL1_SMALL" \
+    --service-role "$CODEBUILD_ROLE_ARN" --region "$REGION" >/dev/null
+  echo "已创建项目 stayright-gate-pr"
+fi
+
+# webhook：PR 打开/更新/重开，且目标分支匹配 PR_GATE_BASE_REFS 才触发
+GATE_PR_FILTER="[[{\"type\":\"EVENT\",\"pattern\":\"PULL_REQUEST_CREATED,PULL_REQUEST_UPDATED,PULL_REQUEST_REOPENED\"},{\"type\":\"BASE_REF\",\"pattern\":\"$PR_GATE_BASE_REFS\"}]]"
+if aws codebuild batch-get-projects --names stayright-gate-pr --query 'projects[0].webhook.url' --output text 2>/dev/null | grep -q https; then
+  echo "stayright-gate-pr webhook 已存在，更新 filter"
+  aws codebuild update-webhook --project-name stayright-gate-pr \
+    --filter-groups "$GATE_PR_FILTER" --region "$REGION" >/dev/null
+else
+  aws codebuild create-webhook --project-name stayright-gate-pr \
+    --filter-groups "$GATE_PR_FILTER" --region "$REGION" >/dev/null
+  echo "已创建 stayright-gate-pr webhook"
+fi
+
+# ---------------------------------------------------------------------------
 say "5. CodePipeline：Source → Gate → 人工审批 → Deploy(backend+frontend 并行)"
 # ---------------------------------------------------------------------------
 cat > /tmp/pipeline-def.json <<EOF
@@ -261,7 +305,7 @@ cat > /tmp/pipeline-def.json <<EOF
             "ConnectionArn": "$CONNECTION_ARN",
             "FullRepositoryId": "$GITHUB_OWNER/$GITHUB_REPO",
             "BranchName": "$GITHUB_BRANCH",
-            "DetectChanges": "false"
+            "DetectChanges": "true"
           }
         }]
       },
@@ -328,7 +372,12 @@ if [ "$CONN_STATUS" != "AVAILABLE" ]; then
   echo "    找到 connection「${CONNECTION_NAME}」→ Update pending connection → 授权 GitHub → 选择组织 ${GITHUB_OWNER}"
 fi
 echo ""
-echo "触发方式：手动。Source 阶段关掉了 push 自动触发（DetectChanges=false），"
-echo "每次都要你自己发起，push 到 Test 分支不会自动跑："
-echo "    aws codepipeline start-pipeline-execution --name stayright-dev-pipeline --region $REGION"
-echo "  或在控制台 CodePipeline → stayright-dev-pipeline → Release change"
+echo "触发方式："
+echo "  - PR 进 Test / main：CodeBuild stayright-gate-pr 经 GitHub webhook 自动跑 gate，"
+echo "    结果回写 PR commit status。"
+echo "  - 提交进 main（PR 合并后）：CodePipeline 自动跑 Gate → 人工审批 → 部署"
+echo "    （DetectChanges=true，盯 main）。也可手动："
+echo "        aws codepipeline start-pipeline-execution --name stayright-dev-pipeline --region $REGION"
+echo ""
+echo "webhook 依赖 CodeConnections 连接有 GitHub App 的 webhook 权限；若 stayright-gate-pr"
+echo "的 webhook 创建报权限错，去连接的 GitHub App 安装里确认对 $GITHUB_REPO 已授权。"

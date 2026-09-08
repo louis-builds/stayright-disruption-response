@@ -14,13 +14,13 @@
 
 **目录结构与实际代码的对应关系**（2026-08-31 核对代码后补充，2026-09-08 补记新增模块）：
 
-| 目录 | 内容 | 对应 CI job |
+| 目录 | 内容 | 对应 gate 检查（`.codebuild/buildspec-gate.yml`） |
 |---|---|---|
-| `detect/` | Python 3.12 采集器/检测逻辑（`src/`、`tests/`、`requirements.txt`、`pyproject.toml`） | `gate.yml` 的 `python` job |
-| `detect/agent/` | ⚠️ 新增、未在本文件其他章节说明：`langgraph_framework.py`，基于 LangGraph 的"扰动处理 & 改签"agent 骨架（工具函数为占位桩）。不在 `src/` 下，靠 `sys.path.insert` 挂路径，游离于下文三层分层约束之外——架构定位待 Zachary 确认 | 未纳入 `gate.yml`（不在 `src/`，`pytest` 覆盖不到） |
-| `detect/src/mcp_server/` | ⚠️ 新增、未在本文件其他章节说明：`identify_server.py`，MCP server，用途/调用方待补文档 | 随 `python` job 一并跑 pytest（若有对应测试） |
-| `backend/` | .NET 服务（`backend.sln`、`Program.cs`、`Controllers/`、`Features/` 等） | `gate.yml` 的 `backend` job |
-| `frontend/` | React + TypeScript + Vite 运营台（`package.json` 含 `lint`/`build`） | `gate.yml` 的 `frontend` job |
+| `detect/` | Python 3.12 采集器/检测逻辑（`src/`、`tests/`、`requirements.txt`、`pyproject.toml`） | `cd detect && pytest` |
+| `detect/agent/` | ⚠️ 新增、未在本文件其他章节说明：`langgraph_framework.py`，基于 LangGraph 的"扰动处理 & 改签"agent 骨架（工具函数为占位桩）。不在 `src/` 下，靠 `sys.path.insert` 挂路径，游离于下文三层分层约束之外——架构定位待 Zachary 确认 | 无专门测试；`pytest` 收集不到 |
+| `detect/src/mcp_server/` | ⚠️ 新增、未在本文件其他章节说明：`identify_server.py`，MCP server，用途/调用方待补文档 | 随 `pytest` 一并跑（若有对应测试） |
+| `backend/` | .NET 服务（`backend.sln`、`Program.cs`、`Controllers/`、`Features/` 等） | `dotnet build backend.sln -c Release` |
+| `frontend/` | React + TypeScript + Vite 运营台（`package.json` 含 `lint`/`build`） | `npm ci && npm run lint && npm run build` |
 
 ⚠️ **与下方「技术栈」表存在落差，待 Zachary 确认**：技术栈表只列了 Python 后端，未提及 `backend/` 下的 .NET 服务；这是架构表述滞后于代码演进，还是 `backend/` 属于非核心/待淘汰模块，需要 Zachary 明确后回填本文件，不要自行假设。
 
@@ -35,10 +35,10 @@
 | 大模型 | 主用 **Gemini**（`backend/Features/Chat/GeminiClient.cs`）；**AWS Bedrock**（Claude Haiku）作为 fallback |
 | AWS SDK | Python 侧 **boto3**（唯一）；C# 侧 AWS SDK for .NET（目前仅 Bedrock fallback 用到） |
 | 云区域 | **`ap-southeast-2`（悉尼）** |
-| CI | GitHub Actions（`.github/workflows/gate.yml`，触发分支 `Test`）：`pytest` + `dotnet build` + 前端 `lint`/`build` |
+| CI/CD | AWS CodePipeline + CodeBuild（`infra/bootstrap-cicd.sh` + `.codebuild/`）。PR 进 `Test`/`main` 经 GitHub webhook 跑 gate；提交进 `main` 自动跑 Gate→人工审批→部署。GitHub Actions 被组织策略 `local_only` 卡死，`gate.yml` 已删。详见 `docs/AWS_SDK_SPEC.md` §12 |
 | 运行环境（规划） | EC2 模块化单体 + 5 个 Lambda（4 采集器 + 1 回调）。4 个采集器（weather/volcano/flight/road）已于 2026-09-03 随 SAM 栈 `stayright-dev-weather-collector` 部署上线并实测；回调 Lambda（第 5 个）代码未写、未部署。详见 `docs/AWS_SDK_SPEC.md` §13.2 部署时间线 |
 | IaC（规划） | 非代码资源用脚本创建、Lambda 走 AWS SAM（`detect/template.yaml`）。`infra/` 目前是空占位 |
-| CD（规划） | 合并即部署的流水线尚未建；`gate.yml` 只做检查、不做部署 |
+| CD | CodePipeline `stayright-dev-pipeline`（盯 `main`，`DetectChanges: true`）：Gate → 人工审批 → Deploy（backend 走 SSM RunCommand 到 EC2；frontend 走 S3 sync + CloudFront 失效）。tag `v*` 部署 demo 仍属规划 |
 
 ---
 
@@ -171,20 +171,24 @@ Lambda ×5：4 个采集器（weather/volcano/flight/road）已于 2026-09-03 �
 
 ## CI / 部署
 
-目前只有 `.github/workflows/gate.yml`（触发分支 `Test`，PR + push）：
+CI/CD 全部走 AWS CodePipeline + CodeBuild —— GitHub Actions 被组织策略限制成
+`allowed_actions: local_only`（`actions/checkout` 等一律不放行），`gate.yml` 每次
+`startup_failure`，已于 2026-09-09 删除。完整说明见 `docs/AWS_SDK_SPEC.md` §12。
+
+分支模型：`开发分支 --PR--> Test（集成）--PR--> main（发布）`。
 
 ```
-gate: pytest（detect/）+ dotnet build（backend/）+ 前端 lint & build
+PR 进 Test / main   → CodeBuild stayright-gate-pr（GitHub webhook）
+                       跑 gate，结果回写 PR commit status
+提交进 main（合并后）→ CodePipeline（盯 main，自动）：
+                       Gate → 人工审批 → Deploy(backend+frontend 并行)
+gate = pytest（detect/）+ dotnet build（backend/）+ 前端 lint & build
 ```
 
-**部署流水线尚未建。** 下面是既定方向、未落地：
-
-```
-deploy: 打包 → S3 → SSM Run Command → EC2 重启服务
-        sam build && sam deploy（5 个 Lambda）
-```
-
-规划里「不要手动登录 EC2 改代码——下次部署会覆盖掉」仍然成立。
+- 部署只从 `main` 出；`Test` 不触发部署。
+- Lambda 采集器不在 pipeline 里，仍手动 `sam deploy`（`--manifest requirements-lambda.txt`）。
+- 搭建脚本 `infra/bootstrap-cicd.sh`（幂等）；buildspec 在 `.codebuild/`，部署逻辑复用 `scripts/deploy-*.sh`。
+- 「不要手动登录 EC2 改代码——下次部署会覆盖掉」仍然成立。
 
 ## 提交前自检
 
@@ -273,9 +277,10 @@ deploy: 打包 → S3 → SSM Run Command → EC2 重启服务
 
 例如：`feat/user-login`、`fix/order-timeout`、`refactor/api-client`
 
-- **集成分支：`Test`**（受保护，走 PR；`gate.yml` 在此触发）。`main` 目前基本不用，落后 `Test` 数十个 commit
-- 功能/修复分支从 `Test` 切出，完成后通过 PR 合并回 `Test`
-- 规划：合并到 `main` 自动部署 dev、tag `v*` 部署 demo —— 部署流水线尚未建，暂不适用
+- **集成分支：`Test`**（受保护，走 PR）。功能/修复分支从 `Test` 切出，完成后 PR 合并回 `Test`
+- **发布分支：`main`**。`Test` 稳定后 PR 合并到 `main`；进 `main` 即触发 CodePipeline 部署 dev（Gate → 人工审批 → 部署）
+- PR 进 `Test` / `main` 都会经 GitHub webhook 跑 gate（`stayright-gate-pr`），结果回写 PR
+- 规划：tag `v*` 部署 demo —— 尚未落地
 
 ### PR 规范
 
@@ -349,3 +354,4 @@ deploy: 打包 → S3 → SSM Run Command → EC2 重启服务
 | 2026-08-21 | 新增数据库章节 | 指向 `docs/DATABASE_ACCESS.md`（macOS / Windows 连接步骤 + 设计与变更约定） |
 | 2026-08-21 | 回填技术栈 + 新增「AWS 与架构约束」 | 技术栈已定；新增三层分层、AWS 五条铁律、Bedrock 两条硬规则、禁止事项、必须遵循的模式、提交前自检；完整写法见 `docs/AWS_SDK_SPEC.md`。**风格 / 测试 / Git 等章节仍待团队确认** |
 | 2026-09-03 | 对齐现状 | 技术栈表改为反映实际（C# .NET 后端 + Python `detect/` + React 前端 + Gemini 主 / Bedrock 备）；把未落地的部分（`adapters/fakes.py`、`STAYRIGHT_LOCAL`、`src/core/`、`src/runtimes/worker`、Makefile、CI 守卫、部署流水线）标为「规划」；Git 章节集成分支由 `main` 改为 `Test`；注明忽略父目录 `../CLAUDE.md`。**架构方向本身未改，仅对齐描述——「AWS 与架构约束」的实质改动仍需 Zachary 确认** |
+| 2026-09-09 | CI/CD 定案（Zachary 拍板） | 弃用 GitHub Actions（组织策略 `local_only` 卡死），删除 `.github/workflows/gate.yml`；CI/CD 全走 AWS CodePipeline + CodeBuild。分支模型：`开发分支 → Test（集成）→ main（发布）`，部署只从 `main` 出（`DetectChanges: true`）；PR 进 `Test`/`main` 经 GitHub webhook 跑 gate（`stayright-gate-pr`）。详见 `docs/AWS_SDK_SPEC.md` §12、`infra/bootstrap-cicd.sh` |

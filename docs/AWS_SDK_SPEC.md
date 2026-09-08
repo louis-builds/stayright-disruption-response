@@ -734,35 +734,41 @@ aws ssm start-session --target <实例ID> \
 
 ---
 
-## 12. 部署方式（2026-09-08 更新为实际方案）
+## 12. 部署方式（2026-09-09 更新为实际方案）
 
-本节原描述的"push main 触发 GitHub Actions 自动部署"从未真正落地——`.github/workflows/gate.yml` 写好后就没在 GitHub 上跑过一次，原因是这个仓库所在的 GitHub 组织在**组织层面**关闭了 Actions（`actions/permissions` API 返回 `409 disabled by the organization`，需要组织 admin 权限才能改，不在 Zachary 控制范围内）。
+本节原描述的"push main 触发 GitHub Actions 自动部署"从未落地——这个仓库所在的 GitHub 组织把 Actions 的 `allowed_actions` 限制成 `local_only`（只允许本仓库内定义的 action，`actions/checkout` 等一律不放行），`.github/workflows/gate.yml` 每次触发都是 `startup_failure`。该策略在组织层强制、repo 层改不了。2026-09-09 Zachary 拍板：不再等组织放开，CI/CD 全部走 AWS，`.github/workflows/gate.yml` 已删除。
 
-**现方案：AWS CodePipeline + CodeBuild**，完全在 AWS 账号权限内搭建，不依赖 GitHub Actions：
+**现方案：AWS CodePipeline + CodeBuild**，完全在 AWS 账号权限内，不依赖 GitHub Actions。
+
+**分支模型**：`开发分支 --PR--> Test（集成）--PR--> main（发布）`。部署只从 `main` 出。
 
 ```
-（手动触发）
-   ↓
-Source（CodeStar Connection 拉 GitHub Test 分支代码）
-   ↓
-Gate（CodeBuild：pytest + dotnet build + npm lint/build）
-   ↓ 全绿才往下走
-Approval（人工审批，控制台点 Approve 才继续）
-   ↓
-Deploy（并行：deploy-backend 走 SSM RunCommand 原地换目录到 EC2；
-        deploy-frontend 走 S3 sync + CloudFront 失效）
+【PR 阶段】PR 进 Test / main
+   → CodeBuild stayright-gate-pr（GitHub webhook 触发）
+   → 跑 gate（pytest + dotnet build + npm lint/build），结果回写 PR commit status
+
+【合并后】提交进 main
+   → CodePipeline（DetectChanges=true，盯 main）自动跑：
+      Source（CodeStar Connection 拉 main）
+        ↓
+      Gate（CodeBuild stayright-gate：同一套 gate 检查）
+        ↓ 全绿才往下走
+      Approval（人工审批，控制台点 Approve 才继续）
+        ↓
+      Deploy（并行：deploy-backend 走 SSM RunCommand 原地换目录到 EC2；
+              deploy-frontend 走 S3 sync + CloudFront 失效）
 ```
 
-搭建脚本：`infra/bootstrap-cicd.sh`（一次性，创建 CodeStar Connection / IAM 角色 / CodeBuild 项目 / CodePipeline，全部可逆）。各阶段的构建定义在 `.codebuild/buildspec-*.yml`，部署逻辑直接调用现成的 `scripts/deploy-backend.sh` / `scripts/deploy-frontend.sh`，没有重复实现。
+搭建脚本：`infra/bootstrap-cicd.sh`（幂等，可反复跑；创建 CodeStar Connection / IAM 角色 / CodeBuild 项目 / webhook / CodePipeline，全部可逆）。各阶段的构建定义在 `.codebuild/buildspec-*.yml`，部署逻辑直接调用现成的 `scripts/deploy-backend.sh` / `scripts/deploy-frontend.sh`，没有重复实现。
 
 | 要点 | 说明 |
 |---|---|
-| **触发方式：手动**（2026-09-08 拍板） | Source 阶段 `DetectChanges: false`，push 到 `Test` 不会自动跑，要么控制台点 "Release change"，要么 `aws codepipeline start-pipeline-execution` |
-| Lambda 采集器部署**不在**这条 pipeline 里 | `buildspec-deploy-lambda.yml` 已写好但没建对应 CodeBuild 项目——采集器改动频率低，暂时保持手动 `sam deploy` |
+| PR gate（`stayright-gate-pr`） | GitHub webhook，只对目标分支是 `Test` / `main` 的 PR（打开/更新/重开）触发；`reportBuildStatus=true` 回写 commit status |
+| pipeline 触发（`stayright-dev-pipeline`） | `DetectChanges: true`，盯 `main`；`main` 一有新提交自动跑。也可手动 `aws codepipeline start-pipeline-execution` / 控制台 "Release change" |
+| `Test` 分支自身 | 不触发部署，只有 PR gate。想跑全量检查就本地 `cd detect && pytest` 等 |
+| Lambda 采集器部署**不在**这条 pipeline 里 | `buildspec-deploy-lambda.yml` 已写好但没建对应 CodeBuild 项目——采集器改动频率低，暂时保持手动 `sam deploy`（`--manifest requirements-lambda.txt`，精简依赖） |
 | EC2 是按需开停的 | 触发部署前先确认 EC2 是开机状态，否则 SSM RunCommand 会失败 |
 | 回滚 | EC2 上 `systemctl stop stayright-api && rm -rf api && mv api.old api && systemctl start stayright-api`（`deploy-backend.sh` 头部注释有完整命令） |
-
-**【部署待决策点】** 触发方式目前是手动，后续计划改成"`Test` 分支 PR 到 `main` 分支合并后自动触发"——但这个改动涉及 `main`/`Test` 两个分支的定位要不要调整（现状 `main` 落后 `Test` 几十个 commit，基本不用，`Test` 才是实际集成分支）。这条还没定，定了之后把 pipeline 的 `DetectChanges` 改回 `true`（或用 CodePipeline V2 显式 triggers 指到 `main`），并同步更新本节。
 
 ---
 

@@ -1,12 +1,16 @@
 version: 0.2
 
-# 对应 .github/workflows/gate.yml 的三项检查，逻辑完全一致（同一套命令），
-# 只是执行环境从 GitHub Actions 换成 CodeBuild——因为组织策略把这个仓库的
-# GitHub Actions 关掉了（repo 级 API 返回 409 Conflict: disabled by the
-# organization），gate.yml 从写完那天起就没在 GitHub 上真正跑过一次。
+# gate 的三项检查：pytest（detect/）+ dotnet build（backend/）+ 前端 lint/build。
+# 执行环境是 CodeBuild——这个仓库所在组织把 Actions 限制成 local_only，
+# 原来的 .github/workflows/gate.yml 每次都 startup_failure，已删除（见
+# docs/AWS_SDK_SPEC.md §12）。
+#
+# 两处引用同一个 buildspec：
+#   - stayright-gate      CodePipeline 的 Gate stage（main 合并后）
+#   - stayright-gate-pr    GitHub webhook（PR 进 Test / main），结果回写 PR
 #
 # 三项全部通过才算 gate 通过；任一失败 CodeBuild 直接非零退出，
-# CodePipeline 的这个 stage 标红，后面的部署 stage 不会执行。
+# CodePipeline 的这个 stage 标红 / PR 的 commit status 标红，后面不会往下走。
 
 phases:
   install:
