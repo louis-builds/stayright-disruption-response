@@ -2,5 +2,14 @@
   { "id": "44444444-4444-4444-4444-000000000001", "name": "Queenstown Lakeview Hotel", "address": "1 Lake Esplanade, Queenstown, New Zealand", "lat": -45.0312, "lng": 168.6626, "google_place_id": null, "status": "active" },
   { "id": "44444444-4444-4444-4444-000000000002", "name": "Rotorua Thermal Hotel", "address": "88 Fenton Street, Rotorua, New Zealand", "lat": -38.1368, "lng": 176.2497, "google_place_id": null, "status": "active" },
   { "id": "44444444-4444-4444-4444-000000000003", "name": "Auckland Harbour Hotel", "address": "12 Quay Street, Auckland, New Zealand", "lat": -36.8485, "lng": 174.7633, "google_place_id": null, "status": "active" },
-  { "id": "0e0fa03e-e442-4e7f-9575-fe73c87eb26e", "name": "Test Auckland CBD Hotel", "address": "1 Queen Street, Auckland, New Zealand", "lat": -36.8485, "lng": 174.7633, "google_place_id": null, "status": "active" }
+  { "id": "0e0fa03e-e442-4e7f-9575-fe73c87eb26e", "name": "Test Auckland CBD Hotel", "address": "1 Queen Street, Auckland, New Zealand", "lat": -36.8485, "lng": 174.7633, "google_place_id": null, "status": "active" },
+
+  { "id": "44444444-4444-4444-4444-000000000005", "name": "Queenstown Central Park Hotel", "address": "32 Park Street, Queenstown 9300, New Zealand", "lat": -45.0297, "lng": 168.6560, "google_place_id": null, "status": "active" },
+  { "id": "44444444-4444-4444-4444-000000000006", "name": "Queenstown Alpine Lodge", "address": "78 Stanley Street, Queenstown 9300, New Zealand", "lat": -45.0345, "lng": 168.6655, "google_place_id": null, "status": "active" },
+  { "id": "44444444-4444-4444-4444-000000000007", "name": "Auckland SkyTower Suites", "address": "88 Federal Street, Auckland CBD 1010, New Zealand", "lat": -36.8480, "lng": 174.7620, "google_place_id": null, "status": "active" },
+  { "id": "44444444-4444-4444-4444-000000000008", "name": "Auckland Airport Gateway Hotel", "address": "14 George Bolt Memorial Drive, Auckland Airport 2022, New Zealand", "lat": -37.0050, "lng": 174.7890, "google_place_id": null, "status": "active" },
+  { "id": "44444444-4444-4444-4444-000000000009", "name": "Wellington Harbourfront Hotel", "address": "2 Oriental Parade, Wellington 6011, New Zealand", "lat": -41.2900, "lng": 174.7940, "google_place_id": null, "status": "active" },
+  { "id": "44444444-4444-4444-4444-000000000010", "name": "Wellington CBD Grand Hotel", "address": "100 Cuba Street, Wellington 6011, New Zealand", "lat": -41.2940, "lng": 174.7760, "google_place_id": null, "status": "active" },
+  { "id": "44444444-4444-4444-4444-000000000011", "name": "Christchurch Riverside Hotel", "address": "5 Oxford Terrace, Christchurch Central 8011, New Zealand", "lat": -43.5310, "lng": 172.6360, "google_place_id": null, "status": "active" },
+  { "id": "44444444-4444-4444-4444-000000000012", "name": "Rotorua Lakeside Resort", "address": "20 Lake Road, Rotorua 3010, New Zealand", "lat": -38.1280, "lng": 176.2450, "google_place_id": null, "status": "active" }
 ]
