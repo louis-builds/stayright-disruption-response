@@ -22,6 +22,8 @@ export interface CaseSummary {
   guestAvatarUrl: string | null;
   guestEmail: string | null;
   guestPhone: string | null;
+  // 拉这个客人的标签(api/tags/guest/{id})用，协调员案件页侧边栏展示。
+  guestUserId: string | null;
   assigneeCoordinatorId: string | null;
   assigneeNickname: string | null;
   hotelImageUrl: string | null;
