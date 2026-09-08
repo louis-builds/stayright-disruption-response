@@ -47,6 +47,13 @@ public static class SeedRunner
             Currency = r.Currency, ImageUrls = r.ImageUrls, CreatedAt = now, UpdatedAt = now,
         }));
 
+        var hotelPolicies = Load<HotelRefundPolicySeed>(seedDir, "hotel_refund_policies.json");
+        db.HotelRefundPolicies.AddRange(hotelPolicies.Select(p => new HotelRefundPolicy
+        {
+            Id = p.Id, HotelId = p.HotelId, Content = p.Content, StructuredRulesJson = p.StructuredRulesJson,
+            IsActive = p.IsActive, CreatedAt = now, UpdatedAt = now,
+        }));
+
         var users = Load<UserSeed>(seedDir, "users.json");
         db.Users.AddRange(users.Select(u => new User
         {
@@ -155,6 +162,8 @@ public static class SeedRunner
 
     private record RoomTypeSeed(Guid Id, Guid HotelId, string Name, string Description, List<string> Amenities,
         int Capacity, decimal PriceAmount, string Currency, List<string> ImageUrls);
+
+    private record HotelRefundPolicySeed(Guid Id, Guid HotelId, string Content, string? StructuredRulesJson, bool IsActive);
 
     private record UserSeed(Guid Id, string Role, string Email, string Phone, string Nickname, string Gender,
         string Language, string PasswordPlaintext, Guid? HotelId, string Status);
