@@ -361,6 +361,57 @@
   margin-top: 0.3rem;
 }
 
+.msg-room-card {
+  margin-top: 0.5rem;
+  white-space: normal;
+}
+
+.msg-room-card-photos {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  margin-bottom: 6px;
+}
+
+.msg-room-card-photo {
+  width: 88px;
+  height: 66px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: #e2e8f0;
+  flex-shrink: 0;
+}
+
+.msg-room-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.8rem;
+}
+
+.msg-room-card-hotel {
+  font-weight: 600;
+  color: #1f2d3d;
+}
+
+.msg-room-card-room-type {
+  color: #4d6072;
+}
+
+.msg-room-card-description {
+  color: #4d6072;
+}
+
+.msg-room-card-amenities {
+  color: #94a3b8;
+  font-size: 0.75rem;
+}
+
+.msg-room-card-reason {
+  font-style: italic;
+  color: #7628e8;
+}
+
 .msg-bubble-line {
   display: flex;
   align-items: flex-end;
@@ -566,7 +617,6 @@
   gap: 26px;
   padding: 18px 22px;
   border: 1px solid #e5e8f0;
-  border-top: 4px solid #7628e8;
   border-radius: 14px;
   background: #fff;
   box-shadow: 0 3px 14px rgba(48, 42, 82, 0.045);

@@ -39,6 +39,49 @@ function useTypewriter(text: string, enabled: boolean) {
   return shown;
 }
 
+interface RoomCardAttachment {
+  kind: "room_card";
+  hotel?: string;
+  room_type?: string;
+  room_description?: string;
+  room_amenities?: string[];
+  room_image_urls?: string[];
+  reason?: string;
+}
+
+function parseAttachment(json: string | null): RoomCardAttachment | null {
+  if (!json) return null;
+  try {
+    const parsed = JSON.parse(json);
+    return parsed.kind === "room_card" ? (parsed as RoomCardAttachment) : null;
+  } catch {
+    return null;
+  }
+}
+
+function RoomCard({ attachment }: { attachment: RoomCardAttachment }) {
+  return (
+    <div className="msg-room-card">
+      {attachment.room_image_urls && attachment.room_image_urls.length > 0 && (
+        <div className="msg-room-card-photos">
+          {attachment.room_image_urls.map((uri, i) => (
+            <img key={i} src={uri} alt={attachment.room_type ?? "Room"} className="msg-room-card-photo" />
+          ))}
+        </div>
+      )}
+      <div className="msg-room-card-body">
+        {attachment.hotel && <span className="msg-room-card-hotel">{attachment.hotel}</span>}
+        {attachment.room_type && <span className="msg-room-card-room-type">{attachment.room_type}</span>}
+        {attachment.room_description && <span className="msg-room-card-description">{attachment.room_description}</span>}
+        {attachment.room_amenities && attachment.room_amenities.length > 0 && (
+          <span className="msg-room-card-amenities">{attachment.room_amenities.join(" · ")}</span>
+        )}
+        {attachment.reason && <span className="msg-room-card-reason">{attachment.reason}</span>}
+      </div>
+    </div>
+  );
+}
+
 function MessageBubble({
   message,
   onVote,
@@ -56,6 +99,7 @@ function MessageBubble({
   const isOwnMessage = message.senderRole === viewerRole;
   const isRead = !!message.readAt;
   const displayedContent = useTypewriter(message.content, !!typewriter);
+  const attachment = parseAttachment(message.attachmentJson);
 
   return (
     <div className={`msg-row ${isGuest ? "msg-row-mine" : ""}`}>
@@ -68,7 +112,10 @@ function MessageBubble({
           <span className="msg-time">{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
         </div>
         <div className="msg-bubble-line">
-          <div className={`msg-bubble msg-bubble-${message.senderRole}`}>{displayedContent}</div>
+          <div className={`msg-bubble msg-bubble-${message.senderRole}`}>
+            {displayedContent}
+            {attachment && <RoomCard attachment={attachment} />}
+          </div>
           {!isOwnMessage && (
             <span className={`msg-read-indicator ${isRead ? "msg-read-indicator-read" : "msg-read-indicator-unread"}`}>
               {isRead ? "Read" : "Unread"}

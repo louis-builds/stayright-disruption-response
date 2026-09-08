@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using TravelDisruptionAgent.Api.Infrastructure.Data.Entities;
+using TravelDisruptionAgent.Api.Infrastructure.Storage;
 
 namespace TravelDisruptionAgent.Api.Infrastructure.Data;
 
@@ -16,7 +17,11 @@ public static class SeedRunner
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
     };
 
-    public static async Task RunAsync(AppDbContext db, ILogger logger, CancellationToken ct = default)
+    // 这两份是唯一走 S3/本地全局开关的种子 RAG 文档；取消与改订政策.md 保持固定读本地仓库文件，
+    // 不受 RAG_DOC_SOURCE 影响（团队决定：那份还在走别的审核/发布流程，先不搬）。
+    private static readonly HashSet<string> S3EligibleRagDocFiles = ["使用说明.md", "常见问题.md"];
+
+    public static async Task RunAsync(AppDbContext db, IRagDocumentSource ragDocumentSource, ILogger logger, CancellationToken ct = default)
     {
         if (await db.Users.AnyAsync(ct))
         {
@@ -115,12 +120,18 @@ public static class SeedRunner
         }));
 
         var ragDocs = Load<RagDocumentSeed>(seedDir, "rag_documents.json");
-        db.RagDocuments.AddRange(ragDocs.Select(r => new RagDocument
+        foreach (var r in ragDocs)
         {
-            Id = r.Id, Name = r.Name, Version = r.Version,
-            Content = File.ReadAllText(Path.Combine(seedDir, r.File)),
-            IsDefaultVersion = r.IsDefaultVersion, CreatedAt = now, UpdatedAt = now,
-        }));
+            var localPath = Path.Combine(seedDir, r.File);
+            var content = S3EligibleRagDocFiles.Contains(r.File)
+                ? await ragDocumentSource.ReadAsync(r.File, localPath, ct)
+                : await File.ReadAllTextAsync(localPath, ct);
+            db.RagDocuments.Add(new RagDocument
+            {
+                Id = r.Id, Name = r.Name, Version = r.Version, Content = content,
+                IsDefaultVersion = r.IsDefaultVersion, CreatedAt = now, UpdatedAt = now,
+            });
+        }
 
         var goldenTests = Load<GoldenTestSeed>(seedDir, "golden_tests.json");
         db.GoldenTests.AddRange(goldenTests.Select(g => new GoldenTest

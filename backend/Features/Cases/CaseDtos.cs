@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace TravelDisruptionAgent.Api.Features.Cases;
 
-public record MessageDto(Guid Id, Guid CaseId, string SenderRole, string Content, string? Vote, string Thread, DateTimeOffset CreatedAt, DateTimeOffset? ReadAt);
+public record MessageDto(Guid Id, Guid CaseId, string SenderRole, string Content, string? Vote, string Thread, DateTimeOffset CreatedAt, DateTimeOffset? ReadAt, string? AttachmentJson = null);
 
 public class PostMessageRequest
 {
