@@ -89,11 +89,53 @@
      `SELECT name, version, is_default_version, updated_at FROM rag_documents` 确认
      语料状态，而不是假设本文件的覆盖表永远准确。
 
-## 下一步（评测脚本，待做）
+## ✅ 评测脚本（2026-09-08 已完成，跑过一次，见下方结果）
 
-1. backend 加只读检索端点：输入 query，返回 top-k `{chunk_id, doc_name, chunk_index, score}`
-   （去掉现在的 top-1 限制和 0.5 阈值，评测要看完整排名）。
-2. 映射脚本：`{doc, heading}` → 真实 chunk id。
-3. Python：读本文件 → 调端点 → 组 ragas `EvaluationDataset` → `IDBasedContextPrecision`
-   + `IDBasedContextRecall` → 输出 CSV。
-4. 负样本单独统计：`miss` 条目里最高分是否真的 < 0.5。
+1. ✅ backend 只读检索端点：`GET /api/coordinator/knowledge-base/search?q=&topK=`（`backend/Features/Coordinator/KnowledgeBaseController.cs`），不做阈值截断，返回完整排名。
+2. ✅ 映射逻辑：`eval/run_retrieval_eval.py` 里 `build_heading_index`，直接连库按当前 default version 的 chunk 首行匹配 heading，不依赖硬编码 index。
+3. ✅ `eval/run_retrieval_eval.py`：读 golden 集 → 调端点 → 组 ragas `EvaluationDataset` → `IDBasedContextPrecision` + `IDBasedContextRecall` → 输出 `retrieval_eval_results.csv`。
+4. ✅ 负样本单独统计：脚本里对 8 条 `miss` 单独跑 top-1，检查是否 `>= 0.5`（cosine distance，越大越不像）。
+
+### topK 参数选择依据
+
+`topK` 不是 ragas 规定的值，官方文档（`IDBasedContextPrecision`）本身不建议任何固定数字——`precision = 命中数/检索总数`，检索总数取决于**你的系统实际会用几个结果**，不是评测随便定的。
+
+本项目生产环境 `ChatService.FindRelevantSnippetAsync` 实际是 **top-1 + 0.5 阈值**（每次只取最相似的 1 个 chunk），所以评测要对齐这个真实深度，**`TOP_K` 默认设为 1**，不是任意选大数字"看更多结果"。如果以后生产环境改成多 chunk 检索（比如 RAG 提案 D5 讨论的酒店政策接入后要不要多路召回），这里的默认值要跟着改。
+
+### 第一次跑的结果（2026-09-08，topK=1，共享 dev 库，对齐生产环境真实检索深度）
+
+跑法：`python eval/run_retrieval_eval.py`（需要 `EVAL_DB_PASSWORD`/`EVAL_API_PASSWORD` 环境变量 + SSM 端口转发到共享 dev 库，脚本头部注释有完整命令）。逐条明细见仓库里 `eval/retrieval_eval_results.csv`。
+
+#### 检索层聚合指标（41 条 hit）
+
+```
+id_based_context_precision = 0.8780
+id_based_context_recall    = 0.7927
+```
+
+#### 拆开看，41 条分三类
+
+| 情况 | 条数 | 说明 |
+|---|---|---|
+| 完美命中（precision=1, recall=1） | 29 | top-1 检索直接对 |
+| 部分命中（precision=1, recall=0.5） | 7 | **不算真失败**——这类问题原本设计了 2 个都算对的答案（`relevant_chunks` + `acceptable_chunks`），但 topK=1 一次只能给 1 个结果，recall 分母是 2、分子是 1，数学上必然是 0.5，不是检索选错了。涉及 id：`policy-stormshield-03`、`policy-refund-02`、`faq-affected-03`、`faq-options-01`、`faq-options-03`、`faq-refundtime-01`、`faq-refundtime-02` |
+| **真正没命中（precision=0, recall=0）** | **5** | top-1 检索结果两个参考答案一个都没沾上，是真正的检索错误。id：`guide-notif-01`、`guide-notif-02`（都是"查看扰动通知"）、`policy-defer-03`、`policy-refund-01`、`policy-refund-03`（都在"取消与改订政策"里，退款/延期相关）|
+
+**真实命中率（排除数学必然的 0.5 稀释）约 34/41 ≈ 83%**。5 条真实漏检集中在两组"同一份文档里语义相近的相邻小标题"，看起来向量检索在这类场景下容易选错到邻近标题，值得针对这几个具体案例排查。
+
+#### 负样本（8 条 miss，单独用 top-1 检查，不进 precision/recall）
+
+```
+neg-weather-01    distance=0.471   ❌
+neg-flight-01     distance=0.354   ❌
+neg-loyalty-01    distance=0.422   ❌
+neg-restaurant-01 distance=0.499   ❌
+neg-visa-01       distance=0.444   ❌
+neg-chitchat-01   distance=0.467   ❌
+neg-account-01    distance=0.462   ❌
+neg-pricing-01    distance=0.427   ❌
+```
+
+**8/8 全部失败**——全部落在 0.35~0.5 之间，**没有一条真正达到或超过生产环境用的 0.5 阈值**（`ChatService.FindRelevantSnippetAsync` 的判断是 `< 0.5` 才采纳，越低越像；这 8 条全部 `< 0.5`，也就是全部会被当成"找到相关内容"）。这说明现在这道"够不够像才采纳"的判断线，在这次测试样本上从未真正拦下过一次不相关问题。
+
+**这两组发现都是生产代码问题，不是评测脚本或知识库内容的问题**——按团队分工转开发团队讨论。
