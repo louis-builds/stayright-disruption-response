@@ -1,5 +1,5 @@
 import { apiGet, apiPost } from "../../shared/api/client";
-import type { CaseMessage, CaseOption, CaseSummary, ConfirmExecutionResult, PolicySummary, ProposeDeferDatesResult, Thread } from "./types";
+import type { CaseMessage, CaseOption, CaseSummary, CaseWorkflowProgress, ConfirmExecutionResult, PolicySummary, ProposeDeferDatesResult, Thread } from "./types";
 
 export function fetchMyCases(includeClosed = false) {
   return apiGet<CaseSummary[]>(`/api/cases/mine?includeClosed=${includeClosed}`);
@@ -7,6 +7,10 @@ export function fetchMyCases(includeClosed = false) {
 
 export function fetchCase(caseId: string) {
   return apiGet<CaseSummary>(`/api/cases/${caseId}`);
+}
+
+export function fetchWorkflowProgress(caseId: string) {
+  return apiGet<CaseWorkflowProgress[]>(`/api/cases/${caseId}/workflow-progress`);
 }
 
 export function fetchTopFaqQuestions() {

@@ -5,6 +5,7 @@ namespace TravelDisruptionAgent.Api.Features.Cases;
 public interface ICaseService
 {
     Task<PagedResult<MessageDto>> GetMessagesAsync(Guid caseId, Guid userId, string userRole, string thread, int page, int pageSize, CancellationToken ct = default);
+    Task<List<CaseWorkflowProgressDto>> GetWorkflowProgressAsync(Guid caseId, Guid userId, string userRole, CancellationToken ct = default);
     Task<MessageDto> PostMessageAsync(Guid caseId, Guid userId, string userRole, string content, string thread, CancellationToken ct = default);
     Task<List<MessageDto>> PostChatMessageAsync(Guid caseId, Guid guestUserId, string content, CancellationToken ct = default);
     Task VoteMessageAsync(Guid caseId, Guid messageId, Guid userId, string userRole, string vote, CancellationToken ct = default);

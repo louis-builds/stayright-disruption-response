@@ -82,6 +82,17 @@
 .entry-affected-row{width:100%;min-height:76px;padding:12px 15px;border:0;border-bottom:1px solid #eceef4;background:#fff;color:#33384a;font-size:13px;text-align:left;cursor:pointer}
 .entry-affected-row:hover,.entry-affected-row.selected{background:#f7f3ff}.entry-affected-row.selected{box-shadow:inset 4px 0 #7628e8}.entry-affected-row>span{line-height:1.45;overflow-wrap:anywhere}.entry-affected-row>time{font-size:13px}.entry-affected-row>time.overdue{color:#e44863;font-weight:700}.entry-affected-row>em{font-style:normal;text-transform:capitalize}.entry-affected-row>i{padding:8px 10px;border:1px solid #7628e8;border-radius:6px;color:#7628e8;font-style:normal;text-align:center}
 .entry-handoff-details>section{margin-block:10px;padding-block:12px}.entry-handoff-details>section p.unavailable{color:#969aaa;font-style:italic}.entry-handoff-details>button{position:sticky;bottom:12px}
+.entry-handoff-details header{align-items:center;background:linear-gradient(135deg,#fff 0%,#fbf9ff 100%)}
+.entry-handoff-eyebrow{display:block;margin-bottom:5px;color:#7628e8;font-size:10px;font-weight:800;letter-spacing:.07em;text-transform:uppercase}
+.entry-handoff-status{flex:none;padding:6px 10px;border-radius:999px;background:#fff1e6;color:#bd6400;font-size:10px;font-style:normal;font-weight:700;text-transform:uppercase}
+.entry-handoff-content{padding:16px}
+.entry-handoff-content>section{margin:0;padding:0;border:0;background:transparent}
+.entry-handoff-content>section+section{margin-top:16px;padding-top:16px;border-top:1px solid #eceaf2}
+.entry-handoff-content small{display:block;margin-bottom:7px;color:#8c90a0;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.entry-handoff-reason strong{display:inline-flex;padding:8px 11px;border-radius:8px;background:#f1eaff;color:#65429d;font-size:13px;line-height:1.35}
+.entry-handoff-action p{color:#454a5d;font-size:13px;line-height:1.55}
+.entry-handoff-content>button{display:flex;width:100%;align-items:center;justify-content:center;gap:8px;margin-top:18px;padding:11px 14px;border:1px solid #7628e8;border-radius:8px;background:#7628e8;color:#fff;font-size:13px;font-weight:700;cursor:pointer}
+.entry-handoff-content>button:hover{background:#6420c9}.entry-handoff-content>button span{font-size:17px;line-height:1}
 @media(max-width:760px){.entry-disruption-list,.entry-my-cases{overflow-x:auto}.entry-disruption-head,.entry-disruption-body>button{min-width:650px}.entry-affected-head,.entry-affected-row{min-width:850px}}
 
 /* Expandable disruption detail card: light, compact and readable over the map. */

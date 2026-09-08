@@ -31,6 +31,11 @@ export interface CaseSummary {
   escalationReviewNote: string | null;
 }
 
+export interface CaseWorkflowProgress {
+  state: string;
+  current: boolean;
+}
+
 export type SenderRole = "system" | "ai" | "guest" | "coordinator";
 
 // ai: 客人跟 AI 的对话(含自动转人工);coordinator: 客人跟协调员的人工对话，两条独立线程。
