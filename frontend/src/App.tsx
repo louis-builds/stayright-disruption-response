@@ -6,6 +6,7 @@ import { CaseActionConfirmPage, CaseConversationPage, OptionsFlowPage } from "./
 import { MyBookingsPage } from "./features/bookings";
 import { CoordinatorHomePage, EscalationDeskPage, OptionsAdminPage } from "./features/coordinator";
 import { HotelHomePage } from "./features/hotel";
+import { LandingPage } from "./features/landing/LandingPage";
 
 function RootRedirect() {
   const { user, loading } = useAuth();
@@ -18,7 +19,8 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          <Route path="/" element={<RootRedirect />} />
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/app" element={<RootRedirect />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/case-actions/confirm" element={<CaseActionConfirmPage />} />

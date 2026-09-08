@@ -47,7 +47,7 @@ public class HotelService(
             i.Status == "pending" && now - i.RequestedAt > OverdueThreshold,
             guestId.HasValue && returningGuestIds.Contains(guestId.Value),
             guestId.HasValue && highValueGuestIds.Contains(guestId.Value),
-            i.RespondedAt, i.RejectReason, finalOutcome, proposedCheckIn, proposedCheckOut, guestCommitted);
+            i.RespondedAt, i.RejectReason, finalOutcome, proposedCheckIn, proposedCheckOut, guestCommitted, guestId);
     }
 
     public async Task<List<InquiryItemDto>> ListInquiriesAsync(Guid hotelUserId, string? status, CancellationToken ct = default)
@@ -110,7 +110,7 @@ public class HotelService(
             o.OptionType, o.PayloadJson, o.UpdatedAt, o.CustomTitle, o.PerkNames,
             guestId.HasValue && returningGuestIds.Contains(guestId.Value),
             guestId.HasValue && highValueGuestIds.Contains(guestId.Value),
-            o.Availability, o.UnavailableReason);
+            o.Availability, o.UnavailableReason, guestId);
     }
 
     private async Task<bool> OptionTargetsHotelAsync(Option option, Guid hotelId, CancellationToken ct)

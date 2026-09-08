@@ -1,5 +1,5 @@
 import { apiGet, apiPost } from "../../shared/api/client";
-import type { CaseMessage, CaseOption, CaseSummary, ConfirmExecutionResult, PolicySummary, ProposeDeferDatesResult, Thread } from "./types";
+import type { CaseMessage, CaseOption, CaseSummary, CaseWorkflowProgress, ConfirmExecutionResult, PolicySummary, ProposeDeferDatesResult, Thread } from "./types";
 
 export function fetchMyCases(includeClosed = false) {
   return apiGet<CaseSummary[]>(`/api/cases/mine?includeClosed=${includeClosed}`);
@@ -7,6 +7,10 @@ export function fetchMyCases(includeClosed = false) {
 
 export function fetchCase(caseId: string) {
   return apiGet<CaseSummary>(`/api/cases/${caseId}`);
+}
+
+export function fetchWorkflowProgress(caseId: string) {
+  return apiGet<CaseWorkflowProgress[]>(`/api/cases/${caseId}/workflow-progress`);
 }
 
 export function fetchTopFaqQuestions() {
@@ -85,4 +89,19 @@ export function verifyCaseAction(token: string) {
 
 export function executeCaseAction(token: string) {
   return apiPost<{ caseId: string }>(`/api/case-actions/execute`, { token });
+}
+
+// 客人标签(只给 hotel/coordinator 角色，客人 403)。
+export interface GuestTags {
+  isHighValueGuest: boolean;
+  isReturningGuest: boolean;
+  emotionallySensitive: boolean;
+  aiDifficult: boolean;
+  highRejectionRate: boolean;
+  slowResponder: boolean;
+  customTags: { id: string; label: string; ownerRole: string }[];
+}
+
+export function fetchGuestTags(guestUserId: string) {
+  return apiGet<GuestTags>(`/api/tags/guest/${guestUserId}`);
 }

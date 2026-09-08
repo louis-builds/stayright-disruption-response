@@ -14,6 +14,7 @@ export interface OverviewDto {
 
 export interface CaseQueueItem {
   caseId: string;
+  disruptionId: string;
   confirmationNo: string;
   guestNickname: string;
   disruptionTitle: string;

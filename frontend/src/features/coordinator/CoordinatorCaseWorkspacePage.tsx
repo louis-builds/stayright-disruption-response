@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../auth";
-import { reviewEscalation } from "../cases/api";
+import { fetchGuestTags, reviewEscalation, type GuestTags } from "../cases/api";
 import { useCaseConversation } from "../cases/useCaseConversation";
 import type { CaseSummary, Thread } from "../cases/types";
 import { CoordinatorDashboardShell } from "./CoordinatorDashboardShell";
@@ -103,7 +103,18 @@ export function CoordinatorCaseWorkspacePage() {
   const navigate = useNavigate();
   const [thread, setThread] = useState<Thread>("coordinator");
   const [draft, setDraft] = useState("");
+  const [guestTags, setGuestTags] = useState<GuestTags | null>(null);
   const { caseInfo, messages, loading, sending, error, sendMessage } = useCaseConversation(id, "coordinator", thread);
+
+  // 客人标签：酒店和协调员可见、客人不可见。案件切换时清空再按新客人重拉。
+  useEffect(() => {
+    setGuestTags(null);
+    if (caseInfo?.guestUserId) {
+      void fetchGuestTags(caseInfo.guestUserId).then((res) => {
+        if (res.code === 0) setGuestTags(res.data);
+      });
+    }
+  }, [caseInfo?.guestUserId]);
 
   const activity = useMemo(() => {
     const rows = messages.slice(-4).reverse().map((message) => ({
@@ -150,6 +161,21 @@ export function CoordinatorCaseWorkspacePage() {
             <dl className="case-details-core"><div><dt>Disruption</dt><dd>{caseInfo.disruptionTitle ?? "—"}</dd></div><div><dt>Stay dates</dt><dd>{caseInfo.checkIn && caseInfo.checkOut ? `${caseInfo.checkIn} – ${caseInfo.checkOut}` : "Not recorded"}</dd></div><div><dt>Priority</dt><dd><span className={`detail-pill priority ${caseInfo.priority}`}>{caseInfo.priority}</span></dd></div><div><dt>Status</dt><dd><span className={`detail-pill status ${caseInfo.status}`}>{statusTone(caseInfo.statusLabel)}</span></dd></div></dl>
             <EscalationReviewPanel caseInfo={caseInfo} />
             <div className="case-details-contact"><small>Guest contact & booking</small><div><span><b>{caseInfo.guestNickname ?? "Guest"}</b>{caseInfo.guestPhone ?? "No phone"}</span><span><b>Booking</b>{caseInfo.confirmationNo ?? "—"}</span><span><b>Email</b>{caseInfo.guestEmail ?? "—"}</span></div></div>
+            <div className="case-details-tags">
+              <small>Guest tags · staff only, the guest can&apos;t see these</small>
+              {guestTags ? (
+                guestTags.isHighValueGuest || guestTags.emotionallySensitive || guestTags.aiDifficult || guestTags.highRejectionRate || guestTags.slowResponder || guestTags.customTags.length > 0 ? (
+                  <div className="case-details-tag-chips">
+                    {guestTags.isHighValueGuest && <span className="tag tag-status-vip">high value</span>}
+                    {guestTags.emotionallySensitive && <span className="case-tag-chip muted">emotionally sensitive</span>}
+                    {guestTags.aiDifficult && <span className="case-tag-chip muted">AI difficult</span>}
+                    {guestTags.highRejectionRate && <span className="case-tag-chip muted">high rejection</span>}
+                    {guestTags.slowResponder && <span className="case-tag-chip muted">slow responder</span>}
+                    {guestTags.customTags.map((t) => <span key={t.id} className="case-tag-chip">{t.label}</span>)}
+                  </div>
+                ) : <p className="case-workspace-empty">No tags recorded for this guest.</p>
+              ) : <p className="case-workspace-empty">Loading tags…</p>}
+            </div>
             <button className="case-options-action" disabled={caseInfo.status === "closed"} onClick={() => navigate(`/coordinator/cases/${id}/options`)}><span>▰</span>Review Rebooking Options <b>→</b></button>
           </section>}
           <section className="case-activity"><header><h2>Case Activity</h2><small>Latest recorded events</small></header>{activity.length === 0 ? <p className="case-workspace-empty">No recorded activity.</p> : <ol>{activity.map((item, index) => <li key={`${item.at}-${index}`}><i/><div><strong>{item.title}</strong><time>{new Date(item.at).toLocaleString("en-NZ", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</time></div></li>)}</ol>}</section>

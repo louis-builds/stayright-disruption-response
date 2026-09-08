@@ -14,3 +14,6 @@ public record GuestTagsDto(
 public record CustomTagDto(Guid Id, string Label, string OwnerRole);
 
 public record CreateCustomTagRequest(string Label);
+
+/// <summary>批量查多个客人的标签。酒店任务队列一屏几十张卡片，一次 POST 比每卡片一个 GET 省得多。</summary>
+public record GuestTagsQueryRequest(List<Guid> GuestUserIds);

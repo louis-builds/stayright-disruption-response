@@ -48,6 +48,14 @@ public class CaseService(
         return PagedResult<MessageDto>.Create(dtoList, page_.Total, page_.Page, page_.PageSize);
     }
 
+    public async Task<List<CaseWorkflowProgressDto>> GetWorkflowProgressAsync(
+        Guid caseId, Guid userId, string userRole, CancellationToken ct = default)
+    {
+        await LoadAuthorizedCaseAsync(cases, caseId, userId, userRole, ct);
+        var history = await cases.ListWorkflowHistoryAsync(caseId, ct);
+        return [.. history.Select(item => new CaseWorkflowProgressDto(item.State, item.EndedAt is null))];
+    }
+
     /// <summary>进入即主动说明：客人第一次打开一个 ai 线程还没有任何消息的案件时，系统先说明中断情况，
     /// 不等客人先问。</summary>
     private async Task EnsureProactiveOpeningAsync(Guid caseId, string userRole, CancellationToken ct)
@@ -455,7 +463,8 @@ public class CaseService(
             guest?.Nickname, guest?.AvatarUrl, guest?.Email, guest?.Phone,
             c.AssigneeCoordinatorId, assignee?.Nickname,
             HotelImageUrl: PrimaryHotelImage(c),
-            EscalationReason: c.EscalationReason, EscalationReviewedAsReasonable: c.EscalationReviewedAsReasonable, EscalationReviewNote: c.EscalationReviewNote);
+            EscalationReason: c.EscalationReason, EscalationReviewedAsReasonable: c.EscalationReviewedAsReasonable, EscalationReviewNote: c.EscalationReviewNote,
+            GuestUserId: c.Booking?.GuestUserId);
     }
 
     /// <summary>协调员给这次AI转人工打分：合理还是不合理，不合理要说明原因。只有真的转过人工的

@@ -95,7 +95,7 @@ public class CoordinatorService(ICoordinatorRepository repo, IEmailService email
 
     private static CaseQueueItemDto ToQueueItemDto(Case c, Dictionary<Guid, string> coordinatorNames, HashSet<Guid> highValueGuestIds,
         HashSet<Guid> awaitingHotelCaseIds) => new(
-        c.Id, c.Booking?.ConfirmationNo ?? "", c.Booking?.GuestUser?.Nickname ?? "", c.Disruption?.Title ?? "",
+        c.Id, c.DisruptionId, c.Booking?.ConfirmationNo ?? "", c.Booking?.GuestUser?.Nickname ?? "", c.Disruption?.Title ?? "",
         c.EscalationReason, DateTimeOffset.UtcNow - c.CreatedAt, c.Priority, c.Status,
         c.AssigneeCoordinatorId,
         c.AssigneeCoordinatorId.HasValue && coordinatorNames.TryGetValue(c.AssigneeCoordinatorId.Value, out var n) ? n : null,

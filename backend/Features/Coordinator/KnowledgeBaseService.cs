@@ -6,7 +6,8 @@ using TravelDisruptionAgent.Api.Infrastructure.Data.Entities;
 namespace TravelDisruptionAgent.Api.Features.Coordinator;
 
 public class KnowledgeBaseService(
-    IKnowledgeBaseRepository repo, ICaseRepository caseRepository, IChatService chatService, GeminiClient gemini)
+    IKnowledgeBaseRepository repo, ICaseRepository caseRepository, IChatService chatService, GeminiClient gemini,
+    IRagRepository ragRepository)
     : IKnowledgeBaseService
 {
     // ponytail: 固定考题需要一个"真实案件"上下文才能跑完整对话链路(第4条考题依赖第3条的上下文记忆)，
@@ -169,5 +170,14 @@ public class KnowledgeBaseService(
             .ToList();
 
         return new KnowledgeDashboardDto(Rate(liked), Rate(disliked), Rate(escalated), totalAi, liked, disliked, escalated, versionRates);
+    }
+
+    public async Task<List<RagSearchResultDto>> SearchAsync(string query, int topK, CancellationToken ct = default)
+    {
+        var embedding = await gemini.EmbedAsync(query, ct);
+        if (embedding is not { Length: > 0 }) return [];
+
+        var results = await ragRepository.SearchTopKAsync(new Vector(embedding), topK, ct);
+        return [.. results.Select(r => new RagSearchResultDto(r.ChunkId, r.DocName, r.Version, r.ChunkIndex, r.Content, r.Distance))];
     }
 }
