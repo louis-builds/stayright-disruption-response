@@ -151,7 +151,8 @@ public static class SeedRunner
     private record BookingSeed(Guid Id, string ConfirmationNo, Guid GuestUserId, Guid HotelId, Guid RoomTypeId,
         int CheckInOffsetDays, int CheckOutOffsetDays, int GuestsCount, decimal TotalAmount, string Currency, string Status);
 
-    // EventSubtype/Severity/Lat/Lng/RadiusKm/RawSignalJson 对齐 docs/handoff.jsonl 的对接结构，
+    // EventSubtype/Severity/Lat/Lng/RadiusKm/RawSignalJson 对齐 detect/src/identify/handoff.py
+    // 的 build_handoff_payloads() 写出的对接结构，
     // 目前只有 weather/storm 这条会填，其它 disruption 留 null 照样能反序列化。
     private record DisruptionSeed(Guid Id, string Type, string Title, string Region,
         double StartOffsetHours, double EndOffsetHours, string Status, string RawSignalText,

@@ -2,7 +2,8 @@ namespace TravelDisruptionAgent.Api.Infrastructure.Data.Entities;
 
 /// <summary>
 /// type: weather|flight|road; status: active|closed.
-/// event_subtype/severity/lat/lng/radius_km/raw_signal_json 对齐 docs/handoff.jsonl 的 disruption_event 结构，
+/// event_subtype/severity/lat/lng/radius_km/raw_signal_json 对齐 detect/src/identify/handoff.py
+/// 的 build_handoff_payloads() 写出的 disruption_event 结构，
 /// 目前只有 weather/storm 这条对接链路会填这些列，其它 type 留空。
 /// </summary>
 public class Disruption
