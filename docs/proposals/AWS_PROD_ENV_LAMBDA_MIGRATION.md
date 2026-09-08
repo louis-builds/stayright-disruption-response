@@ -2,7 +2,9 @@
 
 > 日期：2026-09-07 ｜ 作者：Zachary（Dev-Zachary）
 > 状态：提案（待团队评审）
-> 背景：延续 `AWS-Deployment-History.md` 2026-08-27 部署计划与 2026-09-03 三轨全量部署，规划从 dev（EC2 + Docker PG）升级为生产形态。
+> 背景：延续 `docs/AWS_SDK_SPEC.md` §13.2（原 `AWS-Deployment-History.md`，2026-09-08 已合并进该节，原文件是本地 gitignore 文件从未进仓库）2026-08-27 部署计划与 2026-09-03 三轨全量部署，规划从 dev（EC2 + Docker PG）升级为生产形态。
+>
+> ⚠️ **2026-09-08 更新**：§7 决策点 4 已拍板为双环境，且 prod 建在**另一个独立 AWS 账户**（$200 额度），不是本文档原设想的同账户 SAM Stage 分环境。本文档下方涉及"同账户"的部分（成本估算、Secrets/SSM 复用、S3 中转迁移路径）需要按跨账户场景重新核对，详见 §7 第 4 点的更新说明。
 
 ---
 
@@ -128,12 +130,19 @@ Lambda 是无状态函数；全 Lambda 化意味着 EC2 退役，自建（Docker
 1. **RDS 还是 Aurora Serverless v2**——成本 vs 展示效果（提案倾向：RDS 起步）。
 2. **API 入口用 API Gateway 还是 Lambda Function URL**——后者免费够用；前者有 throttling/阶段管理，叙事更完整。
 3. **切换节奏**——建议 EC2 双跑一周作回滚点（多烧约 ¥20）。
-4. **环境策略**——是否沿用单环境（现 dev 直接升 prod），还是借机分 `dev`/`prod` 两套（SAM 栈 Stage 参数已支持，成本 +RDS 一份）。
+4. **环境策略** ✅ 已决策（2026-09-08，Zachary）：采取双环境（dev/prod）。
+
+   **⚠️ 与本提案原方案不同：不是同账户 SAM Stage 参数分环境，而是 prod 建在另一个独立 AWS 账户上**（该账户有 $200 额度）。这个决定改变了本文档几处默认假设，后续落地/评审时要注意：
+
+   - §2.4「迁移注意」里"连接凭证沿用 Secrets Manager `stayright/prod/db/password`"——跨账户后 prod 账户要有自己独立的 Secrets Manager 条目和 SSM 参数集（`/stayright/prod/{KEY}` 那 12 个 key 要在新账户里重新建一遍），不是同账户下加个 stage 前缀那么简单。这恰好是 `docs/AWS_SDK_SPEC.md` 里"资源全走 `cfg()`/`secret()`"设计所承诺的"换账户零改动"红利第一次被真正用上——业务代码不用改，但**基建侧要在新账户里重新走一遍 SSM/Secrets 建立流程**。
+   - §5「迁移路径」的 pg_dump → S3 → 导入流程原设计是同账户中转，跨账户需要额外确认：是走跨账户 S3 bucket policy 授权，还是本地下载再上传到新账户的桶——待与团队确认。
+   - §3 目标架构图、§6 成本估算目前都是单账户视角（CloudFront/EC2/RDS 算在一套账单里），需要在新账户建立后重新核算 prod 侧独立成本；dev 账户现有资源保留还是退役，待定（大概率保留作为开发环境）。
+   - 待补充信息：新账户何时到位、由谁开通、detect/ 的 4 个采集器 Lambda 是否也要在新账户里独立部署一份（目前是单一部署面向单一环境）。
 
 ---
 
 ## 8. 参考
 
-- `AWS-Deployment-History.md`（2026-08-24 ~ 09-03 各节：现状盘点、SES 踩坑、部署管线）
+- `docs/AWS_SDK_SPEC.md` §13.2（原 `AWS-Deployment-History.md`，2026-09-08 已合并：2026-08-24 ~ 09-03 各节，现状盘点、SES 踩坑、部署管线）
 - `docs/AWS_SDK_SPEC.md` §5.10（数据库规范现状：EC2 Docker 形态）
 - Issue #31（扰动去重缺口——与本次迁移无依赖，独立排期）
