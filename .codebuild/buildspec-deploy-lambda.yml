@@ -1,0 +1,33 @@
+version: 0.2
+
+# 部署 4 个采集器 Lambda（weather/volcano/flight/road）。
+#
+# 跟本地开发机的关键区别：部署记录（AWS_SDK_SPEC.md §13.2）里 `sam build`
+# 必须加 `--use-container` 是因为本地是 Apple Silicon（macOS arm64）交叉编译
+# 到 Lambda 的 linux/arm64——pydantic 编译型依赖跨平台生成的 .so 用不了。
+# CodeBuild 这里如果直接选 arm64 计算类型（Linux 原生 arm64），构建产物和
+# 运行目标是同一平台，不需要交叉编译，可以省掉 `--use-container`（也就不需要
+# 给 CodeBuild 开 privileged mode 跑 Docker-in-Docker）。CodeBuild 项目建的
+# 时候记得选 ARM_CONTAINER 计算类型，不要选默认的 x86_64。
+#
+# 只有 detect/template.yaml、detect/src/runtimes/、
+# detect/requirements-lambda.txt 变化时才需要跑这个 stage——CodePipeline
+# 的触发条件里按路径过滤，其余改动（比如这次纯 backend/frontend 的更新）
+# 不应该触发这个 stage,跟你们手动部署时"detect/ 没变就跳过 sam deploy"的
+# 判断逻辑一致。
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.12
+    commands:
+      - pip install aws-sam-cli
+
+  build:
+    commands:
+      - cd detect
+      - sam build --manifest requirements-lambda.txt
+      - sam deploy --stack-name stayright-dev-weather-collector
+          --s3-bucket stayright-dev-raw-990393187001 --s3-prefix sam/
+          --capabilities CAPABILITY_IAM --region ap-southeast-2
+          --no-confirm-changeset --no-fail-on-empty-changeset
