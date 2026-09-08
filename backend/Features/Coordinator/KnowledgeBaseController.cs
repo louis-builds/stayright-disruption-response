@@ -66,4 +66,16 @@ public class KnowledgeBaseController(IKnowledgeBaseService kb) : ControllerBase
     [HttpGet("dashboard")]
     public async Task<ActionResult<ApiResponse<KnowledgeDashboardDto>>> Dashboard(CancellationToken ct) =>
         Ok(ApiResponse<KnowledgeDashboardDto>.Ok(await kb.GetDashboardAsync(ct)));
+
+    /// <summary>ragas 评测用：不做阈值截断，返回 top-k 完整排名。</summary>
+    [HttpGet("search")]
+    public async Task<ActionResult<ApiResponse<List<RagSearchResultDto>>>> Search(
+        [FromQuery] string q, [FromQuery] int topK, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(q))
+            return BadRequest(ApiResponse<object?>.Fail(400, "q is required"));
+
+        var boundedTopK = topK <= 0 ? 10 : Math.Min(topK, 50);
+        return Ok(ApiResponse<List<RagSearchResultDto>>.Ok(await kb.SearchAsync(q, boundedTopK, ct)));
+    }
 }

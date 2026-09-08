@@ -89,10 +89,10 @@ if [ "$ST" != "Success" ]; then
   echo "--- stderr ---"
   aws ssm get-command-invocation --region "$REGION" --command-id "$CMD_ID" --instance-id "$EC2_ID" \
     --query StandardErrorContent --output text
-  echo "❌ 部署失败（状态 $ST）。回滚见脚本头部注释。"
+  echo "❌ 部署失败（状态 ${ST}）。回滚见脚本头部注释。"
   exit 1
 fi
 
 rm -f "$TARBALL"
-say "✅ 后端部署完成（$STAMP）"
+say "✅ 后端部署完成（${STAMP}）"
 echo "公网验证： curl -s -o /dev/null -w '%{http_code}\\n' https://d2y6g16anevc6h.cloudfront.net/api/auth/me   # 期望 403"

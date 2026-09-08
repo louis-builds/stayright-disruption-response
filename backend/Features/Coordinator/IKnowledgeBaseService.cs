@@ -13,4 +13,7 @@ public interface IKnowledgeBaseService
     Task<GoldenTestRunDto?> GetLatestRunAsync(CancellationToken ct = default);
 
     Task<KnowledgeDashboardDto> GetDashboardAsync(CancellationToken ct = default);
+
+    /// <summary>ragas 评测用：不做阈值截断，返回 top-k 排名。</summary>
+    Task<List<RagSearchResultDto>> SearchAsync(string query, int topK, CancellationToken ct = default);
 }

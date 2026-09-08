@@ -1,5 +1,0 @@
-{"disruption_event": {"id": "28dff9bf-13c6-4499-b0e3-592e94113b67", "type": "weather", "event_subtype": "storm", "severity": "high", "detected_at": "2026-08-25T00:39:18Z", "affects_window": {"start": "2026-08-25T00:39:18Z", "end": "2026-09-01T00:39:18Z"}, "geo": {"lat": -45.0312, "lng": 168.6626, "radius_km": 30.0}, "raw_signal": {"wind_gusts_kmh": 150, "precipitation_mm": 0, "snowfall_cm": 0}}}
-{"disruption_event_id": "28dff9bf-13c6-4499-b0e3-592e94113b67", "guest_id": "guest-001", "booking_id": "booking-0001"}
-{"disruption_event_id": "28dff9bf-13c6-4499-b0e3-592e94113b67", "guest_id": "guest-002", "booking_id": "booking-0002"}
-{"disruption_event_id": "28dff9bf-13c6-4499-b0e3-592e94113b67", "guest_id": "guest-007", "booking_id": "booking-0009"}
-{"disruption_event_id": "28dff9bf-13c6-4499-b0e3-592e94113b67", "guest_id": "guest-008", "booking_id": "booking-0010"}

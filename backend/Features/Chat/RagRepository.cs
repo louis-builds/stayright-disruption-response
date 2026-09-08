@@ -40,6 +40,30 @@ public class RagRepository(AppDbContext db) : IRagRepository
         return row is null ? null : (row.Content, row.DocName, row.Version, (double)row.Distance);
     }
 
+    public async Task<List<(Guid ChunkId, string Content, int ChunkIndex, string DocName, int Version, double Distance)>>
+        SearchTopKAsync(Vector query, int topK, CancellationToken ct = default)
+    {
+        var ids = await GetSearchableChunkIdsAsync(null, ct);
+        if (ids.Count == 0) return [];
+
+        var rows = await db.RagDocumentChunks
+            .Where(c => ids.Contains(c.Id) && c.Embedding != null)
+            .OrderBy(c => c.Embedding!.CosineDistance(query))
+            .Take(topK)
+            .Select(c => new
+            {
+                c.Id,
+                c.Content,
+                c.ChunkIndex,
+                DocName = c.RagDocument!.Name,
+                Version = c.RagDocument.Version,
+                Distance = c.Embedding!.CosineDistance(query),
+            })
+            .ToListAsync(ct);
+
+        return rows.Select(r => (r.Id, r.Content, r.ChunkIndex, r.DocName, r.Version, (double)r.Distance)).ToList();
+    }
+
     private async Task<List<Guid>> GetSearchableChunkIdsAsync(Guid? guestUserId, CancellationToken ct)
     {
         var docs = await db.RagDocuments.Select(d => new { d.Id, d.Name, d.Version, d.IsDefaultVersion }).ToListAsync(ct);

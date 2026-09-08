@@ -28,3 +28,6 @@ public record KnowledgeDashboardDto(
     List<GoldenTestVersionPassRateDto> GoldenTestPassRateByVersion);
 
 public record GoldenTestVersionPassRateDto(string DocumentName, int Version, double PassRatePercent, int FailCount, DateTimeOffset RunAt);
+
+/// <summary>ragas 评测用：不做阈值截断的原始 top-k 检索结果。</summary>
+public record RagSearchResultDto(Guid ChunkId, string DocName, int Version, int ChunkIndex, string Content, double Score);

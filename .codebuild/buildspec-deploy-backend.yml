@@ -1,0 +1,17 @@
+version: 0.2
+
+# 直接复用 scripts/deploy-backend.sh 里已经跑通、踩过坑的逻辑（原子换目录 +
+# 回滚点 + rag 种子文件校验 + SSM RunCommand），不在这里重写一遍部署步骤。
+# CodeBuild 只负责：装好 dotnet + aws cli，然后照抄本地开发者手跑这个脚本
+# 时做的事。
+
+phases:
+  install:
+    commands:
+      - curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 9.0 --install-dir /usr/share/dotnet
+      - ln -sf /usr/share/dotnet/dotnet /usr/bin/dotnet
+
+  build:
+    commands:
+      - chmod +x scripts/deploy-backend.sh
+      - ./scripts/deploy-backend.sh
