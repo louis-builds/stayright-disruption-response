@@ -7,7 +7,7 @@ public record OverviewDto(
     int OverdueInProgressCount);
 
 public record CaseQueueItemDto(
-    Guid CaseId, string ConfirmationNo, string GuestNickname, string DisruptionTitle,
+    Guid CaseId, Guid DisruptionId, string ConfirmationNo, string GuestNickname, string DisruptionTitle,
     string? EscalationReason, TimeSpan WaitTime, string Priority, string Status,
     Guid? AssigneeCoordinatorId, string? AssigneeNickname, bool Overdue, bool IsHighValueGuest,
     bool AwaitingHotelConfirmation);

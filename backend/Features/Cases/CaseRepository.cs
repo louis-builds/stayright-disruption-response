@@ -32,6 +32,13 @@ public class CaseRepository(AppDbContext db) : ICaseRepository
             .Include(c => c.Booking).ThenInclude(b => b!.RoomType)
             .FirstOrDefaultAsync(c => c.Id == caseId, ct);
 
+    public Task<List<CaseWorkflowStateHistory>> ListWorkflowHistoryAsync(Guid caseId, CancellationToken ct = default) =>
+        db.CaseWorkflowStateHistories
+            .Where(item => item.CaseId == caseId)
+            .OrderBy(item => item.StartedAt)
+            .AsNoTracking()
+            .ToListAsync(ct);
+
     public Task<bool> IsHotelConfirmedAsync(Guid caseId, CancellationToken ct = default) =>
         db.Inquiries.AnyAsync(i => i.CaseId == caseId && i.Status == "accepted", ct);
 

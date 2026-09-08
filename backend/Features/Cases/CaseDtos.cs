@@ -31,6 +31,8 @@ public class ConfirmRefundRequest
 
 public record RefundStatusDto(bool Confirmed, decimal? Amount, string? Reason, DateTimeOffset? ConfirmedAt);
 
+public record CaseWorkflowProgressDto(string State, bool Current);
+
 /// <summary>客人首页"我的待办"卡片，也是案件详情页(GetCaseAsync)用的DTO。StatusLabel 是给 UI 直接展示
 /// 的人话状态，Status 是原始枚举值。Escalated/UnreadAiCount/UnreadCoordinatorCount 只有 GetCaseAsync
 /// 会真正算(案件详情页页签用)，GetMyCasesAsync(首页列表，没有页签)一律填 false/0/0，不为列表页多跑查询。</summary>

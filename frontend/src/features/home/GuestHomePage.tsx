@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import * as notificationsApi from "../notifications/api";
 import type { NotificationItem } from "../notifications/types";
 import { useMyCases } from "../cases/useMyCases";
+import * as casesApi from "../cases/api";
+import type { CaseWorkflowProgress } from "../cases/types";
 import * as bookingsApi from "../bookings/api";
 import type { BookingSummary } from "../bookings/types";
 import { useAuth } from "../auth";
@@ -16,8 +18,16 @@ const NOTICE_FETCH_SIZE = 40;
 const NOTICE_PAGE_SIZE = 6;
 const SHOW_LEGACY_GUEST_HOME = false;
 
+const RECOVERY_STAGES = [
+  { state: "new", label: "Case opened" },
+  { state: "awaiting_hotel", label: "Waiting for hotel confirmation" },
+  { state: "awaiting_guest", label: "Options ready for your review" },
+  { state: "guest_selected", label: "Guest choice submitted" },
+  { state: "closed", label: "Recovery completed" },
+] as const;
+
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleString("en-NZ", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 function daysUntil(dateStr: string): number {
@@ -90,6 +100,8 @@ export function GuestHomePage() {
   const [noticeQuery, setNoticeQuery] = useState("");
   const [noticeShown, setNoticeShown] = useState(NOTICE_PAGE_SIZE);
   const [openingId, setOpeningId] = useState<string | null>(null);
+  const [workflowProgress, setWorkflowProgress] = useState<CaseWorkflowProgress[]>([]);
+  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const { cases, loading: casesLoading } = useMyCases();
   const navigate = useNavigate();
 
@@ -126,14 +138,54 @@ export function GuestHomePage() {
   const upcomingBookings = useMemo(() => bookings
     .filter((item) => item.status !== "cancelled" && new Date(`${item.checkOut}T23:59:59`).getTime() >= Date.now())
     .sort((a, b) => new Date(a.checkIn).getTime() - new Date(b.checkIn).getTime()), [bookings]);
-  const priorityCase = useMemo(() => [...activeCases].sort((a, b) => {
-    if (a.priority === "high" && b.priority !== "high") return -1;
-    if (b.priority === "high" && a.priority !== "high") return 1;
-    return new Date(a.checkIn ?? a.createdAt).getTime() - new Date(b.checkIn ?? b.createdAt).getTime();
-  })[0] ?? null, [activeCases]);
+  const affectedBookingCases = useMemo(() => {
+    const latestCaseByBooking = new Map<string, (typeof activeCases)[number]>();
+    activeCases.forEach((item) => {
+      const bookingKey = item.confirmationNo?.trim().toLowerCase() || `case:${item.id}`;
+      const current = latestCaseByBooking.get(bookingKey);
+      if (!current || new Date(item.createdAt).getTime() > new Date(current.createdAt).getTime()) {
+        latestCaseByBooking.set(bookingKey, item);
+      }
+    });
+    return [...latestCaseByBooking.values()].sort((a, b) => {
+      if (a.priority === "high" && b.priority !== "high") return -1;
+      if (b.priority === "high" && a.priority !== "high") return 1;
+      return new Date(a.checkIn ?? a.createdAt).getTime() - new Date(b.checkIn ?? b.createdAt).getTime();
+    });
+  }, [activeCases]);
+  const priorityCase = useMemo(
+    () => affectedBookingCases.find((item) => item.id === selectedCaseId) ?? affectedBookingCases[0] ?? null,
+    [affectedBookingCases, selectedCaseId],
+  );
+  const selectedCaseIndex = priorityCase ? affectedBookingCases.findIndex((item) => item.id === priorityCase.id) : -1;
+
+  useEffect(() => {
+    if (!affectedBookingCases.length) {
+      if (selectedCaseId !== null) setSelectedCaseId(null);
+      return;
+    }
+    if (!affectedBookingCases.some((item) => item.id === selectedCaseId)) {
+      setSelectedCaseId(affectedBookingCases[0].id);
+    }
+  }, [affectedBookingCases, selectedCaseId]);
+
+  function selectAdjacentCase(direction: -1 | 1) {
+    if (affectedBookingCases.length < 2 || selectedCaseIndex < 0) return;
+    const nextIndex = (selectedCaseIndex + direction + affectedBookingCases.length) % affectedBookingCases.length;
+    setSelectedCaseId(affectedBookingCases[nextIndex].id);
+  }
+
+  useEffect(() => {
+    let active = true;
+    setWorkflowProgress([]);
+    if (!priorityCase) return () => { active = false; };
+    void casesApi.fetchWorkflowProgress(priorityCase.id).then((res) => {
+      if (active && res.code === 0) setWorkflowProgress(res.data);
+    });
+    return () => { active = false; };
+  }, [priorityCase?.id]);
   const nearestCheckIn = upcomingBookings[0]?.checkIn ?? null;
   const dashboardNotices = filteredNotifications.slice(0, noticeShown > NOTICE_PAGE_SIZE ? filteredNotifications.length : 4);
-
   async function openNotification(id: string, caseId: string | null) {
     setOpeningId(id);
     try {
@@ -163,7 +215,17 @@ export function GuestHomePage() {
 
           <section className={`guest-priority ${priorityCase ? "has-action" : "all-clear"}`}>
             {priorityCase ? <>
-              <header><span><i aria-hidden="true" />Priority action required: your stay may be affected</span><em>{priorityCase.checkIn ? (daysUntil(priorityCase.checkIn) <= 0 ? "Check-in is due now" : `${daysUntil(priorityCase.checkIn)} days until check-in`) : `${priorityCase.priority} priority`}</em></header>
+              <header>
+                <span><i aria-hidden="true" />Priority action required: your stay may be affected</span>
+                <div className="guest-priority-header-actions">
+                  {affectedBookingCases.length > 1 && <nav aria-label="Affected booking navigation">
+                    <button type="button" onClick={() => selectAdjacentCase(-1)} aria-label="Previous affected booking">&larr;</button>
+                    <strong>{selectedCaseIndex + 1} / {affectedBookingCases.length}</strong>
+                    <button type="button" onClick={() => selectAdjacentCase(1)} aria-label="Next affected booking">&rarr;</button>
+                  </nav>}
+                  <em>{priorityCase.checkIn ? (daysUntil(priorityCase.checkIn) <= 0 ? "Check-in is due now" : `${daysUntil(priorityCase.checkIn)} days until check-in`) : `${priorityCase.priority} priority`}</em>
+                </div>
+              </header>
               <div className="guest-priority-body">
                 <figure className={priorityCase.hotelImageUrl ? "" : "no-image"}>
                   {priorityCase.hotelImageUrl
@@ -176,7 +238,7 @@ export function GuestHomePage() {
                   <p>{priorityCase.disruptionDescription ?? "A disruption may affect this stay. Review the latest case information and available recovery options."}</p>
                   <dl><div><dt>Stay dates</dt><dd>{formatStayDates(priorityCase.checkIn, priorityCase.checkOut)}</dd></div><div><dt>Disruption type</dt><dd>{disruptionLabel(priorityCase.disruptionType)}</dd></div><div><dt>Case status</dt><dd>{priorityCase.statusLabel}</dd></div></dl>
                 </div>
-                <div className="guest-priority-actions"><button type="button" onClick={() => navigate(`/cases/${priorityCase.id}`)}>Review recovery options →</button><small>Open your case for the latest update</small></div>
+                <div className="guest-priority-actions"><button type="button" onClick={() => navigate(`/cases/${priorityCase.id}`)}>Open case conversation →</button><small>Open your case for the latest update</small></div>
               </div>
             </> : <div className="guest-priority-clear"><i aria-hidden="true">✓</i><div><small>ALL CLEAR</small><h2>No action is required right now</h2><p>We will keep monitoring your upcoming stays and notify you if anything changes.</p></div></div>}
           </section>
@@ -189,13 +251,13 @@ export function GuestHomePage() {
               </section>
 
               <section className="guest-dashboard-card guest-notices">
-                <header><div><h2>Recent disruption notices</h2><p>Updates connected to your bookings and cases</p></div>{filteredNotifications.length > 4 && <button type="button" onClick={() => setNoticeShown((current) => current > NOTICE_PAGE_SIZE ? NOTICE_PAGE_SIZE : NOTICE_FETCH_SIZE)}>{noticeShown > NOTICE_PAGE_SIZE ? "Show recent" : "View all notices"} →</button>}</header>
-                {noticesLoading ? <EmptyState icon="◌" title="Loading…" body="Fetching your notices." /> : dashboardNotices.length === 0 ? <EmptyState icon="✓" title={noticeQuery ? "No matches" : "All quiet for now"} body={noticeQuery ? "Try a different search term." : "New disruption notices will appear here automatically."} /> : <div className="guest-notice-list">{dashboardNotices.map((notice) => <button type="button" key={notice.id} className={!notice.readAt ? "unread" : ""} onClick={() => void openNotification(notice.id, notice.caseId)}><i aria-hidden="true">{notice.readAt ? "✓" : "!"}</i><span><strong>{notice.disruptionTitle ?? notice.title}</strong><small>{notice.body}</small></span><em>{formatDate(notice.sentAt)}</em></button>)}</div>}
+                <header><div><h2>Travel alerts &amp; updates</h2><p>Recent notices connected to your stays</p></div>{filteredNotifications.length > 4 && <button type="button" onClick={() => setNoticeShown((current) => current > NOTICE_PAGE_SIZE ? NOTICE_PAGE_SIZE : NOTICE_FETCH_SIZE)}>{noticeShown > NOTICE_PAGE_SIZE ? "Show recent" : "View all notices"} →</button>}</header>
+                {noticesLoading ? <EmptyState icon="◌" title="Loading…" body="Fetching your notices." /> : dashboardNotices.length === 0 ? <EmptyState icon="✓" title={noticeQuery ? "No matches" : "All quiet for now"} body={noticeQuery ? "Try a different search term." : "New disruption notices will appear here automatically."} /> : <div className="guest-notices-content"><div className="guest-notice-list">{dashboardNotices.map((notice) => <button type="button" key={notice.id} className={!notice.readAt ? "unread" : ""} onClick={() => void openNotification(notice.id, notice.caseId)}><i aria-hidden="true"><DashboardStatIcon type="bell" /></i><span><strong>{notice.disruptionTitle ?? notice.title}</strong><small>{notice.body}</small></span><em><time>{formatDate(notice.sentAt)}</time><b>View notice →</b></em></button>)}</div></div>}
               </section>
             </div>
 
             <aside className="guest-dashboard-side">
-              <section className="guest-dashboard-card guest-case-summary"><header><div><h2>Current case status</h2><p>Your active recovery assistance</p></div></header>{priorityCase ? <><strong>{priorityCase.statusLabel}</strong><dl><div><dt>Hotel</dt><dd>{priorityCase.hotelName ?? "Not recorded"}</dd></div><div><dt>Stay</dt><dd>{priorityCase.checkIn ?? "—"} → {priorityCase.checkOut ?? "—"}</dd></div><div><dt>Disruption</dt><dd>{priorityCase.disruptionType ?? "Travel disruption"}</dd></div></dl><button type="button" onClick={() => navigate(`/cases/${priorityCase.id}`)}>Open case conversation →</button></> : <div className="guest-side-clear"><i>✓</i><p>You have no unresolved disruption cases.</p></div>}</section>
+              <section className="guest-dashboard-card guest-recovery-progress"><header><div><h2>Recovery progress</h2><p>Current recovery journey for your active case</p></div></header>{priorityCase ? <ol>{RECOVERY_STAGES.map((stage, index) => { const records = workflowProgress.filter((item) => item.state === stage.state); const isCurrent = records.some((item) => item.current) || (workflowProgress.length === 0 && priorityCase.status === stage.state); const isComplete = stage.state === "new" ? !isCurrent : records.length > 0 && !isCurrent; const stageClass = isCurrent ? "current" : isComplete ? "complete" : "upcoming"; return <li className={stageClass} key={stage.state}><i aria-hidden="true">{isComplete ? "✓" : index + 1}</i><span><strong>{stage.label}</strong>{isCurrent && <small>Current stage</small>}</span></li>; })}</ol> : <div className="guest-side-clear"><i>✓</i><p>You have no unresolved disruption cases.</p></div>}</section>
               <section className="guest-dashboard-card guest-help-steps"><header><div><h2>How StayRight helps</h2><p>Support when travel plans change</p></div></header><figure><img src="/images/guest-help-illustration.png" alt="A traveller receiving disruption assistance from StayRight NZ" /></figure>{HOW_IT_WORKS.map((step) => <div key={step.step}><i>{step.step}</i><span><strong>{step.title}</strong><small>{step.body}</small></span></div>)}</section>
             </aside>
           </div>

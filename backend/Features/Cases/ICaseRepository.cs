@@ -11,6 +11,7 @@ public interface ICaseRepository
     Task<List<Case>> ListForGuestAsync(Guid guestUserId, bool includeClosed, CancellationToken ct = default);
     /// <summary>P4 对话页用：带 Disruption + Booking.Hotel 一起加载，够拼 AI 提示词和开场白。</summary>
     Task<Case?> FindFullAsync(Guid caseId, CancellationToken ct = default);
+    Task<List<CaseWorkflowStateHistory>> ListWorkflowHistoryAsync(Guid caseId, CancellationToken ct = default);
     Task<bool> IsHotelConfirmedAsync(Guid caseId, CancellationToken ct = default);
     Task<Message?> FindMessageAsync(Guid messageId, Guid caseId, CancellationToken ct = default);
     Task<List<Option>> ListOptionsAsync(Guid caseId, CancellationToken ct = default);
