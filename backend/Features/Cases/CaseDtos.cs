@@ -45,7 +45,8 @@ public record CaseSummaryDto(
     string? GuestNickname = null, string? GuestAvatarUrl = null, string? GuestEmail = null, string? GuestPhone = null,
     Guid? AssigneeCoordinatorId = null, string? AssigneeNickname = null,
     string? HotelImageUrl = null,
-    string? EscalationReason = null, bool? EscalationReviewedAsReasonable = null, string? EscalationReviewNote = null);
+    string? EscalationReason = null, bool? EscalationReviewedAsReasonable = null, string? EscalationReviewNote = null,
+    Guid? GuestUserId = null);
 
 public record ReviewEscalationRequest(bool Reasonable, string? Note);
 
