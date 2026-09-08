@@ -53,8 +53,9 @@ public class OptionsAdminService(IOptionsAdminRepository repo, IBookingRepositor
     // 不用 Gemini 现编:这段文案只是把已经算出来的数字翻译成一句话,没有语义生成需求，
     // 犯不着为了一句话再搭一次网络调用(既慢又多一个失败点)。
     private static string BuildAlternateReason(Hotel candidateHotel, RoomType candidateRoom, RoomType? originalRoom,
-        HashSet<Guid> guestPreviousHotelIds, double? distanceKm)
+        HashSet<Guid> guestPreviousHotelIds, double? distanceKm, bool preferCheaper = false)
     {
+        if (preferCheaper && distanceKm is { } kmCheaper) return $"Cheaper option, about {Math.Round(kmCheaper)} km away.";
         if (guestPreviousHotelIds.Contains(candidateHotel.Id)) return "You've stayed here before.";
         if (distanceKm is { } km && km <= 1) return "Right next to your original hotel.";
         if (distanceKm is { } km2 && km2 <= 20) return $"Only {Math.Round(km2)} km from your original hotel.";
@@ -63,7 +64,52 @@ public class OptionsAdminService(IOptionsAdminRepository repo, IBookingRepositor
         return "The closest match we could find among available hotels.";
     }
 
-    private async Task<List<Option>> BuildDraftOptionsAsync(Case c, IEnumerable<string> typesToBuild, CancellationToken ct)
+    private record AlternateCandidateSelection(Hotel Hotel, RoomType RoomType, decimal FeeDiff, double? DistanceKm, string Reason, bool RanOutOfNewOptions);
+
+    // 挑候选酒店/房型的核心逻辑，从 BuildDraftOptionsAsync 拆出来是因为 PreviewCheaperAlternateAsync
+    // 需要同一套挑选/打分规则做只读预览(不落库、不占用 AddAlternateOfferAsync 的"已推荐"名额)，
+    // 两处一旦分叉，预览给客人看的和最终真正生成的就可能对不上。
+    private async Task<AlternateCandidateSelection?> SelectAlternateCandidateAsync(Case c, bool preferCheaper, CancellationToken ct)
+    {
+        var booking = c.Booking!;
+        var nights = Math.Max(booking.CheckOut.DayNumber - booking.CheckIn.DayNumber, 1);
+        var candidates = await repo.ListAlternateCandidatesAsync(booking.HotelId, ct);
+        var alreadyOfferedHotelIds = await repo.ListOfferedAlternateHotelIdsAsync(c.Id, ct);
+        var unseenCandidates = candidates.Where(cand => !alreadyOfferedHotelIds.Contains(cand.Hotel.Id)).ToList();
+        var ranOutOfNewOptions = candidates.Count > 0 && unseenCandidates.Count == 0;
+        if (unseenCandidates.Count > 0) candidates = unseenCandidates;
+        if (candidates.Count == 0) return null;
+
+        var previousHotelIds = (await bookingRepo.ListForGuestAsync(booking.GuestUserId, ct)).Select(b => b.HotelId).ToHashSet();
+        var (hotel, roomType) = preferCheaper
+            ? candidates.OrderBy(cand => cand.RoomType.PriceAmount)
+                .ThenBy(cand => ScoreAlternate(cand.Hotel, cand.RoomType, booking.Hotel, booking.RoomType, previousHotelIds))
+                .First()
+            : candidates.MinBy(cand => ScoreAlternate(cand.Hotel, cand.RoomType, booking.Hotel, booking.RoomType, previousHotelIds));
+
+        var originalNightly = booking.RoomType?.PriceAmount ?? booking.TotalAmount / nights;
+        var feeDiff = Math.Round((roomType.PriceAmount - originalNightly) * nights, 2);
+        var distanceKm = booking.Hotel is not null
+            ? Math.Round(HaversineKm(booking.Hotel.Lat, booking.Hotel.Lng, hotel.Lat, hotel.Lng), 0)
+            : (double?)null;
+        var reason = BuildAlternateReason(hotel, roomType, booking.RoomType, previousHotelIds, distanceKm, preferCheaper);
+        return new AlternateCandidateSelection(hotel, roomType, feeDiff, distanceKm, reason, ranOutOfNewOptions);
+    }
+
+    // 只读预览："客人问有没有更便宜的"这一步要把候选方案的图片/理由先给客人看，但还没确认，
+    // 不能真的占用 AddAlternateOfferAsync 的"已推荐"名额或改动 Option 表——万一客人不要，
+    // 候选池不该被这次预览提前消耗掉。真正落库交给 RegenerateAlternateAsync。
+    public async Task<AlternateCandidatePreviewDto?> PreviewCheaperAlternateAsync(Guid caseId, CancellationToken ct = default)
+    {
+        var c = await repo.FindCaseWithContextAsync(caseId, ct) ?? throw new CaseNotFoundException();
+        var selection = await SelectAlternateCandidateAsync(c, preferCheaper: true, ct);
+        if (selection is null) return null;
+        return new AlternateCandidatePreviewDto(
+            selection.Hotel.Name, selection.RoomType.Name, selection.RoomType.Description, selection.RoomType.Amenities, selection.RoomType.ImageUrls,
+            selection.FeeDiff, c.Booking!.Currency, selection.DistanceKm, selection.Reason);
+    }
+
+    private async Task<List<Option>> BuildDraftOptionsAsync(Case c, IEnumerable<string> typesToBuild, CancellationToken ct, bool preferCheaper = false)
     {
         var booking = c.Booking!;
         var nights = Math.Max(booking.CheckOut.DayNumber - booking.CheckIn.DayNumber, 1);
@@ -89,40 +135,23 @@ public class OptionsAdminService(IOptionsAdminRepository repo, IBookingRepositor
 
         if (types.Contains("alternate"))
         {
-            var candidates = await repo.ListAlternateCandidatesAsync(booking.HotelId, ct);
-            var alreadyOfferedHotelIds = await repo.ListOfferedAlternateHotelIdsAsync(c.Id, ct);
-            // 排除已经推荐过的酒店；但如果候选已经被排到一个都不剩(比如就两三家在营酒店，
-            // 全被推荐过了)，宁可重复推荐也不要一个方案都不给客人——不过要跟客人说清楚这是重复推荐，
-            // 不能让 TA 以为这是一个新方案。
-            var unseenCandidates = candidates.Where(cand => !alreadyOfferedHotelIds.Contains(cand.Hotel.Id)).ToList();
-            var ranOutOfNewOptions = candidates.Count > 0 && unseenCandidates.Count == 0;
-            if (unseenCandidates.Count > 0) candidates = unseenCandidates;
-            (Hotel Hotel, RoomType RoomType)? alt = null;
-            var previousHotelIds = new HashSet<Guid>();
-            if (candidates.Count > 0)
+            var selection = await SelectAlternateCandidateAsync(c, preferCheaper, ct);
+            if (selection is not null)
             {
-                previousHotelIds = (await bookingRepo.ListForGuestAsync(booking.GuestUserId, ct))
-                    .Select(b => b.HotelId).ToHashSet();
-                alt = candidates.MinBy(cand => ScoreAlternate(cand.Hotel, cand.RoomType, booking.Hotel, booking.RoomType, previousHotelIds));
-            }
-            if (alt is not null)
-            {
-                var (hotel, roomType) = alt.Value;
+                var (hotel, roomType, feeDiff, distanceKm, reason, ranOutOfNewOptions) = selection;
                 await repo.AddAlternateOfferAsync(c.Id, hotel.Id, ct);
-                var originalNightly = booking.RoomType?.PriceAmount ?? booking.TotalAmount / nights;
-                var feeDiff = Math.Round((roomType.PriceAmount - originalNightly) * nights, 2);
-                var distanceKm = booking.Hotel is not null
-                    ? Math.Round(HaversineKm(booking.Hotel.Lat, booking.Hotel.Lng, hotel.Lat, hotel.Lng), 0)
-                    : (double?)null;
                 var altPayload = JsonSerializer.Serialize(new
                 {
                     hotel = hotel.Name,
                     hotel_id = hotel.Id,
                     room_type = roomType.Name,
+                    room_description = roomType.Description,
+                    room_amenities = roomType.Amenities,
+                    room_image_urls = roomType.ImageUrls,
                     fee_diff = feeDiff,
                     currency = booking.Currency,
                     distance_km = distanceKm,
-                    reason = BuildAlternateReason(hotel, roomType, booking.RoomType, previousHotelIds, distanceKm),
+                    reason,
                 });
                 built.Add(new Option
                 {
@@ -266,6 +295,22 @@ public class OptionsAdminService(IOptionsAdminRepository repo, IBookingRepositor
         var drafts = await BuildDraftOptionsAsync(c, typesToBuild, ct);
         foreach (var d in drafts) await repo.AddOptionAsync(d, ct);
         await repo.SaveChangesAsync(ct);
+    }
+
+    // 只重算 alternate 一种类型，不动 defer/cancel——供对话内"客人确认要更便宜的方案"这条链路调用，
+    // 跟协调员手动触发的 RegenerateAsync(重算全部未锁定类型)是两回事，不要合并。
+    public async Task<Option?> RegenerateAlternateAsync(Guid caseId, bool preferCheaper, CancellationToken ct = default)
+    {
+        var c = await repo.FindCaseWithContextAsync(caseId, ct) ?? throw new CaseNotFoundException();
+        if (c.Status == "closed") throw new CaseClosedException();
+        var options = await repo.ListOptionsAsync(caseId, ct);
+        foreach (var o in options.Where(o => o.OptionType == "alternate" && !o.Locked))
+            await repo.RemoveOptionAsync(o, ct);
+
+        var drafts = await BuildDraftOptionsAsync(c, ["alternate"], ct, preferCheaper);
+        foreach (var d in drafts) await repo.AddOptionAsync(d, ct);
+        await repo.SaveChangesAsync(ct);
+        return drafts.FirstOrDefault(d => d.OptionType == "alternate");
     }
 
     public async Task<PushOptionsStatusDto> GetPushStatusAsync(Guid caseId, CancellationToken ct = default)

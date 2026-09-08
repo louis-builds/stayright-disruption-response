@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Pgvector;
@@ -13,9 +14,11 @@ using TravelDisruptionAgent.Api.Infrastructure.Data;
 namespace TravelDisruptionAgent.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260907100959_AddDeviceTokens")]
+    partial class AddDeviceTokens
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1118,10 +1121,6 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<string>("AttachmentJson")
-                        .HasColumnType("text")
-                        .HasColumnName("attachment_json");
-
                     b.Property<Guid>("CaseId")
                         .HasColumnType("uuid")
                         .HasColumnName("case_id");
@@ -1374,10 +1373,6 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("effective_until");
 
-                    b.Property<Guid?>("HotelId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("hotel_id");
-
                     b.Property<bool>("IsDefaultVersion")
                         .HasColumnType("boolean")
                         .HasColumnName("is_default_version");
@@ -1402,9 +1397,6 @@ namespace TravelDisruptionAgent.Api.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_rag_documents");
-
-                    b.HasIndex("HotelId")
-                        .HasDatabaseName("ix_rag_documents_hotel_id");
 
                     b.HasIndex("Name", "Version")
                         .IsUnique()
@@ -2001,17 +1993,6 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .HasConstraintName("fk_options_cases_case_id");
 
                     b.Navigation("Case");
-                });
-
-            modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.RagDocument", b =>
-                {
-                    b.HasOne("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.Hotel", "Hotel")
-                        .WithMany()
-                        .HasForeignKey("HotelId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .HasConstraintName("fk_rag_documents_hotels_hotel_id");
-
-                    b.Navigation("Hotel");
                 });
 
             modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.RagDocumentChunk", b =>

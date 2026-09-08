@@ -10,7 +10,7 @@ public record ChatReply(string Content, bool Escalate, bool IsTemplate, bool Nee
 
 public interface IChatService
 {
-    Task<ChatReply> GenerateReplyAsync(Case caseEntity, List<Message> recentMessages, string userMessage, string language, CancellationToken ct = default);
+    Task<ChatReply> GenerateReplyAsync(Case caseEntity, List<Message> recentMessages, string userMessage, string language, string? currentAlternateSummary = null, CancellationToken ct = default);
     string BuildProactiveOpening(Case caseEntity, bool hotelConfirmed, string language, bool isReturningGuest = false);
 }
 
@@ -63,7 +63,7 @@ public class ChatService(GeminiClient gemini, IRagRepository ragRepository, ISys
         };
     }
 
-    public async Task<ChatReply> GenerateReplyAsync(Case caseEntity, List<Message> recentMessages, string userMessage, string language, CancellationToken ct = default)
+    public async Task<ChatReply> GenerateReplyAsync(Case caseEntity, List<Message> recentMessages, string userMessage, string language, string? currentAlternateSummary = null, CancellationToken ct = default)
     {
         var settings = await settingsRepo.GetAsync(ct);
 
@@ -95,7 +95,7 @@ public class ChatService(GeminiClient gemini, IRagRepository ragRepository, ISys
             return new ChatReply(Templates.Pick(Templates.EscalationTemplate, language), true, true, EscalationReason: ReasonAiStuck, EscalationTrigger: "unresolved_turns");
         }
 
-        var prompt = await BuildPromptAsync(caseEntity, recentMessages, userMessage, language, ct);
+        var prompt = await BuildPromptAsync(caseEntity, recentMessages, userMessage, language, currentAlternateSummary, ct);
         var aiText = await gemini.GenerateAsync(prompt, ct);
 
         if (string.IsNullOrWhiteSpace(aiText))
@@ -175,7 +175,7 @@ public class ChatService(GeminiClient gemini, IRagRepository ragRepository, ISys
         return (content.Length > 0 ? content : aiText, lowConfidence, hotelQuestion, frustrated, ambiguous);
     }
 
-    private async Task<string> BuildPromptAsync(Case caseEntity, List<Message> recentMessages, string userMessage, string language, CancellationToken ct)
+    private async Task<string> BuildPromptAsync(Case caseEntity, List<Message> recentMessages, string userMessage, string language, string? currentAlternateSummary, CancellationToken ct)
     {
         var sb = new StringBuilder();
         var languageName = language switch { "zh" => "Chinese", "mi" => "Māori", _ => "English" };
@@ -193,6 +193,14 @@ public class ChatService(GeminiClient gemini, IRagRepository ragRepository, ISys
         sb.AppendLine($"Hotel: {caseEntity.Booking?.Hotel?.Name}");
         sb.AppendLine($"Stay: {caseEntity.Booking?.CheckIn:yyyy-MM-dd} to {caseEntity.Booking?.CheckOut:yyyy-MM-dd}, confirmation {caseEntity.Booking?.ConfirmationNo}");
         sb.AppendLine($"Case status: {caseEntity.Status}");
+
+        if (currentAlternateSummary is not null)
+        {
+            sb.AppendLine();
+            sb.AppendLine("=== Current alternate option already offered ===");
+            sb.AppendLine(currentAlternateSummary);
+            sb.AppendLine("The guest may ask if a cheaper option exists. You may say yes and that it will likely be farther away. If they confirm they want it, tell them you're refreshing the options now — the system will handle the actual update, you do not need to say you're checking with the hotel.");
+        }
 
         // 酒店自己配的退款政策(没配就代表这家酒店不支持退款，见 CaseService.PolicyAllowsCancelAsync)
         // 直接喂给模型，这样客人问"为什么没有退款选项"时能照着这家酒店的真实政策回答，
