@@ -45,6 +45,7 @@ export interface CaseMessage {
   thread: Thread;
   createdAt: string;
   readAt: string | null;
+  attachmentJson: string | null;
 }
 
 export type OptionType = "defer" | "alternate" | "cancel" | "custom";

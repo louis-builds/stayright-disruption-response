@@ -855,6 +855,22 @@
   margin: 0;
 }
 
+.option-room-photos {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin-bottom: 4px;
+}
+
+.option-room-photo {
+  width: 96px;
+  height: 72px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: #e2e8f0;
+  flex-shrink: 0;
+}
+
 .guest-option-detail-grid > div {
   min-width: 0;
   padding: 10px 11px;
