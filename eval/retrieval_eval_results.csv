@@ -1,0 +1,42 @@
+id,user_input,retrieved_context_ids,reference_context_ids,id_based_context_precision,id_based_context_recall
+guide-notif-01,Where do I see the alerts about my trip being disrupted?,['146ecae1-f435-42aa-a582-38fda61b81c5'],['7dc34be3-7418-464c-830e-255d75355ad4'],0.0,0.0
+guide-notif-02,系统怎么通知我我的预订受影响了？在哪看？,['146ecae1-f435-42aa-a582-38fda61b81c5'],['7dc34be3-7418-464c-830e-255d75355ad4'],0.0,0.0
+guide-notif-03,What does the red dot next to a notification mean?,['7dc34be3-7418-464c-830e-255d75355ad4'],['7dc34be3-7418-464c-830e-255d75355ad4'],1.0,1.0
+guide-coord-01,How do I talk to a real person instead of the bot?,['a7a47c70-a2e9-4ce4-9f54-653f4564c86c'],['a7a47c70-a2e9-4ce4-9f54-653f4564c86c'],1.0,1.0
+guide-coord-02,我想找人工客服，怎么操作？,['a7a47c70-a2e9-4ce4-9f54-653f4564c86c'],['a7a47c70-a2e9-4ce4-9f54-653f4564c86c'],1.0,1.0
+guide-coord-03,If I close the coordinator chat will I lose the conversation history?,['a7a47c70-a2e9-4ce4-9f54-653f4564c86c'],['a7a47c70-a2e9-4ce4-9f54-653f4564c86c'],1.0,1.0
+guide-profile-01,How can I change my phone number on my account?,['2e642a77-b526-40d5-a2b7-2a57d2251674'],['2e642a77-b526-40d5-a2b7-2a57d2251674'],1.0,1.0
+guide-profile-02,怎么修改我的昵称和密码？,['2e642a77-b526-40d5-a2b7-2a57d2251674'],['2e642a77-b526-40d5-a2b7-2a57d2251674'],1.0,1.0
+guide-profile-03,"I want to update my email address, where is that setting?",['2e642a77-b526-40d5-a2b7-2a57d2251674'],['2e642a77-b526-40d5-a2b7-2a57d2251674'],1.0,1.0
+guide-lang-01,Can I get the support chat to reply in Chinese?,['2c83841a-c427-492c-ac84-e21622c1ce75'],['2c83841a-c427-492c-ac84-e21622c1ce75'],1.0,1.0
+guide-lang-02,你们支持毛利语吗？在哪切换语言？,['2c83841a-c427-492c-ac84-e21622c1ce75'],['2c83841a-c427-492c-ac84-e21622c1ce75'],1.0,1.0
+guide-lang-03,How do I switch the app language after signing up?,['2c83841a-c427-492c-ac84-e21622c1ce75'],['2c83841a-c427-492c-ac84-e21622c1ce75'],1.0,1.0
+policy-free-01,How many hours before check-in can I cancel for free?,['e685283b-286f-4760-9cc4-3947f0c737c8'],['e685283b-286f-4760-9cc4-3947f0c737c8'],1.0,1.0
+policy-free-02,如果我在入住前一天取消，要收多少钱？,['e685283b-286f-4760-9cc4-3947f0c737c8'],['e685283b-286f-4760-9cc4-3947f0c737c8'],1.0,1.0
+policy-free-03,Is there a fee for cancelling my booking last minute?,['e685283b-286f-4760-9cc4-3947f0c737c8'],['e685283b-286f-4760-9cc4-3947f0c737c8'],1.0,1.0
+policy-defer-01,"My flight got cancelled because of a storm, can I move my hotel stay to later?",['4a57afec-9195-46af-b38a-acc334cfdb90'],['4a57afec-9195-46af-b38a-acc334cfdb90'],1.0,1.0
+policy-defer-02,因为道路封闭我去不了，能不能改到之后的日期，要不要手续费？,['4a57afec-9195-46af-b38a-acc334cfdb90'],['4a57afec-9195-46af-b38a-acc334cfdb90'],1.0,1.0
+policy-defer-03,What happens if the original hotel can't hold my room for the new dates?,['1f0ab67f-44c9-4e0b-b5d9-f38c58c31671'],"['4a57afec-9195-46af-b38a-acc334cfdb90', 'a7d4172f-112b-4047-9854-3850c09323a0']",0.0,0.0
+policy-stormshield-01,What is Storm Shield Priority Rebooking and how do I get it?,['ca548067-c75a-44e3-bfdf-17d74b2b2e2b'],['ca548067-c75a-44e3-bfdf-17d74b2b2e2b'],1.0,1.0
+policy-stormshield-02,台风天扰动，协调员多久会回电给我？,['ca548067-c75a-44e3-bfdf-17d74b2b2e2b'],['ca548067-c75a-44e3-bfdf-17d74b2b2e2b'],1.0,1.0
+policy-stormshield-03,Does Storm Shield waive the price difference if I switch to another hotel?,['ca548067-c75a-44e3-bfdf-17d74b2b2e2b'],"['ca548067-c75a-44e3-bfdf-17d74b2b2e2b', 'a7d4172f-112b-4047-9854-3850c09323a0']",1.0,0.5
+policy-altprice-01,"If I move to a different hotel, how is the price difference worked out?",['a7d4172f-112b-4047-9854-3850c09323a0'],['a7d4172f-112b-4047-9854-3850c09323a0'],1.0,1.0
+policy-altprice-02,换到别的酒店会不会要我补差价？怎么算的？,['a7d4172f-112b-4047-9854-3850c09323a0'],['a7d4172f-112b-4047-9854-3850c09323a0'],1.0,1.0
+policy-altprice-03,Why does my alternative stay quote say 'pending'?,['a7d4172f-112b-4047-9854-3850c09323a0'],['a7d4172f-112b-4047-9854-3850c09323a0'],1.0,1.0
+policy-refund-01,Who decides how much refund I get?,['42110c62-3f45-4b1b-ab7f-91db6dd22e89'],['02c69e2b-bcdd-443a-9cef-074da4a69d57'],0.0,0.0
+policy-refund-02,退款是自动到账的吗？,['42110c62-3f45-4b1b-ab7f-91db6dd22e89'],"['02c69e2b-bcdd-443a-9cef-074da4a69d57', '42110c62-3f45-4b1b-ab7f-91db6dd22e89']",1.0,0.5
+policy-refund-03,When will I get the refund confirmation email?,['42110c62-3f45-4b1b-ab7f-91db6dd22e89'],['02c69e2b-bcdd-443a-9cef-074da4a69d57'],0.0,0.0
+policy-noshow-01,What counts as a no-show?,['f8e532c6-f665-48c3-8e3d-bf982a1c0632'],['f8e532c6-f665-48c3-8e3d-bf982a1c0632'],1.0,1.0
+policy-noshow-02,我没去入住也没提前说，还能享受免费取消或延期吗？,['f8e532c6-f665-48c3-8e3d-bf982a1c0632'],['f8e532c6-f665-48c3-8e3d-bf982a1c0632'],1.0,1.0
+policy-noshow-03,"If I just don't turn up without telling anyone, what happens?",['f8e532c6-f665-48c3-8e3d-bf982a1c0632'],['f8e532c6-f665-48c3-8e3d-bf982a1c0632'],1.0,1.0
+faq-affected-01,My booking is affected by a disruption — what happens now?,['146ecae1-f435-42aa-a582-38fda61b81c5'],['146ecae1-f435-42aa-a582-38fda61b81c5'],1.0,1.0
+faq-affected-02,系统检测到扰动后多久会通知我？,['146ecae1-f435-42aa-a582-38fda61b81c5'],['146ecae1-f435-42aa-a582-38fda61b81c5'],1.0,1.0
+faq-affected-03,How do I check the progress on my disrupted booking?,['146ecae1-f435-42aa-a582-38fda61b81c5'],"['146ecae1-f435-42aa-a582-38fda61b81c5', '7dc34be3-7418-464c-830e-255d75355ad4']",1.0,0.5
+faq-options-01,What choices do I have when my stay is disrupted?,['1f0ab67f-44c9-4e0b-b5d9-f38c58c31671'],"['1f0ab67f-44c9-4e0b-b5d9-f38c58c31671', '4a57afec-9195-46af-b38a-acc334cfdb90']",1.0,0.5
+faq-options-02,我能选哪些方案？为什么有的方案没显示出来？,['1f0ab67f-44c9-4e0b-b5d9-f38c58c31671'],['1f0ab67f-44c9-4e0b-b5d9-f38c58c31671'],1.0,1.0
+faq-options-03,Can I keep my original hotel and just change the dates?,['1f0ab67f-44c9-4e0b-b5d9-f38c58c31671'],"['1f0ab67f-44c9-4e0b-b5d9-f38c58c31671', '4a57afec-9195-46af-b38a-acc334cfdb90']",1.0,0.5
+faq-refundtime-01,How long does it take to get my money back?,['42110c62-3f45-4b1b-ab7f-91db6dd22e89'],"['42110c62-3f45-4b1b-ab7f-91db6dd22e89', '02c69e2b-bcdd-443a-9cef-074da4a69d57']",1.0,0.5
+faq-refundtime-02,退款大概几天能到？,['42110c62-3f45-4b1b-ab7f-91db6dd22e89'],"['42110c62-3f45-4b1b-ab7f-91db6dd22e89', '02c69e2b-bcdd-443a-9cef-074da4a69d57']",1.0,0.5
+faq-newbooking-01,Can I book a brand new hotel on this platform?,['4b013965-b2d5-4d56-896c-e7e3d4c36ad8'],['4b013965-b2d5-4d56-896c-e7e3d4c36ad8'],1.0,1.0
+faq-newbooking-02,我能用你们平台直接订一个新酒店吗？,['4b013965-b2d5-4d56-896c-e7e3d4c36ad8'],['4b013965-b2d5-4d56-896c-e7e3d4c36ad8'],1.0,1.0
+faq-newbooking-03,Is this a general hotel booking site?,['4b013965-b2d5-4d56-896c-e7e3d4c36ad8'],['4b013965-b2d5-4d56-896c-e7e3d4c36ad8'],1.0,1.0

@@ -1,0 +1,29 @@
+version: 0.2
+
+# 对应 .github/workflows/gate.yml 的三项检查，逻辑完全一致（同一套命令），
+# 只是执行环境从 GitHub Actions 换成 CodeBuild——因为组织策略把这个仓库的
+# GitHub Actions 关掉了（repo 级 API 返回 409 Conflict: disabled by the
+# organization），gate.yml 从写完那天起就没在 GitHub 上真正跑过一次。
+#
+# 三项全部通过才算 gate 通过；任一失败 CodeBuild 直接非零退出，
+# CodePipeline 的这个 stage 标红，后面的部署 stage 不会执行。
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.12
+      nodejs: 20
+    commands:
+      - curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 9.0 --install-dir /usr/share/dotnet
+      - ln -sf /usr/share/dotnet/dotnet /usr/bin/dotnet
+
+  build:
+    commands:
+      - echo "== Python (detect/) =="
+      - cd detect && pip install -r requirements.txt && pytest && cd ..
+
+      - echo "== Backend (.NET build) =="
+      - cd backend && dotnet restore backend.sln && dotnet build backend.sln --no-restore --configuration Release && cd ..
+
+      - echo "== Frontend (lint + build) =="
+      - cd frontend && npm ci && npm run lint && npm run build && cd ..

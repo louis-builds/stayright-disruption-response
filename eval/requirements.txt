@@ -1,0 +1,15 @@
+ragas
+requests
+psycopg[binary]
+
+# ragas 0.4.3（截至 2026-09-08 PyPI 最新版）自身依赖没锁版本，会拉最新的
+# langchain-community + langchain-openai，但这两者已经是互不兼容的两代 langchain
+# API（langchain-community 仍在用 langchain_community.chat_models.vertexai 这个
+# 旧路径；最新 langchain-openai/langchain-core 已经把这套路径删了）——直接
+# pip install ragas 会在 import 阶段炸掉两次（先 vertexai 缺失，修完又轮到
+# ContextOverflowError 缺失）。这不是本项目代码的问题，是 ragas 上游 pyproject.toml
+# 没锁 langchain 系依赖版本导致的。锁定一整代互相兼容的 0.3.x 系列解决：
+langchain-core==0.3.63
+langchain-community==0.3.0
+langchain-openai==0.2.14
+langchain==0.3.7
