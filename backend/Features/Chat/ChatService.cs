@@ -199,7 +199,7 @@ public class ChatService(GeminiClient gemini, IRagRepository ragRepository, ISys
             sb.AppendLine();
             sb.AppendLine("=== Current alternate option already offered ===");
             sb.AppendLine(currentAlternateSummary);
-            sb.AppendLine("The guest may ask if a cheaper option exists. You may say yes and that it will likely be farther away. If they confirm they want it, tell them you're refreshing the options now — the system will handle the actual update, you do not need to say you're checking with the hotel.");
+            sb.AppendLine("The guest may ask to switch to a different alternate hotel option (for any reason — cheaper, closer, bigger, or otherwise). Never say you are checking with the hotel or making the change yourself — the system handles the actual update once they confirm.");
         }
 
         // 酒店自己配的退款政策(没配就代表这家酒店不支持退款，见 CaseService.PolicyAllowsCancelAsync)
