@@ -1,7 +1,9 @@
 using System.Net;
 using System.Text.Json;
+using Pgvector;
 using TravelDisruptionAgent.Api.Features.Auth;
 using TravelDisruptionAgent.Api.Features.Chat;
+using TravelDisruptionAgent.Api.Features.Coordinator;
 using TravelDisruptionAgent.Api.Features.HotelPortal;
 using TravelDisruptionAgent.Api.Infrastructure;
 using TravelDisruptionAgent.Api.Infrastructure.Data.Entities;
@@ -13,9 +15,10 @@ namespace TravelDisruptionAgent.Api.Features.Cases;
 public class CaseService(
     ICaseRepository cases, IUserRepository users, IEmailService email, IChatService chat,
     IRagRepository ragRepository, GeminiClient gemini, CaseActionTokenService actionTokens,
-    IHotelRepository hotelRepo, ILogger<CaseService> logger) : ICaseService
+    IHotelRepository hotelRepo, IOptionsAdminService optionsAdmin, ILogger<CaseService> logger) : ICaseService
 {
-    private static MessageDto ToDto(Message m) => new(m.Id, m.CaseId, m.SenderRole, m.Content, m.Vote, m.Thread, m.CreatedAt, m.ReadAt);
+    private static MessageDto ToDto(Message m) => new(m.Id, m.CaseId, m.SenderRole, m.Content, m.Vote, m.Thread, m.CreatedAt, m.ReadAt, m.AttachmentJson);
+    private static bool ContainsCheapKeyword(string text) => text.Contains("cheap", StringComparison.OrdinalIgnoreCase) || text.Contains("便宜");
     private static OptionDto ToDto(Option o) => new(o.Id, o.OptionType, o.Availability, o.Selected, o.PayloadJson, o.CreatedAt, o.CustomTitle, o.PerkNames);
 
     /// <summary>guest 只能看自己预订下的案件；coordinator 能看所有案件（多数案子系统自动跑，协调员只处理例外单，
@@ -174,7 +177,36 @@ public class CaseService(
 
         // 只读 ai 线程的历史当上下文——协调员线程的人工对话不该被喂给 AI。
         var recentPage = await cases.ListMessagesAsync(caseId, "ai", 1, 50, ct);
-        var reply = await chat.GenerateReplyAsync(full, recentPage.List, content, language, ct);
+
+        // 用 cases.ListOptionsAsync 直接读，不走 optionsAdmin.GetOptionsAsync——后者在缺哪个标准类型
+        // 就补哪个，每条聊天消息都调一次会提前把 defer/alternate/cancel 造出来，破坏原有的选项生成时机。
+        var existingOptions = await cases.ListOptionsAsync(caseId, ct);
+        var currentAlternate = existingOptions.FirstOrDefault(o => o.OptionType == "alternate" && !o.Locked);
+        string? currentAlternateSummary = null;
+        AlternateCandidatePreviewDto? cheaperPreview = null;
+        if (currentAlternate is not null)
+        {
+            using var payloadDoc = JsonDocument.Parse(currentAlternate.PayloadJson);
+            var root = payloadDoc.RootElement;
+            var hotelName = root.TryGetProperty("hotel", out var h) ? h.GetString() : "unknown hotel";
+            var roomTypeName = root.TryGetProperty("room_type", out var rt) ? rt.GetString() : "unknown room type";
+            var feeDiff = root.TryGetProperty("fee_diff", out var fd) ? fd.GetDecimal() : (decimal?)null;
+            var currency = root.TryGetProperty("currency", out var cur) ? cur.GetString() : "";
+            var distanceKm = root.TryGetProperty("distance_km", out var dk) && dk.ValueKind != JsonValueKind.Null ? dk.GetDouble() : (double?)null;
+            var currentLine = $"Guest is currently offered: {hotelName}, {roomTypeName}, fee difference {feeDiff} {currency}, {(distanceKm.HasValue ? Math.Round(distanceKm.Value) + " km" : "unknown distance")} away.";
+
+            // 非致命：找不到更便宜候选就当没有，不影响本轮正常回复。
+            try { cheaperPreview = await optionsAdmin.PreviewCheaperAlternateAsync(caseId, ct); }
+            catch (Exception ex) { logger.LogWarning(ex, "Cheaper-alternative preview failed for case {CaseId}", caseId); }
+
+            currentAlternateSummary = cheaperPreview is not null
+                ? currentLine + $"\nA cheaper alternative is available: {cheaperPreview.Hotel}, {cheaperPreview.RoomType}, fee difference {cheaperPreview.FeeDiff} {cheaperPreview.Currency}, " +
+                  $"{(cheaperPreview.DistanceKm.HasValue ? Math.Round(cheaperPreview.DistanceKm.Value) + " km" : "unknown distance")} away ({cheaperPreview.Reason}). " +
+                  "If the guest asks about a cheaper option, describe this specific alternative by name and ask if they'd like to switch to it. Do not say you're updating anything yet — only ask and wait for them to confirm."
+                : currentLine + "\nThere is currently no cheaper alternative available — if asked, say this is already the best option found.";
+        }
+
+        var reply = await chat.GenerateReplyAsync(full, recentPage.List, content, language, currentAlternateSummary, ct);
 
         // 不管这个案件有没有分配协调员都要落这个字段——协调员的 Escalation queue 页签靠它过滤
         // (CoordinatorService.EscalationFilterMap)，之前这里只发了个 Notification，从没真正设置过
@@ -186,6 +218,10 @@ public class CaseService(
         }
 
         var now = DateTimeOffset.UtcNow;
+        var previousAiMessage = recentPage.List.LastOrDefault(m => m.SenderRole == "ai");
+        var guestMentionsCheap = ContainsCheapKeyword(content);
+        var previousAiMentionedCheap = previousAiMessage is not null && ContainsCheapKeyword(previousAiMessage.Content);
+
         var aiMessage = new Message
         {
             Id = Guid.NewGuid(),
@@ -197,7 +233,56 @@ public class CaseService(
             CreatedAt = now,
             UpdatedAt = now,
         };
+
+        // 第一次听到"有没有更便宜的"：把候选方案(酒店/房型/图片/理由)当成推荐卡片挂在AI这句回复上，
+        // 客人先看图和介绍，回复文字里问"这个怎么样"——这一步只展示，不动 Option 表。
+        // 用 !previousAiMentionedCheap 保证这张卡只在话题第一次被提起时出现一次，
+        // 不会跟下面"确认后才真正重算"那个分支在同一轮里重复触发。
+        if (currentAlternate is not null && cheaperPreview is not null && !reply.Escalate && guestMentionsCheap && !previousAiMentionedCheap)
+        {
+            aiMessage.AttachmentJson = JsonSerializer.Serialize(new
+            {
+                kind = "room_card",
+                hotel = cheaperPreview.Hotel,
+                room_type = cheaperPreview.RoomType,
+                room_description = cheaperPreview.RoomDescription,
+                room_amenities = cheaperPreview.RoomAmenities,
+                room_image_urls = cheaperPreview.RoomImageUrls,
+                reason = cheaperPreview.Reason,
+            });
+        }
+
         await cases.AddMessageAsync(aiMessage, ct);
+
+        // 客人上一轮已经看过推荐卡片、这一轮是在确认要那个方案，才真正把 alternate 选项按价格优先
+        // 重新生成。是否"在确认"走结构化分类（GeminiClient.ClassifyConfirmsCheaperAlternativeAsync），
+        // 不是关键词硬判——previousAiMentionedCheap 只用来先做一次低成本的"值不值得调用分类"的前置过滤。
+        // 整段非致命：分类/重算失败不该打断这轮聊天消息本身的保存。
+        if (currentAlternate is not null && !reply.Escalate && previousAiMentionedCheap)
+        {
+            try
+            {
+                var confirmsCheaper = await gemini.ClassifyConfirmsCheaperAlternativeAsync(previousAiMessage!.Content, content, ct);
+                if (confirmsCheaper == true)
+                {
+                    await optionsAdmin.RegenerateAlternateAsync(caseId, preferCheaper: true, ct);
+
+                    // 房型卡片已经在上一轮推荐时展示过，这里只需要一句确认——不用再发一遍图片。
+                    var updateText = language == "zh"
+                        ? "好的，已经为您切换到这个更便宜的候补方案，可以去Options页确认。"
+                        : "Done — I've switched your alternate option to that cheaper pick. Check the Options tab to confirm.";
+                    await cases.AddMessageAsync(new Message
+                    {
+                        Id = Guid.NewGuid(), CaseId = caseId, SenderRole = "system", Thread = "ai",
+                        Content = updateText, CreatedAt = now, UpdatedAt = now,
+                    }, ct);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Cheaper-alternative regeneration failed for case {CaseId}", caseId);
+            }
+        }
 
         if (reply.Escalate && full.AssigneeCoordinatorId.HasValue)
         {
@@ -378,7 +463,8 @@ public class CaseService(
             guest?.Nickname, guest?.AvatarUrl, guest?.Email, guest?.Phone,
             c.AssigneeCoordinatorId, assignee?.Nickname,
             HotelImageUrl: PrimaryHotelImage(c),
-            EscalationReason: c.EscalationReason, EscalationReviewedAsReasonable: c.EscalationReviewedAsReasonable, EscalationReviewNote: c.EscalationReviewNote);
+            EscalationReason: c.EscalationReason, EscalationReviewedAsReasonable: c.EscalationReviewedAsReasonable, EscalationReviewNote: c.EscalationReviewNote,
+            GuestUserId: c.Booking?.GuestUserId);
     }
 
     /// <summary>协调员给这次AI转人工打分：合理还是不合理，不合理要说明原因。只有真的转过人工的
@@ -1049,6 +1135,12 @@ public class CaseService(
         string? excerpt = null;
         string? docName = null;
         int? docVersion = null;
+        var keyword = option.OptionType switch
+        {
+            "cancel" => "refund",
+            "defer" => "deferral due to a disruption",
+            _ => "price difference",
+        };
 
         var hotelId = c.Booking?.HotelId;
         if (hotelId.HasValue)
@@ -1056,15 +1148,17 @@ public class CaseService(
             var hotelPolicy = await hotelRepo.GetActiveRefundPolicyAsync(hotelId.Value, ct);
             if (hotelPolicy is not null)
             {
-                var keyword = option.OptionType switch
-                {
-                    "cancel" => "refund",
-                    "defer" => "deferral due to a disruption",
-                    _ => "price difference",
-                };
-                excerpt = hotelPolicy.Content.Split("\n## ")
-                    .FirstOrDefault(s => s.Contains(keyword, StringComparison.OrdinalIgnoreCase))
-                    ?.Trim()
+                // 优先用向量检索(酒店重新上传/编辑政策时 HotelService 已经把新内容切片+embedding 好了)；
+                // 酒店还没有过 RAG 化的政策(老数据、或这次 embedding 失败过)时退回关键词匹配，不能让
+                // 客人看到"没有政策摘录"。
+                var queryEmbedding = await gemini.EmbedAsync(keyword, ct);
+                var nearestChunk = queryEmbedding is { Length: > 0 }
+                    ? await ragRepository.FindNearestHotelChunkAsync(hotelId.Value, new Vector(queryEmbedding), ct)
+                    : null;
+                excerpt = nearestChunk
+                    ?? hotelPolicy.Content.Split("\n## ")
+                        .FirstOrDefault(s => s.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+                        ?.Trim()
                     ?? hotelPolicy.Content.Trim();
                 docName = $"Hotel policy: {c.Booking?.Hotel?.Name}";
                 docVersion = null;
@@ -1078,12 +1172,6 @@ public class CaseService(
                 || d.Name.Contains("政策", StringComparison.OrdinalIgnoreCase));
             if (policyDoc is not null)
             {
-                var keyword = option.OptionType switch
-                {
-                    "cancel" => "refund",
-                    "defer" => "deferral due to a disruption",
-                    _ => "price difference",
-                };
                 excerpt = policyDoc.Content.Split("\n## ")
                     .FirstOrDefault(s => s.Contains(keyword, StringComparison.OrdinalIgnoreCase))
                     ?.Trim();

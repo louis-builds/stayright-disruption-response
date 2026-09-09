@@ -38,6 +38,10 @@ public class TagsController(ITagService tagService) : ControllerBase
     public Task<ActionResult<ApiResponse<GuestTagsDto>>> GetGuestTags(Guid guestUserId, CancellationToken ct) =>
         HandleAsync(() => tagService.GetGuestTagsAsync(guestUserId, CurrentUserId, CurrentUserRole, ct));
 
+    [HttpPost("query")]
+    public Task<ActionResult<ApiResponse<Dictionary<Guid, GuestTagsDto>>>> QueryGuestTags([FromBody] GuestTagsQueryRequest req, CancellationToken ct) =>
+        HandleAsync(() => tagService.GetGuestTagsBulkAsync(req.GuestUserIds.Distinct().Take(200).ToList(), CurrentUserId, CurrentUserRole, ct));
+
     [HttpGet("custom")]
     public Task<ActionResult<ApiResponse<List<CustomTagDto>>>> ListCustomTags(CancellationToken ct) =>
         HandleAsync(() => tagService.ListCustomTagsAsync(CurrentUserId, CurrentUserRole, ct));

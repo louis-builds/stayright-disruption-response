@@ -7,7 +7,7 @@
 #   ① Coordinator：关闭所有未结案件（不只 Alice）；resolve 所有 Demo Storm /
 #      Storm near Wellington 扰动；协调员自己的通知全部已读
 #   ② Guest：Alice 的全部通知标记已读（铃铛红点清零）
-#   ③ Hotel：三家酒店（Rotorua / Wellington / Queenstown）的 pending 询单与
+#   ③ Hotel：所有酒店前台账号的 pending 询单与
 #      待确认换房方案全部确认掉（每轮后重新拉取验证，最多 5 轮），
 #      酒店账号的通知全部已读
 #
@@ -19,7 +19,11 @@ COORD_EMAIL="${COORD_EMAIL:-coord1@example.com}"
 COORD_PASS="${COORD_PASS:-Password123!}"
 CLOSE_REASON="人工决议结案"
 GUESTS=("Alice" "Bob" "Carol" "Dave" "Eve" "Test Guest1")
-HOTELS=("Rotorua Thermal Front Desk" "Wellington Waterfront Front Desk" "Queenstown Lakeview Front Desk")
+HOTELS=("Rotorua Thermal Front Desk" "Wellington Waterfront Front Desk" "Queenstown Lakeview Front Desk" \
+  "Queenstown Central Park Front Desk" "Queenstown Alpine Front Desk" \
+  "Auckland SkyTower Front Desk" "Auckland Airport Front Desk" \
+  "Wellington Harbourfront Front Desk" "Wellington CBD Front Desk" \
+  "Christchurch Riverside Front Desk" "Rotorua Lakeside Front Desk" "Test Hotel Auckland")
 MAX_ROUNDS=5
 
 JAR="$(mktemp)"; JAR2="$(mktemp)"
@@ -131,7 +135,7 @@ cat <<EOF
 ========================================
 🧹 清场完成（已逐项验证归零）
 ① Coordinator 队列 pending: ${Q}
-② 通知未读：协调员 / Alice / 三家酒店均已清零（见上）
+② 通知未读：协调员 / Alice / 全部酒店前台均已清零（见上）
 ③ 酒店 pending 询单/方案: 全部确认
 现在可以运行 ./scripts/seed-demo-full.sh 注水开演
 ========================================

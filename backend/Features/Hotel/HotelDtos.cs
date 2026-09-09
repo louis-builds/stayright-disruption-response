@@ -12,11 +12,13 @@ namespace TravelDisruptionAgent.Api.Features.HotelPortal;
 // GuestCommitted: 客人已对这个 case 的 defer 方案点过 P7 确认(ExecutionRequestedAt!=null)。pending 的
 // H1 卡靠它把"请确认方案是否可行"升级成"客人已拍板，等你核实空房"——这正是 defer 不再另发 H2 卡
 // 之后(见 HotelRepository.ListSelectedPendingOptionsAsync 的过滤)酒店感知客人承诺的唯一通道。
+// GuestUserId: 前端拿它去拉这个客人的标签(api/tags)。后端本来就有这个关联，只是以前没暴露——
+// 不给的话前端对每张卡片根本没法知道"这是哪位客人"。
 public record InquiryItemDto(
     Guid Id, Guid CaseId, string ConfirmationNo, string GuestNickname, string DisruptionTitle,
     DateOnly CheckIn, DateOnly CheckOut, string RoomTypeName, string Status, DateTimeOffset RequestedAt, TimeSpan WaitTime, bool Overdue,
     bool IsReturningGuest, bool IsHighValueGuest, DateTimeOffset? RespondedAt, string? RejectReason, string? FinalOutcome,
-    DateOnly? ProposedNewCheckIn, DateOnly? ProposedNewCheckOut, bool GuestCommitted);
+    DateOnly? ProposedNewCheckIn, DateOnly? ProposedNewCheckOut, bool GuestCommitted, Guid? GuestUserId = null);
 
 public record ConfirmInquiryRequest(DateOnly? NewCheckIn, DateOnly? NewCheckOut, string? Note);
 
@@ -25,7 +27,8 @@ public record RejectInquiryRequest(string Reason);
 public record SelectedOptionItemDto(
     Guid OptionId, Guid CaseId, string ConfirmationNo, string GuestNickname, string OptionType,
     string PayloadJson, DateTimeOffset SelectedSince, string? CustomTitle, List<string> PerkNames,
-    bool IsReturningGuest, bool IsHighValueGuest, string Availability, string? UnavailableReason);
+    bool IsReturningGuest, bool IsHighValueGuest, string Availability, string? UnavailableReason,
+    Guid? GuestUserId = null);
 
 public record HotelWorkbenchItemDto(
     string Kind, Guid CaseId, string ConfirmationNo, string GuestNickname, string DisruptionTitle,

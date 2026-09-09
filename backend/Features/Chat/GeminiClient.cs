@@ -111,6 +111,65 @@ public class GeminiClient(IHttpClientFactory httpClientFactory, ILogger<GeminiCl
         }
     }
 
+    /// <summary>用 Gemini responseSchema 强制返回结构化布尔值，判断客人是不是在确认要一个刚提到的
+    /// 更便宜/更远的候补方案——不用正则抠自由文本，遵循项目对"新增结构化输出需求"的约定。
+    /// 只走 Gemini，不降级 Bedrock：这是锦上添花的自动化判断，拿不到就跳过这次自动重算，
+    /// 不阻断本轮对话的正常回复。</summary>
+    public async Task<bool?> ClassifyConfirmsCheaperAlternativeAsync(string previousAiMessage, string guestMessage, CancellationToken ct = default)
+    {
+        var apiKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
+        var model = Environment.GetEnvironmentVariable("GEMINI_MODEL") ?? "gemini-2.5-flash";
+        if (string.IsNullOrEmpty(apiKey)) return null;
+
+        var url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}";
+        var prompt = $"An assistant told a hotel guest: \"{previousAiMessage}\"\nThe guest then replied: \"{guestMessage}\"\nDoes the guest's reply confirm they want to proceed with a cheaper, farther-away alternative hotel option that was just mentioned? Answer only based on what's given.";
+        var requestBody = new
+        {
+            contents = new[] { new { role = "user", parts = new[] { new { text = prompt } } } },
+            generationConfig = new
+            {
+                temperature = 0.0,
+                maxOutputTokens = 50,
+                thinkingConfig = new { thinkingBudget = 0 },
+                responseMimeType = "application/json",
+                responseSchema = new
+                {
+                    type = "OBJECT",
+                    properties = new { confirms = new { type = "BOOLEAN" } },
+                    required = new[] { "confirms" },
+                },
+            },
+        };
+
+        try
+        {
+            var client = httpClientFactory.CreateClient("gemini");
+            using var response = await client.PostAsync(url,
+                new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json"), ct);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogWarning("Gemini cheaper-alternative classification returned {Status}: {Body}",
+                    response.StatusCode, await response.Content.ReadAsStringAsync(ct));
+                return null;
+            }
+
+            using var stream = await response.Content.ReadAsStreamAsync(ct);
+            using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+            var text = doc.RootElement.GetProperty("candidates")[0].GetProperty("content")
+                .GetProperty("parts")[0].GetProperty("text").GetString();
+            if (text is null) return null;
+
+            using var parsed = JsonDocument.Parse(text);
+            return parsed.RootElement.GetProperty("confirms").GetBoolean();
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Gemini cheaper-alternative classification failed");
+            return null;
+        }
+    }
+
     /// <summary>Gemini embedContent：把文本转成向量，供 RAG 检索算余弦相似度用。</summary>
     public async Task<float[]?> EmbedAsync(string text, CancellationToken ct = default)
     {

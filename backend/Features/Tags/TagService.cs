@@ -7,31 +7,41 @@ public class TagService(ITagRepository tags, IHotelRepository hotels) : ITagServ
 {
     // 逐个 await,不能用 Task.WhenAll 并发跑——这几个查询共用同一个 request-scoped DbContext,
     // EF Core 不允许同一个 DbContext 实例被并发操作(会抛 ConcurrencyDetector 异常)。
-    public async Task<GuestTagsDto> GetGuestTagsAsync(Guid guestUserId, Guid currentUserId, string currentUserRole, CancellationToken ct = default)
-    {
-        var ids = new[] { guestUserId };
-        var isHighValue = (await hotels.GetPlatformHighValueGuestIdsAsync(ids, ct)).Contains(guestUserId);
-        var isEmotional = (await tags.GetEmotionallySensitiveGuestIdsAsync(ids, ct)).Contains(guestUserId);
-        var isAiDifficult = (await tags.GetAiDifficultGuestIdsAsync(ids, ct)).Contains(guestUserId);
-        var isHighRejection = (await tags.GetHighRejectionGuestIdsAsync(ids, ct)).Contains(guestUserId);
-        var isSlowResponder = (await tags.GetSlowResponderGuestIdsAsync(ids, ct)).Contains(guestUserId);
-        var customTags = await tags.ListGuestCustomTagsAsync(guestUserId, ct);
+    public async Task<GuestTagsDto> GetGuestTagsAsync(Guid guestUserId, Guid currentUserId, string currentUserRole, CancellationToken ct = default) =>
+        (await GetGuestTagsBulkAsync([guestUserId], currentUserId, currentUserRole, ct)).TryGetValue(guestUserId, out var dto)
+            ? dto
+            : new GuestTagsDto(false, false, false, false, false, false, []);
 
-        var isReturning = false;
+    // 酒店任务队列一次几十张卡片，前端批量拉一次而不是每张卡片一个请求。
+    // key 固定覆盖入参里的每一个 id(没标签就是全 false 的空 CustomTags)，前端不用处理"缺 key"。
+    public async Task<Dictionary<Guid, GuestTagsDto>> GetGuestTagsBulkAsync(List<Guid> guestUserIds, Guid currentUserId, string currentUserRole, CancellationToken ct = default)
+    {
+        var ids = guestUserIds.Distinct().ToList();
+        var highValue = await hotels.GetPlatformHighValueGuestIdsAsync(ids, ct);
+        var emotional = await tags.GetEmotionallySensitiveGuestIdsAsync(ids, ct);
+        var aiDifficult = await tags.GetAiDifficultGuestIdsAsync(ids, ct);
+        var highRejection = await tags.GetHighRejectionGuestIdsAsync(ids, ct);
+        var slowResponder = await tags.GetSlowResponderGuestIdsAsync(ids, ct);
+        var appliedRows = await tags.ListGuestCustomTagsForManyAsync(ids, ct);
+
+        HashSet<Guid> returning = [];
         if (currentUserRole == "hotel")
         {
             var hotelId = await hotels.FindHotelIdForUserAsync(currentUserId, ct) ?? throw new HotelNotFoundException();
-            isReturning = (await hotels.GetReturningGuestIdsAsync(ids, hotelId, ct)).Contains(guestUserId);
+            returning = await hotels.GetReturningGuestIdsAsync(ids, hotelId, ct);
         }
 
-        return new GuestTagsDto(
-            IsHighValueGuest: isHighValue,
-            IsReturningGuest: isReturning,
-            EmotionallySensitive: isEmotional,
-            AiDifficult: isAiDifficult,
-            HighRejectionRate: isHighRejection,
-            SlowResponder: isSlowResponder,
-            CustomTags: [.. customTags.Select(ToDto)]);
+        var customByGuest = appliedRows.GroupBy(r => r.GuestUserId)
+            .ToDictionary(g => g.Key, g => g.Select(r => ToDto(r.CustomTag!)).ToList());
+
+        return ids.ToDictionary(id => id, id => new GuestTagsDto(
+            IsHighValueGuest: highValue.Contains(id),
+            IsReturningGuest: returning.Contains(id),
+            EmotionallySensitive: emotional.Contains(id),
+            AiDifficult: aiDifficult.Contains(id),
+            HighRejectionRate: highRejection.Contains(id),
+            SlowResponder: slowResponder.Contains(id),
+            CustomTags: customByGuest.TryGetValue(id, out var list) ? list : []));
     }
 
     public async Task<List<CustomTagDto>> ListCustomTagsAsync(Guid currentUserId, string currentUserRole, CancellationToken ct = default)
