@@ -191,20 +191,38 @@ public class OptionsAdminService(IOptionsAdminRepository repo, IBookingRepositor
         if (types.Contains("cancel"))
         {
             var policy = await hotelRepo.GetActiveRefundPolicyAsync(booking.HotelId, ct);
-            var rules = RefundPolicyParser.Parse(policy?.StructuredRulesJson);
-            var (cancellationFee, refundAmount) = RefundPolicyParser.CalculateRefund(booking.TotalAmount, rules);
-            var cancelPayload = JsonSerializer.Serialize(new
+            // 没配置政策的酒店不支持退款——这是 CaseService.GetPolicySummaryAsync/BuildPromptAsync
+            // 早就在跟客人说的话("hotel has not set up a refund policy...does not support
+            // cancellation-for-refund")。之前这里不管有没有政策都照样调 CalculateRefund，policy
+            // 传 null 时它会静默套一个没人配置过的默认 10% 手续费算出一个"能退"的金额，
+            // 跟聊天里说的"不支持退款"自相矛盾——协调台看到的是编出来的数字，不是真数据。
+            if (policy is null)
             {
-                refund_amount = refundAmount,
-                cancellation_fee = cancellationFee,
-                currency = booking.Currency,
-                eta_business_days = 5,
-            });
-            built.Add(new Option
+                var noPolicyPayload = JsonSerializer.Serialize(new { currency = booking.Currency });
+                built.Add(new Option
+                {
+                    Id = Guid.NewGuid(), CaseId = c.Id, OptionType = "cancel", PayloadJson = noPolicyPayload,
+                    Availability = "unavailable", UnavailableReason = "This hotel has not set up a refund policy.",
+                    CreatedAt = now, UpdatedAt = now,
+                });
+            }
+            else
             {
-                Id = Guid.NewGuid(), CaseId = c.Id, OptionType = "cancel", PayloadJson = cancelPayload,
-                Availability = "available", CreatedAt = now, UpdatedAt = now,
-            });
+                var rules = RefundPolicyParser.Parse(policy.StructuredRulesJson);
+                var (cancellationFee, refundAmount) = RefundPolicyParser.CalculateRefund(booking.TotalAmount, rules, booking.CheckIn, now);
+                var cancelPayload = JsonSerializer.Serialize(new
+                {
+                    refund_amount = refundAmount,
+                    cancellation_fee = cancellationFee,
+                    currency = booking.Currency,
+                    eta_business_days = 5,
+                });
+                built.Add(new Option
+                {
+                    Id = Guid.NewGuid(), CaseId = c.Id, OptionType = "cancel", PayloadJson = cancelPayload,
+                    Availability = "available", CreatedAt = now, UpdatedAt = now,
+                });
+            }
         }
 
         return built;

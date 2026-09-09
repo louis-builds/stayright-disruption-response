@@ -18,6 +18,14 @@ public class CaseService(
     IHotelRepository hotelRepo, IOptionsAdminService optionsAdmin, ILogger<CaseService> logger) : ICaseService
 {
     private static MessageDto ToDto(Message m) => new(m.Id, m.CaseId, m.SenderRole, m.Content, m.Vote, m.Thread, m.CreatedAt, m.ReadAt, m.AttachmentJson);
+    private static string BuildCancellationSummary(HotelRefundPolicy hotelPolicy, Booking booking)
+    {
+        var rules = RefundPolicyParser.Parse(hotelPolicy.StructuredRulesJson);
+        var (fee, refund) = RefundPolicyParser.CalculateRefund(booking.TotalAmount, rules, booking.CheckIn, DateTimeOffset.UtcNow);
+        return $"If the guest cancels right now, the exact result is: refund {refund} {booking.Currency}, cancellation fee {fee} {booking.Currency}. " +
+            "Use these exact numbers if the guest asks what they'd get back — do not recalculate this yourself from the policy text and dates, your own date arithmetic has been wrong before.";
+    }
+
     private static bool IsRoomCardAttachment(string? attachmentJson)
     {
         if (attachmentJson is null) return false;
@@ -244,7 +252,21 @@ public class CaseService(
                 : currentLine;
         }
 
-        var reply = await chat.GenerateReplyAsync(full, recentPage.List, content, language, currentAlternateSummary, ct);
+        // 真实测出来的问题：AI 之前只拿到政策文字("48小时/25%")和入住日期，自己现算"现在到入住
+        // 还有多久"来判断退款金额——这种日期算术模型经常算错(答"超过48小时可全额退"，实际只剩36小时，
+        // 该收25%手续费)。跟 RefundPolicyParser.CalculateRefund 同一套算法在这里现算一遍(不读
+        // Option 表里可能过期的存量值——那个只在协调员点 Regenerate 时才会重新算，客人问的这一刻
+        // 未必是最新的)，直接把算好的数字喂给 AI，不让它自己做算术。
+        string? cancellationSummary = null;
+        if (full.Booking?.HotelId is { } cancellationHotelId)
+        {
+            var hotelPolicy = await hotelRepo.GetActiveRefundPolicyAsync(cancellationHotelId, ct);
+            cancellationSummary = hotelPolicy is null
+                ? "This hotel has not set up a refund policy, so cancellation for a refund is not available."
+                : BuildCancellationSummary(hotelPolicy, full.Booking);
+        }
+
+        var reply = await chat.GenerateReplyAsync(full, recentPage.List, content, language, currentAlternateSummary, cancellationSummary, ct);
 
         // 不管这个案件有没有分配协调员都要落这个字段——协调员的 Escalation queue 页签靠它过滤
         // (CoordinatorService.EscalationFilterMap)，之前这里只发了个 Notification，从没真正设置过

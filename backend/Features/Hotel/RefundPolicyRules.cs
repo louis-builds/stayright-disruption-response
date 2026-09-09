@@ -48,8 +48,19 @@ public static class RefundPolicyParser
             throw new ArgumentException("freeCancellationHours must be non-negative.");
     }
 
-    public static (decimal Fee, decimal Refund) CalculateRefund(decimal totalAmount, HotelRefundRules? rules)
+    // checkIn/now 由调用方传入，不在这个纯计算函数里读当前时间——之前这里完全没看 FreeCancellationHours，
+    // 不管客人是提前一个月还是临出发前取消都无脑按 CancellationFeePercent 扣，退款金额算错了。
+    // 现在：政策写了免费取消小时数、且当前时间到入住还够这个窗口，才是全额退款；
+    // 没写 FreeCancellationHours(rules 里没这个字段)时保留旧行为，不做时间判断，直接按百分比扣——
+    // 这跟"酒店没具体说免费窗口是多久"时该怎么算是两回事，不能因为加了时间判断就把这种情况也堵死。
+    public static (decimal Fee, decimal Refund) CalculateRefund(decimal totalAmount, HotelRefundRules? rules, DateOnly checkIn, DateTimeOffset now)
     {
+        if (rules?.FreeCancellationHours is { } freeHours)
+        {
+            var hoursUntilCheckIn = (checkIn.ToDateTime(TimeOnly.MinValue) - now.UtcDateTime).TotalHours;
+            if (hoursUntilCheckIn >= freeHours) return (0m, totalAmount);
+        }
+
         var feePercent = rules?.CancellationFeePercent ?? 10m;
         var feeFixed = rules?.CancellationFeeFixed ?? 0m;
         var fee = Math.Round(totalAmount * (feePercent / 100m) + feeFixed, 2);
