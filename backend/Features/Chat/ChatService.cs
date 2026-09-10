@@ -135,10 +135,20 @@ public class ChatService(GeminiClient gemini, IRagRepository ragRepository, ISys
 
         // 情绪判断跟置信度是两回事：答得对不代表客人不生气。这里不换成模板话术——AI 的回答本身
         // 照样有用，只是同时把协调员叫过来看一眼，免得一个已经不耐烦的客人还要在AI这边多耗一轮。
+        // 但静默转人工不行——之前这里只把 Escalated 标成 true，唯一的用户可见信号是"Coordinator
+        // conversation"标签页悄悄冒出来，客人压根不会主动去点一个没提示过的新标签，等于没告诉他。
+        // 这里在当前(AI)对话里追加一句"已经叫协调员"，不说具体原因(不提"听起来不耐烦"这种可能
+        // 反而让客人更不爽的措辞)——只说"转了"这件事本身。
         if (frustrated && settings.FrustrationEscalationEnabled)
         {
             logger.LogInformation("Guest sounds frustrated in case {CaseId}, looping in coordinator", caseEntity.Id);
-            return new ChatReply(content, true, false, EscalationReason: ReasonFrustrated, EscalationTrigger: "frustrated");
+            var coordinatorNote = language switch
+            {
+                "zh" => "另外，我已经帮您请协调员一起看看这个案件了，稍后可以在\"Coordinator conversation\"里找到TA。",
+                "mi" => "Kua karangatia hoki e au tētahi kaiwhakarite ki te tiro i tō kēhi.",
+                _ => "I've also looped in a coordinator to take a look at your case — you'll find them under \"Coordinator conversation\".",
+            };
+            return new ChatReply($"{content}\n\n{coordinatorNote}", true, false, EscalationReason: ReasonFrustrated, EscalationTrigger: "frustrated");
         }
 
         return new ChatReply(content, false, false);
