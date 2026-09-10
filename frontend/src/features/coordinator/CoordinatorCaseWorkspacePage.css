@@ -17,6 +17,17 @@
 .case-details-card .case-options-action{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;margin-top:3px;padding:12px 14px}.case-details-card .case-options-action>span{font-size:15px}.case-details-card .case-options-action>b{font-size:16px}
 @media(max-width:480px){.case-details-contact>div{grid-template-columns:1fr}.case-details-card .case-details-core{grid-template-columns:1fr}}
 
+/* Coordinator quick replies sit directly above the existing send action. */
+.case-workspace-composer-actions{position:relative;display:flex;align-self:stretch;flex-direction:column;justify-content:flex-end;gap:8px}
+.case-workspace-quick-replies{position:relative}
+.case-workspace-quick-replies summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 12px;border:1px solid #dfd3f7;border-radius:8px;background:#f7f2ff;color:#7628e8;font-size:11px;font-weight:700;cursor:pointer;list-style:none}
+.case-workspace-quick-replies summary::-webkit-details-marker{display:none}
+.case-workspace-quick-replies[open] summary{border-color:#a477e8;box-shadow:0 0 0 3px #f0e8fc}
+.case-workspace-quick-replies-menu{position:absolute;right:0;bottom:calc(100% + 8px);z-index:30;width:min(390px,72vw);max-height:300px;overflow-y:auto;padding:7px;border:1px solid #e3d9f6;border-radius:12px;background:#fff;box-shadow:0 16px 40px rgba(37,24,67,.16)}
+.case-communication-card form .case-workspace-quick-replies-menu button{display:block;width:100%;padding:10px 11px;border:0;border-radius:8px;background:transparent;color:#273047;font-size:11px;font-weight:500;line-height:1.4;text-align:left;cursor:pointer}
+.case-communication-card form .case-workspace-quick-replies-menu button:hover{background:#f7f2ff;color:#7628e8}
+.case-communication-card form .case-workspace-send{width:100%}
+
 /* Escalation review */
 .case-escalation-review{padding:13px 14px;border:1px solid #f3c27c;border-radius:10px;background:#fff9ef;margin-bottom:14px}.case-escalation-review>small{color:#bb6900;font-size:9px;font-weight:800;text-transform:uppercase}.case-escalation-reason{margin:5px 0 10px;color:#4a3413;font-size:12px;font-weight:700}
 .case-escalation-form{display:flex;flex-direction:column;gap:8px}.case-escalation-form>span{color:#7e7157;font-size:11px}.case-escalation-form label{display:flex;align-items:center;gap:7px;color:#4a3413;font-size:11px;font-weight:600;cursor:pointer}.case-escalation-form input[type="radio"]{accent-color:#7628e8}

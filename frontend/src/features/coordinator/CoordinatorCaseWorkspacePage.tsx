@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../auth";
 import { fetchGuestTags, reviewEscalation, type GuestTags } from "../cases/api";
@@ -7,6 +7,17 @@ import type { CaseSummary, Thread } from "../cases/types";
 import { CoordinatorDashboardShell } from "./CoordinatorDashboardShell";
 import { escalationReasonLabel } from "./escalationLabels";
 import "./CoordinatorCaseWorkspacePage.css";
+
+const COORDINATOR_QUICK_REPLIES = [
+  "We're currently checking with the hotel and will update you as soon as possible.",
+  "The hotel has confirmed your request. Please review the latest update.",
+  "Your recovery options are now available. Please select the option that works best for you.",
+  "Your date-change request is being processed.",
+  "We're arranging an alternative hotel and will share the details shortly.",
+  "Your refund request has been received and is being processed.",
+  "Could you please provide more information so we can assist you?",
+  "Your case has been resolved. Please let us know if you need any further assistance.",
+] as const;
 
 // 只在真的转过人工的案件上出现——没转人工就没有"这次转人工准不准"这回事。协调员的判断
 // (合理/不合理+理由)是攒 AI 转人工准确率反馈的唯一入口，日后要调阈值/权重全靠这批真实数据。
@@ -103,6 +114,7 @@ export function CoordinatorCaseWorkspacePage() {
   const navigate = useNavigate();
   const [thread, setThread] = useState<Thread>("coordinator");
   const [draft, setDraft] = useState("");
+  const quickRepliesRef = useRef<HTMLDetailsElement>(null);
   const [guestTags, setGuestTags] = useState<GuestTags | null>(null);
   const { caseInfo, messages, loading, sending, error, sendMessage } = useCaseConversation(id, "coordinator", thread);
 
@@ -150,7 +162,7 @@ export function CoordinatorCaseWorkspacePage() {
             {loading ? <p className="case-workspace-empty">Loading conversation…</p> : messages.length === 0 ? <p className="case-workspace-empty">No messages in this conversation yet.</p> : messages.map((message) => <article key={message.id} className={`workspace-message ${message.senderRole}`}>{message.senderRole === "coordinator" && user.avatarUrl ? <img src={user.avatarUrl} alt=""/> : <i>{message.senderRole === "coordinator" ? user.nickname.slice(0, 2).toUpperCase() : initials(message.senderRole)}</i>}<div><header><strong>{message.senderRole === "guest" ? "Guest" : message.senderRole === "ai" ? "StayRight AI" : message.senderRole === "coordinator" ? user.nickname : "System"}</strong><time>{new Date(message.createdAt).toLocaleString("en-NZ", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</time></header><p>{message.content}</p>{message.senderRole !== "coordinator" && <small>{message.readAt ? "Read" : "Unread"}</small>}</div></article>)}
           </div>
           {error && <p className="case-workspace-error">{error}</p>}
-          {thread === "coordinator" ? <form onSubmit={submit}><textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Write a message to the guest…"/><button disabled={!draft.trim() || sending}>{sending ? "Sending…" : "Send Message →"}</button></form> : <p className="case-workspace-readonly">AI conversation is read-only for coordinators.</p>}
+          {thread === "coordinator" ? <form onSubmit={submit}><textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Write a message to the guest…"/><div className="case-workspace-composer-actions"><details className="case-workspace-quick-replies" ref={quickRepliesRef}><summary>Quick replies <span aria-hidden="true">⌃</span></summary><div className="case-workspace-quick-replies-menu">{COORDINATOR_QUICK_REPLIES.map((reply) => <button type="button" key={reply} onClick={() => { setDraft(reply); quickRepliesRef.current?.removeAttribute("open"); }}>{reply}</button>)}</div></details><button className="case-workspace-send" disabled={!draft.trim() || sending}>{sending ? "Sending…" : "Send Message →"}</button></div></form> : <p className="case-workspace-readonly">AI conversation is read-only for coordinators.</p>}
         </section>
 
         <aside className="case-workspace-side">
