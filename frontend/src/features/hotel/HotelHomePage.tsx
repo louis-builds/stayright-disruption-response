@@ -6,7 +6,7 @@ import { useAuth } from "../auth";
 import * as api from "./api";
 import { HotelDashboardShell } from "./HotelDashboardShell";
 import { HotelProfilePanel } from "./HotelProfilePanel";
-import type { HotelPerk, InquiryItem, SelectedOptionItem } from "./types";
+import type { CustomTag, GuestTags, HotelPerk, InquiryItem, SelectedOptionItem } from "./types";
 import "../coordinator/CoordinatorHomePage.css";
 import "./HotelHomePage.css";
 
@@ -142,6 +142,113 @@ function CustomOptionModal({ confirmationNo, perks, onCancel, onConfirm }: {
   );
 }
 
+// 后端按历史案件/协调员对话算出来的行为标签，true 才显示。returning/high value 两个徽章
+// 卡片上本来就有，这里不重复列。
+const SYSTEM_TAG_LABELS: Array<{ key: keyof GuestTags; label: string }> = [
+  { key: "emotionallySensitive", label: "emotionally sensitive" },
+  { key: "aiDifficult", label: "AI difficult" },
+  { key: "highRejectionRate", label: "high rejection" },
+  { key: "slowResponder", label: "slow responder" },
+];
+
+/** 卡片上的客人标签区：酒店自建的标签 chip(紫) + 系统行为标签(灰) + "+ Tag" 入口。
+ * 这些标签只给 hotel/coordinator 角色看，客人端拿不到(api/tags 对客人 403)。 */
+function GuestTagChips({ guestUserId, nickname, tags, onManage }: {
+  guestUserId: string | null;
+  nickname: string;
+  tags: GuestTags | undefined;
+  onManage: (target: { guestUserId: string; nickname: string }) => void;
+}) {
+  if (!guestUserId) return null;
+  return (
+    <>
+      {(tags?.customTags ?? []).map((t) => (
+        <span key={t.id} className="tag hotel-guest-tag">{t.label}</span>
+      ))}
+      {tags && SYSTEM_TAG_LABELS.filter((s) => Boolean(tags[s.key])).map((s) => (
+        <span key={s.key} className="tag hotel-guest-tag-muted">{s.label}</span>
+      ))}
+      <button type="button" className="hotel-tag-add" title={`Manage tags for ${nickname}`} onClick={() => onManage({ guestUserId, nickname })}>
+        + Tag
+      </button>
+    </>
+  );
+}
+
+/** 打标签弹窗：勾选/取消本酒店的自定义标签，或输入新标签名"创建并打上"。
+ * 协调员的标签团队共用、酒店的标签只归本店(后端按 owner_role + hotel_id 隔离)。 */
+function TagManageModal({ target, customTags, guestTags, onChanged, onClose }: {
+  target: { guestUserId: string; nickname: string };
+  customTags: CustomTag[];
+  guestTags: GuestTags | undefined;
+  onChanged: () => void;
+  onClose: () => void;
+}) {
+  const [newLabel, setNewLabel] = useState("");
+  const [busy, setBusy] = useState(false);
+  const appliedIds = new Set((guestTags?.customTags ?? []).map((t) => t.id));
+
+  async function toggle(tag: CustomTag) {
+    setBusy(true);
+    try {
+      if (appliedIds.has(tag.id)) await api.removeTagFromGuest(tag.id, target.guestUserId);
+      else await api.applyTagToGuest(tag.id, target.guestUserId);
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function createAndApply() {
+    const label = newLabel.trim();
+    if (!label) return;
+    setBusy(true);
+    try {
+      const res = await api.createCustomTag(label);
+      if (res.code === 0) await api.applyTagToGuest(res.data.id, target.guestUserId);
+      setNewLabel("");
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="coord-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="coord-modal hotel-tag-modal">
+        <h3>Guest tags — {target.nickname}</h3>
+        <p className="coord-modal-hint">Visible to your hotel and StayRight coordinators only — the guest can&apos;t see these.</p>
+        {customTags.length === 0 ? (
+          <p className="coord-empty">No tags yet — create one below.</p>
+        ) : (
+          <div className="hotel-tag-list">
+            {customTags.map((tag) => (
+              <label key={tag.id} className="hotel-tag-option">
+                <input type="checkbox" checked={appliedIds.has(tag.id)} disabled={busy} onChange={() => void toggle(tag)} />
+                {tag.label}
+              </label>
+            ))}
+          </div>
+        )}
+        <div className="hotel-tag-create">
+          <input
+            value={newLabel}
+            onChange={(e) => setNewLabel(e.target.value)}
+            placeholder="New tag (e.g. corporate account)"
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void createAndApply(); } }}
+          />
+          <button type="button" className="coord-btn-primary" disabled={busy || !newLabel.trim()} onClick={() => void createAndApply()}>
+            Create &amp; apply
+          </button>
+        </div>
+        <div className="coord-modal-actions">
+          <button type="button" className="coord-btn-secondary" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function HotelHomePage() {
   const { user } = useAuth();
   const location = useLocation();
@@ -161,6 +268,11 @@ export function HotelHomePage() {
   const [customOptionTarget, setCustomOptionTarget] = useState<{ caseId: string; confirmationNo: string } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [syncedAt, setSyncedAt] = useState<Date | null>(null);
+  // 客人标签：customTags 是本酒店的标签字典(打标签弹窗用)，guestTags 按 guestUserId 存
+  // 每个客人的系统标签+自定义标签。刷新列表时批量拉一次，不用每张卡片一个请求。
+  const [customTags, setCustomTags] = useState<CustomTag[]>([]);
+  const [guestTags, setGuestTags] = useState<Record<string, GuestTags>>({});
+  const [tagTarget, setTagTarget] = useState<{ guestUserId: string; nickname: string } | null>(null);
   // refresh() 虽然被挂载/30秒轮询/每个操作动作(确认/拒绝/加礼遇/开自定义方案)统一复用,
   // 但这只是共用同一段代码,不代表并发调用之间有先后顺序保证——亲测复现过:酒店员工点了
   // "Confirm deferral",这次调用很快把这一行从待办移除(正确),但紧接着一个更早发出、这时才
@@ -189,8 +301,36 @@ export function HotelHomePage() {
       }
       if (!opts?.silent) setLoading(false);
       setSyncedAt(new Date());
+      // 标签跟在列表数据后面补拉，慢一步没关系——和列表一样受 requestId 保护，轮询旧响应
+      // 不会把新标签覆盖回去。
+      const guestIds = [
+        ...pendingInqRes.data, ...pendingOptRes.data, ...doneInqRes.data, ...doneOptRes.data,
+      ].map((x) => x.guestUserId).filter((x): x is string => Boolean(x));
+      if (guestIds.length > 0) {
+        const tagRes = await api.queryGuestTags([...new Set(guestIds)]);
+        if (requestId === latestRequestIdRef.current && tagRes.code === 0) setGuestTags(tagRes.data);
+      }
     }
   }, []);
+
+  // 本酒店的标签字典只在这里和打标签弹窗的"创建"后会变，挂载时拉一次。
+  useEffect(() => {
+    void api.fetchCustomTags().then((res) => {
+      if (res.code === 0) setCustomTags(res.data);
+    });
+  }, []);
+
+  // 打标签弹窗里任何变动(勾选/取消/新建)后重拉：字典 + 当前这位客人的标签。
+  const reloadTags = useCallback(async () => {
+    const [listRes, guestRes] = await Promise.all([
+      api.fetchCustomTags(),
+      tagTarget ? api.fetchGuestTags(tagTarget.guestUserId) : Promise.resolve(null),
+    ]);
+    if (listRes.code === 0) setCustomTags(listRes.data);
+    if (tagTarget && guestRes && guestRes.code === 0) {
+      setGuestTags((prev) => ({ ...prev, [tagTarget.guestUserId]: guestRes.data }));
+    }
+  }, [tagTarget]);
 
   useEffect(() => {
     void refresh();
@@ -273,6 +413,7 @@ export function HotelHomePage() {
     ...doneInquiries.map((i) => ({
       id: i.id, confirmationNo: i.confirmationNo, guestNickname: i.guestNickname,
       isReturningGuest: i.isReturningGuest, isHighValueGuest: i.isHighValueGuest,
+      guestUserId: i.guestUserId,
       label: i.disruptionTitle, statusTag: i.status === "accepted" ? "accepted" : "rejected",
       timestamp: i.respondedAt ?? "", reason: i.status === "rejected" ? i.rejectReason : null,
       // 酒店点了Accept之后案子还会继续走，H1这条请求本身的status永远停在accepted不会变——
@@ -291,6 +432,7 @@ export function HotelHomePage() {
     ...doneOptions.map((o) => ({
       id: o.optionId, confirmationNo: o.confirmationNo, guestNickname: o.guestNickname,
       isReturningGuest: o.isReturningGuest, isHighValueGuest: o.isHighValueGuest,
+      guestUserId: o.guestUserId,
       label: o.optionType, statusTag: o.availability === "available" ? "confirmed" : "declined",
       timestamp: o.selectedSince, reason: o.availability === "unavailable" ? o.unavailableReason : null,
       finalOutcome: null as string | null,
@@ -426,6 +568,12 @@ export function HotelHomePage() {
                                 {d.item.guestCommitted && <span className="tag tag-status-warn">guest confirmed</span>}
                                 {d.item.isReturningGuest && <span className="tag tag-status-returning">returning</span>}
                                 {d.item.isHighValueGuest && <span className="tag tag-status-vip">high value</span>}
+                                <GuestTagChips
+                                  guestUserId={d.item.guestUserId}
+                                  nickname={d.item.guestNickname}
+                                  tags={d.item.guestUserId ? guestTags[d.item.guestUserId] : undefined}
+                                  onManage={setTagTarget}
+                                />
                               </div>
                             </div>
                             <p className="hotel-request-subtitle">
@@ -481,6 +629,12 @@ export function HotelHomePage() {
                                   <div className="hotel-request-tags">
                                     {o.isReturningGuest && <span className="tag tag-status-returning">returning</span>}
                                     {o.isHighValueGuest && <span className="tag tag-status-vip">high value</span>}
+                                    <GuestTagChips
+                                      guestUserId={o.guestUserId}
+                                      nickname={o.guestNickname}
+                                      tags={o.guestUserId ? guestTags[o.guestUserId] : undefined}
+                                      onManage={setTagTarget}
+                                    />
                                   </div>
                                 </div>
                                 <p className="hotel-request-subtitle">
@@ -622,6 +776,12 @@ export function HotelHomePage() {
                               <span className={`tag tag-status-${d.statusTag === "accepted" || d.statusTag === "confirmed" ? "normal" : "overdue"}`}>
                                 {d.statusTag}
                               </span>
+                              <GuestTagChips
+                                guestUserId={d.guestUserId}
+                                nickname={d.guestNickname}
+                                tags={d.guestUserId ? guestTags[d.guestUserId] : undefined}
+                                onManage={setTagTarget}
+                              />
                             </div>
                           </div>
                           <p className="hotel-request-subtitle">
@@ -659,6 +819,15 @@ export function HotelHomePage() {
           perks={perks}
           onCancel={() => setCustomOptionTarget(null)}
           onConfirm={(title, p) => void offerCustomOption(title, p)}
+        />
+      )}
+      {tagTarget && (
+        <TagManageModal
+          target={tagTarget}
+          customTags={customTags}
+          guestTags={guestTags[tagTarget.guestUserId]}
+          onChanged={() => void reloadTags()}
+          onClose={() => setTagTarget(null)}
         />
       )}
     </HotelDashboardShell>

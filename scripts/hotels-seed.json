@@ -1,0 +1,162 @@
+[
+  {
+    "email": "hotel3@example.com",
+    "phone": "+64213000003",
+    "nickname": "Queenstown Central Park Front Desk",
+    "password": "Password123!",
+    "hotel": {
+      "name": "Queenstown Central Park Hotel",
+      "address": "32 Park Street, Queenstown 9300, New Zealand",
+      "lat": -45.0297,
+      "lng": 168.6560,
+      "roomTypes": [
+        { "name": "Standard Queen", "description": "Comfortable double room overlooking the central park", "amenities": ["wifi", "breakfast", "air_conditioning"], "capacity": 2, "priceAmount": 190.00, "currency": "NZD" },
+        { "name": "Deluxe Garden View", "description": "Deluxe garden-view room with a private balcony", "amenities": ["wifi", "breakfast", "garden_view", "minibar"], "capacity": 3, "priceAmount": 270.00, "currency": "NZD" }
+      ]
+    },
+    "policy": {
+      "content": "# Queenstown Central Park Hotel Cancellation & Refund Policy\n\n- Cancel 48+ hours before check-in: full refund, no charge.\n- Cancel 24-48 hours before check-in: 50% cancellation fee of the total room charge.\n- Cancel within 24 hours of check-in or no-show: full room charge applies, no refund.\n- Guests staying while the ski fields are closed due to weather may rebook free of charge once.",
+      "structuredRulesJson": "{\"freeCancellationHours\":48,\"cancellationFeePercent\":50,\"currency\":\"NZD\"}"
+    }
+  },
+  {
+    "email": "hotel4@example.com",
+    "phone": "+64213000004",
+    "nickname": "Queenstown Alpine Front Desk",
+    "password": "Password123!",
+    "hotel": {
+      "name": "Queenstown Alpine Lodge",
+      "address": "78 Stanley Street, Queenstown 9300, New Zealand",
+      "lat": -45.0345,
+      "lng": 168.6655,
+      "roomTypes": [
+        { "name": "Alpine Twin", "description": "Twin room with alpine mountain views", "amenities": ["wifi", "heating", "mountain_view"], "capacity": 2, "priceAmount": 170.00, "currency": "NZD" },
+        { "name": "Family Loft", "description": "Duplex family loft with a kitchenette", "amenities": ["wifi", "kitchenette", "mountain_view"], "capacity": 4, "priceAmount": 310.00, "currency": "NZD" }
+      ]
+    },
+    "policy": {
+      "content": "# Queenstown Alpine Lodge Cancellation & Refund Policy\n\n- Cancel 72+ hours before check-in: full refund, no charge.\n- Cancel within 72 hours of check-in: 30% cancellation fee of the total room charge.\n- No-show: 30% of the total room charge applies as a penalty.\n- Guests unable to arrive due to mountain road closures will receive a full refund with an official notice.",
+      "structuredRulesJson": "{\"freeCancellationHours\":72,\"cancellationFeePercent\":30,\"currency\":\"NZD\"}"
+    }
+  },
+  {
+    "email": "hotel5@example.com",
+    "phone": "+64213000005",
+    "nickname": "Auckland SkyTower Front Desk",
+    "password": "Password123!",
+    "hotel": {
+      "name": "Auckland SkyTower Suites",
+      "address": "88 Federal Street, Auckland CBD 1010, New Zealand",
+      "lat": -36.8480,
+      "lng": 174.7620,
+      "roomTypes": [
+        { "name": "City Studio", "description": "High-floor city-view studio, steps from the Sky Tower", "amenities": ["wifi", "gym_access", "city_view"], "capacity": 2, "priceAmount": 210.00, "currency": "NZD" },
+        { "name": "SkyTower Suite", "description": "Sky Tower-view suite with a separate living area", "amenities": ["wifi", "breakfast", "city_view", "minibar"], "capacity": 4, "priceAmount": 380.00, "currency": "NZD" }
+      ]
+    },
+    "policy": {
+      "content": "# Auckland SkyTower Suites Cancellation & Refund Policy\n\n- Cancel 24+ hours before check-in: full refund, no charge.\n- Cancel within 24 hours of check-in: 50% cancellation fee of the total room charge.\n- No-show: the first night's room charge plus taxes applies.",
+      "structuredRulesJson": "{\"freeCancellationHours\":24,\"cancellationFeePercent\":50,\"currency\":\"NZD\"}"
+    }
+  },
+  {
+    "email": "hotel6@example.com",
+    "phone": "+64213000006",
+    "nickname": "Auckland Airport Front Desk",
+    "password": "Password123!",
+    "hotel": {
+      "name": "Auckland Airport Gateway Hotel",
+      "address": "14 George Bolt Memorial Drive, Auckland Airport 2022, New Zealand",
+      "lat": -37.0050,
+      "lng": 174.7890,
+      "roomTypes": [
+        { "name": "Standard Queen", "description": "Transit-friendly standard room with a 24-hour front desk", "amenities": ["wifi", "airport_shuttle"], "capacity": 2, "priceAmount": 160.00, "currency": "NZD" },
+        { "name": "Family Room", "description": "Connecting family room, ideal for early-flight departures", "amenities": ["wifi", "airport_shuttle", "breakfast"], "capacity": 4, "priceAmount": 240.00, "currency": "NZD" }
+      ]
+    },
+    "policy": {
+      "content": "# Auckland Airport Gateway Hotel Cancellation & Refund Policy\n\n- Cancel 48+ hours before check-in: full refund, no charge.\n- Cancel within 48 hours of check-in: 25% cancellation fee of the total room charge.\n- Guests unable to stay due to cancelled or delayed flights may receive a full refund or rebook free of charge with a boarding pass or airline certificate.\n- No-show: the first night's room charge applies.",
+      "structuredRulesJson": "{\"freeCancellationHours\":48,\"cancellationFeePercent\":25,\"currency\":\"NZD\"}"
+    }
+  },
+  {
+    "email": "hotel7@example.com",
+    "phone": "+64213000007",
+    "nickname": "Wellington Harbourfront Front Desk",
+    "password": "Password123!",
+    "hotel": {
+      "name": "Wellington Harbourfront Hotel",
+      "address": "2 Oriental Parade, Wellington 6011, New Zealand",
+      "lat": -41.2900,
+      "lng": 174.7940,
+      "roomTypes": [
+        { "name": "Harbour View Room", "description": "Harbour-view room with floor-to-ceiling windows", "amenities": ["wifi", "harbour_view", "air_conditioning"], "capacity": 2, "priceAmount": 230.00, "currency": "NZD" },
+        { "name": "Executive Suite", "description": "Executive suite with club lounge access", "amenities": ["wifi", "breakfast", "harbour_view", "lounge_access"], "capacity": 4, "priceAmount": 350.00, "currency": "NZD" }
+      ]
+    },
+    "policy": {
+      "content": "# Wellington Harbourfront Hotel Cancellation & Refund Policy\n\n- Cancel 72+ hours before check-in: full refund, no charge.\n- Cancel within 72 hours of check-in: 40% cancellation fee of the total room charge.\n- No-show: 40% of the total room charge applies as a penalty.\n- Guests staying while ferries are suspended may rebook free of charge once.",
+      "structuredRulesJson": "{\"freeCancellationHours\":72,\"cancellationFeePercent\":40,\"currency\":\"NZD\"}"
+    }
+  },
+  {
+    "email": "hotel8@example.com",
+    "phone": "+64213000008",
+    "nickname": "Wellington CBD Front Desk",
+    "password": "Password123!",
+    "hotel": {
+      "name": "Wellington CBD Grand Hotel",
+      "address": "100 Cuba Street, Wellington 6011, New Zealand",
+      "lat": -41.2940,
+      "lng": 174.7760,
+      "roomTypes": [
+        { "name": "Standard Twin", "description": "Twin room in the Cuba Street pedestrian precinct", "amenities": ["wifi", "breakfast"], "capacity": 2, "priceAmount": 180.00, "currency": "NZD" },
+        { "name": "Premier King", "description": "Premier king room with a coffee machine", "amenities": ["wifi", "breakfast", "coffee_machine"], "capacity": 2, "priceAmount": 260.00, "currency": "NZD" }
+      ]
+    },
+    "policy": {
+      "content": "# Wellington CBD Grand Hotel Cancellation & Refund Policy\n\n- Cancel 48+ hours before check-in: full refund, no charge.\n- Cancel within 48 hours of check-in: 50% cancellation fee of the total room charge.\n- No-show: full room charge applies, no refund.",
+      "structuredRulesJson": "{\"freeCancellationHours\":48,\"cancellationFeePercent\":50,\"currency\":\"NZD\"}"
+    }
+  },
+  {
+    "email": "hotel9@example.com",
+    "phone": "+64213000009",
+    "nickname": "Christchurch Riverside Front Desk",
+    "password": "Password123!",
+    "hotel": {
+      "name": "Christchurch Riverside Hotel",
+      "address": "5 Oxford Terrace, Christchurch Central 8011, New Zealand",
+      "lat": -43.5310,
+      "lng": 172.6360,
+      "roomTypes": [
+        { "name": "River View Room", "description": "Avon River-view room, near Restart Mall", "amenities": ["wifi", "river_view"], "capacity": 2, "priceAmount": 200.00, "currency": "NZD" },
+        { "name": "Deluxe Suite", "description": "River-view deluxe suite with a private study", "amenities": ["wifi", "breakfast", "river_view", "minibar"], "capacity": 3, "priceAmount": 300.00, "currency": "NZD" }
+      ]
+    },
+    "policy": {
+      "content": "# Christchurch Riverside Hotel Cancellation & Refund Policy\n\n- Cancel 24+ hours before check-in: full refund, no charge.\n- Cancel within 24 hours of check-in or no-show: full room charge applies, no refund.\n- In emergencies (earthquake, flooding) where the hotel cannot operate normally, guests receive a full refund and relocation assistance.",
+      "structuredRulesJson": "{\"freeCancellationHours\":24,\"cancellationFeePercent\":100,\"currency\":\"NZD\"}"
+    }
+  },
+  {
+    "email": "hotel10@example.com",
+    "phone": "+64213000010",
+    "nickname": "Rotorua Lakeside Front Desk",
+    "password": "Password123!",
+    "hotel": {
+      "name": "Rotorua Lakeside Resort",
+      "address": "20 Lake Road, Rotorua 3010, New Zealand",
+      "lat": -38.1280,
+      "lng": 176.2450,
+      "roomTypes": [
+        { "name": "Garden View Room", "description": "Garden-view double room near the lakeside walkway", "amenities": ["wifi", "garden_view"], "capacity": 2, "priceAmount": 160.00, "currency": "NZD" },
+        { "name": "Lakeside Suite", "description": "Lake-view suite with a panoramic terrace", "amenities": ["wifi", "breakfast", "lake_view", "bathtub"], "capacity": 4, "priceAmount": 280.00, "currency": "NZD" }
+      ]
+    },
+    "policy": {
+      "content": "# Rotorua Lakeside Resort Cancellation & Refund Policy\n\n- Cancel 72+ hours before check-in: full refund, no charge.\n- Cancel within 72 hours of check-in: 30% cancellation fee of the total room charge.\n- No-show: 30% of the total room charge applies as a penalty.\n- Guests staying during a lake algal bloom warning may apply for a full refund.",
+      "structuredRulesJson": "{\"freeCancellationHours\":72,\"cancellationFeePercent\":30,\"currency\":\"NZD\"}"
+    }
+  }
+]

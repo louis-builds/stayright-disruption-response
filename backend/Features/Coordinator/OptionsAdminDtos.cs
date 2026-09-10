@@ -16,3 +16,7 @@ public record SetVisibilityRequest(bool? Visible);
 public record PushOptionsResultDto(bool Success, DateTimeOffset SentAt);
 
 public record PushOptionsStatusDto(bool CanPush, string State, DateTimeOffset? LastAttemptAt);
+
+public record AlternateCandidatePreviewDto(
+    string Hotel, string RoomType, string RoomDescription, List<string> RoomAmenities, List<string> RoomImageUrls,
+    decimal FeeDiff, string Currency, double? DistanceKm, string Reason);

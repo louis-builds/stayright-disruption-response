@@ -114,7 +114,7 @@ public class KnowledgeBaseService(
             }
             else
             {
-                var reply = await chatService.GenerateReplyAsync(sandboxCase, history, test.Input, "en", ct);
+                var reply = await chatService.GenerateReplyAsync(sandboxCase, history, test.Input, "en", ct: ct);
                 actual = reply.Content;
                 passed = test.Expect == "refuse_template" ? reply.IsTemplate : !reply.IsTemplate && !reply.Escalate && !string.IsNullOrWhiteSpace(reply.Content);
 

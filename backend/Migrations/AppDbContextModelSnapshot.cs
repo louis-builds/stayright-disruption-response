@@ -522,6 +522,48 @@ namespace TravelDisruptionAgent.Api.Migrations
                     b.ToTable("custom_tags", (string)null);
                 });
 
+            modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.DeviceToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("ExpoPushToken")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("expo_push_token");
+
+                    b.Property<string>("Platform")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("platform");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_device_tokens");
+
+                    b.HasIndex("ExpoPushToken")
+                        .IsUnique()
+                        .HasDatabaseName("ix_device_tokens_expo_push_token");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_device_tokens_user_id");
+
+                    b.ToTable("device_tokens", (string)null);
+                });
+
             modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.Disruption", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1076,6 +1118,10 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("AttachmentJson")
+                        .HasColumnType("text")
+                        .HasColumnName("attachment_json");
+
                     b.Property<Guid>("CaseId")
                         .HasColumnType("uuid")
                         .HasColumnName("case_id");
@@ -1328,6 +1374,10 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("effective_until");
 
+                    b.Property<Guid?>("HotelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("hotel_id");
+
                     b.Property<bool>("IsDefaultVersion")
                         .HasColumnType("boolean")
                         .HasColumnName("is_default_version");
@@ -1352,6 +1402,9 @@ namespace TravelDisruptionAgent.Api.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_rag_documents");
+
+                    b.HasIndex("HotelId")
+                        .HasDatabaseName("ix_rag_documents_hotel_id");
 
                     b.HasIndex("Name", "Version")
                         .IsUnique()
@@ -1825,6 +1878,18 @@ namespace TravelDisruptionAgent.Api.Migrations
                     b.Navigation("Hotel");
                 });
 
+            modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.DeviceToken", b =>
+                {
+                    b.HasOne("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_device_tokens_users_user_id");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.GoldenTestRunItem", b =>
                 {
                     b.HasOne("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.GoldenTestRun", "Run")
@@ -1936,6 +2001,17 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .HasConstraintName("fk_options_cases_case_id");
 
                     b.Navigation("Case");
+                });
+
+            modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.RagDocument", b =>
+                {
+                    b.HasOne("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.Hotel", "Hotel")
+                        .WithMany()
+                        .HasForeignKey("HotelId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_rag_documents_hotels_hotel_id");
+
+                    b.Navigation("Hotel");
                 });
 
             modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.RagDocumentChunk", b =>

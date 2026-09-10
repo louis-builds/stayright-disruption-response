@@ -17,6 +17,7 @@ public interface ITagRepository
     Task DeleteCustomTagAsync(Guid id, CancellationToken ct = default);
 
     Task<List<CustomTag>> ListGuestCustomTagsAsync(Guid guestUserId, CancellationToken ct = default);
+    Task<List<GuestCustomTag>> ListGuestCustomTagsForManyAsync(IEnumerable<Guid> guestUserIds, CancellationToken ct = default);
     Task ApplyTagAsync(Guid customTagId, Guid guestUserId, Guid appliedByUserId, CancellationToken ct = default);
     Task RemoveTagAsync(Guid customTagId, Guid guestUserId, CancellationToken ct = default);
 }

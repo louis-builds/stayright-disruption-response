@@ -21,6 +21,26 @@ export interface InquiryItem {
   // 客人已对该 case 的 defer 方案点过 P7 确认(后端 ExecutionRequestedAt!=null)。defer 不再另发
   // H2 卡后，pending 的 H1 卡靠它升级成"客人已拍板，等你核实空房"。
   guestCommitted: boolean;
+  // 拉这个客人的标签(api/tags)用。后端不保证每个 case 都有 booking 关联，可能为 null。
+  guestUserId: string | null;
+}
+
+export interface CustomTag {
+  id: string;
+  label: string;
+  ownerRole: string;
+}
+
+// 后端算好的系统标签 + 这家酒店/协调员打的自定义标签。只给 hotel/coordinator 角色返回，
+// 客人端拿不到(接口 403)——这是"客户看不到"的边界。
+export interface GuestTags {
+  isHighValueGuest: boolean;
+  isReturningGuest: boolean;
+  emotionallySensitive: boolean;
+  aiDifficult: boolean;
+  highRejectionRate: boolean;
+  slowResponder: boolean;
+  customTags: CustomTag[];
 }
 
 export interface SelectedOptionItem {
@@ -37,6 +57,7 @@ export interface SelectedOptionItem {
   isHighValueGuest: boolean;
   availability: "pending" | "available" | "unavailable";
   unavailableReason: string | null;
+  guestUserId: string | null;
 }
 
 export interface HotelPerk {

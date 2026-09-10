@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using TravelDisruptionAgent.Api.Features.Cases;
+using TravelDisruptionAgent.Api.Features.Chat;
 using TravelDisruptionAgent.Api.Features.Coordinator;
 using TravelDisruptionAgent.Api.Infrastructure.Data.Entities;
 using TravelDisruptionAgent.Api.Infrastructure.Storage;
@@ -10,6 +11,7 @@ namespace TravelDisruptionAgent.Api.Features.HotelPortal;
 public class HotelService(
     IHotelRepository repo, ICaseService caseService, IOptionsAdminService optionsAdmin,
     RefundPolicyRuleExtractor ruleExtractor, IPolicyDocumentStorage policyStorage,
+    IRagRepository ragRepository,
     ILogger<HotelService> logger) : IHotelService
 {
     // ponytail: 酒店响应超时阈值先写死 6 小时,没有单独配置项。
@@ -45,7 +47,7 @@ public class HotelService(
             i.Status == "pending" && now - i.RequestedAt > OverdueThreshold,
             guestId.HasValue && returningGuestIds.Contains(guestId.Value),
             guestId.HasValue && highValueGuestIds.Contains(guestId.Value),
-            i.RespondedAt, i.RejectReason, finalOutcome, proposedCheckIn, proposedCheckOut, guestCommitted);
+            i.RespondedAt, i.RejectReason, finalOutcome, proposedCheckIn, proposedCheckOut, guestCommitted, guestId);
     }
 
     public async Task<List<InquiryItemDto>> ListInquiriesAsync(Guid hotelUserId, string? status, CancellationToken ct = default)
@@ -108,7 +110,7 @@ public class HotelService(
             o.OptionType, o.PayloadJson, o.UpdatedAt, o.CustomTitle, o.PerkNames,
             guestId.HasValue && returningGuestIds.Contains(guestId.Value),
             guestId.HasValue && highValueGuestIds.Contains(guestId.Value),
-            o.Availability, o.UnavailableReason);
+            o.Availability, o.UnavailableReason, guestId);
     }
 
     private async Task<bool> OptionTargetsHotelAsync(Option option, Guid hotelId, CancellationToken ct)
@@ -276,6 +278,16 @@ public class HotelService(
         var hotelId = await RequireHotelIdAsync(hotelUserId, ct);
         RefundPolicyParser.Validate(request.StructuredRulesJson);
         var policy = await repo.UpsertRefundPolicyAsync(hotelId, await WithAutoExtractedRulesAsync(request, ct), ct);
+
+        try
+        {
+            await ragRepository.ReplaceHotelPolicyDocumentAsync(hotelId, policy.Content, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Failed to re-embed refund policy for hotel {HotelId}", hotelId);
+        }
+
         return ToRefundPolicyDto(policy);
     }
 
@@ -310,6 +322,17 @@ public class HotelService(
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogWarning(ex, "Failed to archive policy file to S3 for hotel {HotelId}; policy saved without source file", hotelId);
+        }
+
+        // RAG 重新索引也是旁路：政策文本已入库，embedding 失败只记日志，GetPolicySummaryAsync
+        // 会退回关键词匹配，不影响这次上传本身成功与否。
+        try
+        {
+            await ragRepository.ReplaceHotelPolicyDocumentAsync(hotelId, content, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Failed to re-embed refund policy for hotel {HotelId}", hotelId);
         }
 
         return ToRefundPolicyDto(policy);

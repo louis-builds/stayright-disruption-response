@@ -1,7 +1,9 @@
 using System.Net;
 using System.Text.Json;
+using Pgvector;
 using TravelDisruptionAgent.Api.Features.Auth;
 using TravelDisruptionAgent.Api.Features.Chat;
+using TravelDisruptionAgent.Api.Features.Coordinator;
 using TravelDisruptionAgent.Api.Features.HotelPortal;
 using TravelDisruptionAgent.Api.Infrastructure;
 using TravelDisruptionAgent.Api.Infrastructure.Data.Entities;
@@ -13,9 +15,38 @@ namespace TravelDisruptionAgent.Api.Features.Cases;
 public class CaseService(
     ICaseRepository cases, IUserRepository users, IEmailService email, IChatService chat,
     IRagRepository ragRepository, GeminiClient gemini, CaseActionTokenService actionTokens,
-    IHotelRepository hotelRepo, ILogger<CaseService> logger) : ICaseService
+    IHotelRepository hotelRepo, IOptionsAdminService optionsAdmin, ILogger<CaseService> logger) : ICaseService
 {
-    private static MessageDto ToDto(Message m) => new(m.Id, m.CaseId, m.SenderRole, m.Content, m.Vote, m.Thread, m.CreatedAt, m.ReadAt);
+    private static MessageDto ToDto(Message m) => new(m.Id, m.CaseId, m.SenderRole, m.Content, m.Vote, m.Thread, m.CreatedAt, m.ReadAt, m.AttachmentJson);
+    private static string BuildCancellationSummary(HotelRefundPolicy hotelPolicy, Booking booking)
+    {
+        var rules = RefundPolicyParser.Parse(hotelPolicy.StructuredRulesJson);
+        var (fee, refund) = RefundPolicyParser.CalculateRefund(booking.TotalAmount, rules, booking.CheckIn, DateTimeOffset.UtcNow);
+        return $"If the guest cancels right now, the exact result is: refund {refund} {booking.Currency}, cancellation fee {fee} {booking.Currency}. " +
+            "Use these exact numbers if the guest asks what they'd get back — do not recalculate this yourself from the policy text and dates, your own date arithmetic has been wrong before.";
+    }
+
+    private static bool IsRoomCardAttachment(string? attachmentJson)
+    {
+        if (attachmentJson is null) return false;
+        try
+        {
+            using var doc = JsonDocument.Parse(attachmentJson);
+            return doc.RootElement.TryGetProperty("kind", out var kind) && kind.GetString() == "room_card";
+        }
+        catch { return false; }
+    }
+
+    private static string? ExtractPreferenceFromRoomCard(string? attachmentJson)
+    {
+        if (attachmentJson is null) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(attachmentJson);
+            return doc.RootElement.TryGetProperty("preference", out var p) ? p.GetString() : null;
+        }
+        catch { return null; }
+    }
     private static OptionDto ToDto(Option o) => new(o.Id, o.OptionType, o.Availability, o.Selected, o.PayloadJson, o.CreatedAt, o.CustomTitle, o.PerkNames);
 
     /// <summary>guest 只能看自己预订下的案件；coordinator 能看所有案件（多数案子系统自动跑，协调员只处理例外单，
@@ -43,6 +74,14 @@ public class CaseService(
         var page_ = await cases.ListMessagesAsync(caseId, thread, page, pageSize, ct);
         var dtoList = page_.List.Select(ToDto).ToList();
         return PagedResult<MessageDto>.Create(dtoList, page_.Total, page_.Page, page_.PageSize);
+    }
+
+    public async Task<List<CaseWorkflowProgressDto>> GetWorkflowProgressAsync(
+        Guid caseId, Guid userId, string userRole, CancellationToken ct = default)
+    {
+        await LoadAuthorizedCaseAsync(cases, caseId, userId, userRole, ct);
+        var history = await cases.ListWorkflowHistoryAsync(caseId, ct);
+        return [.. history.Select(item => new CaseWorkflowProgressDto(item.State, item.EndedAt is null))];
     }
 
     /// <summary>进入即主动说明：客人第一次打开一个 ai 线程还没有任何消息的案件时，系统先说明中断情况，
@@ -166,7 +205,68 @@ public class CaseService(
 
         // 只读 ai 线程的历史当上下文——协调员线程的人工对话不该被喂给 AI。
         var recentPage = await cases.ListMessagesAsync(caseId, "ai", 1, 50, ct);
-        var reply = await chat.GenerateReplyAsync(full, recentPage.List, content, language, ct);
+        var previousAiMessage = recentPage.List.LastOrDefault(m => m.SenderRole == "ai");
+        // 上一轮AI已经推荐过候补方案(带 room_card)、这一轮就该走"确认"分支，不该再重新分类一次
+        // 客人是不是又在提新要求——用卡片有没有出现过判断"话题第一次提起"，不用关键词/语言硬判，
+        // 客人可能问"离市区近点"/"房间大点"，不是只有"更便宜"这一种说法。
+        var previousAiHadRoomCard = previousAiMessage is not null && IsRoomCardAttachment(previousAiMessage.AttachmentJson);
+
+        // 用 cases.ListOptionsAsync 直接读，不走 optionsAdmin.GetOptionsAsync——后者在缺哪个标准类型
+        // 就补哪个，每条聊天消息都调一次会提前把 defer/alternate/cancel 造出来，破坏原有的选项生成时机。
+        var existingOptions = await cases.ListOptionsAsync(caseId, ct);
+        var currentAlternate = existingOptions.FirstOrDefault(o => o.OptionType == "alternate" && !o.Locked);
+        string? currentAlternateSummary = null;
+        AlternateCandidatePreviewDto? preview = null;
+        string? requestedCriterion = null;
+        if (currentAlternate is not null)
+        {
+            using var payloadDoc = JsonDocument.Parse(currentAlternate.PayloadJson);
+            var root = payloadDoc.RootElement;
+            var hotelName = root.TryGetProperty("hotel", out var h) ? h.GetString() : "unknown hotel";
+            var roomTypeName = root.TryGetProperty("room_type", out var rt) ? rt.GetString() : "unknown room type";
+            var feeDiff = root.TryGetProperty("fee_diff", out var fd) ? fd.GetDecimal() : (decimal?)null;
+            var currency = root.TryGetProperty("currency", out var cur) ? cur.GetString() : "";
+            var distanceKm = root.TryGetProperty("distance_km", out var dk) && dk.ValueKind != JsonValueKind.Null ? dk.GetDouble() : (double?)null;
+            var currentLine = $"Guest is currently offered: {hotelName}, {roomTypeName}, fee difference {feeDiff} {currency}, {(distanceKm.HasValue ? Math.Round(distanceKm.Value) + " km" : "unknown distance")} away.";
+
+            // 非致命：分类/预览失败就当这轮没有换方案的请求，不影响本轮正常回复。已经在"确认"阶段
+            // (previousAiHadRoomCard)就不用再问一次"是不是想换"，省一次 Gemini 调用。
+            if (!previousAiHadRoomCard)
+            {
+                try
+                {
+                    var intent = await gemini.ClassifyAlternateRequestAsync(content, ct);
+                    if (intent?.WantsAlternate == true)
+                    {
+                        requestedCriterion = intent.Criterion;
+                        preview = await optionsAdmin.PreviewAlternateAsync(caseId, requestedCriterion, ct);
+                    }
+                }
+                catch (Exception ex) { logger.LogWarning(ex, "Alternate-request classification/preview failed for case {CaseId}", caseId); }
+            }
+
+            currentAlternateSummary = preview is not null
+                ? currentLine + $"\nA matching alternative is available: {preview.Hotel}, {preview.RoomType}, fee difference {preview.FeeDiff} {preview.Currency}, " +
+                  $"{(preview.DistanceKm.HasValue ? Math.Round(preview.DistanceKm.Value) + " km" : "unknown distance")} away ({preview.Reason}). " +
+                  "Describe this specific alternative by name and ask if they'd like to switch to it. Do not say you're updating anything yet — only ask and wait for them to confirm."
+                : currentLine;
+        }
+
+        // 真实测出来的问题：AI 之前只拿到政策文字("48小时/25%")和入住日期，自己现算"现在到入住
+        // 还有多久"来判断退款金额——这种日期算术模型经常算错(答"超过48小时可全额退"，实际只剩36小时，
+        // 该收25%手续费)。跟 RefundPolicyParser.CalculateRefund 同一套算法在这里现算一遍(不读
+        // Option 表里可能过期的存量值——那个只在协调员点 Regenerate 时才会重新算，客人问的这一刻
+        // 未必是最新的)，直接把算好的数字喂给 AI，不让它自己做算术。
+        string? cancellationSummary = null;
+        if (full.Booking?.HotelId is { } cancellationHotelId)
+        {
+            var hotelPolicy = await hotelRepo.GetActiveRefundPolicyAsync(cancellationHotelId, ct);
+            cancellationSummary = hotelPolicy is null
+                ? "This hotel has not set up a refund policy, so cancellation for a refund is not available."
+                : BuildCancellationSummary(hotelPolicy, full.Booking);
+        }
+
+        var reply = await chat.GenerateReplyAsync(full, recentPage.List, content, language, currentAlternateSummary, cancellationSummary, ct);
 
         // 不管这个案件有没有分配协调员都要落这个字段——协调员的 Escalation queue 页签靠它过滤
         // (CoordinatorService.EscalationFilterMap)，之前这里只发了个 Notification，从没真正设置过
@@ -178,6 +278,7 @@ public class CaseService(
         }
 
         var now = DateTimeOffset.UtcNow;
+
         var aiMessage = new Message
         {
             Id = Guid.NewGuid(),
@@ -189,7 +290,59 @@ public class CaseService(
             CreatedAt = now,
             UpdatedAt = now,
         };
+
+        // 第一次听出客人想换一个候补方案(不管图什么——更便宜/更近/更大)：把候选方案
+        // (酒店/房型/图片/理由)当成推荐卡片挂在AI这句回复上，客人先看图和介绍，回复文字里
+        // 问"这个怎么样"——这一步只展示，不动 Option 表。preference 存进卡片，供下面确认
+        // 那一轮原样复用，保证客人确认的和这里展示的是同一个候选。
+        if (currentAlternate is not null && preview is not null && !reply.Escalate && !previousAiHadRoomCard)
+        {
+            aiMessage.AttachmentJson = JsonSerializer.Serialize(new
+            {
+                kind = "room_card",
+                hotel = preview.Hotel,
+                room_type = preview.RoomType,
+                room_description = preview.RoomDescription,
+                room_amenities = preview.RoomAmenities,
+                room_image_urls = preview.RoomImageUrls,
+                reason = preview.Reason,
+                preference = requestedCriterion,
+            });
+        }
+
         await cases.AddMessageAsync(aiMessage, ct);
+
+        // 客人上一轮已经看过推荐卡片、这一轮是在确认要那个方案，才真正把 alternate 选项重新生成。
+        // 是否"在确认"走结构化分类（GeminiClient.ClassifyConfirmsAlternativeSwitchAsync），
+        // 不是关键词硬判——previousAiHadRoomCard 只用来先做一次低成本的"值不值得调用分类"的前置过滤。
+        // preference 从上一轮卡片里原样取出，保证重新生成挑的是客人刚刚确认的那一个。
+        // 整段非致命：分类/重算失败不该打断这轮聊天消息本身的保存。
+        if (currentAlternate is not null && !reply.Escalate && previousAiHadRoomCard)
+        {
+            try
+            {
+                var confirms = await gemini.ClassifyConfirmsAlternativeSwitchAsync(previousAiMessage!.Content, content, ct);
+                if (confirms == true)
+                {
+                    var preference = ExtractPreferenceFromRoomCard(previousAiMessage.AttachmentJson);
+                    await optionsAdmin.RegenerateAlternateAsync(caseId, preference, ct);
+
+                    // 房型卡片已经在上一轮推荐时展示过，这里只需要一句确认——不用再发一遍图片。
+                    var updateText = language == "zh"
+                        ? "好的，已经为您切换到这个候补方案，可以去Options页确认。"
+                        : "Done — I've switched your alternate option to that pick. Check the Options tab to confirm.";
+                    await cases.AddMessageAsync(new Message
+                    {
+                        Id = Guid.NewGuid(), CaseId = caseId, SenderRole = "system", Thread = "ai",
+                        Content = updateText, CreatedAt = now, UpdatedAt = now,
+                    }, ct);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Alternate-option regeneration failed for case {CaseId}", caseId);
+            }
+        }
 
         if (reply.Escalate && full.AssigneeCoordinatorId.HasValue)
         {
@@ -370,7 +523,8 @@ public class CaseService(
             guest?.Nickname, guest?.AvatarUrl, guest?.Email, guest?.Phone,
             c.AssigneeCoordinatorId, assignee?.Nickname,
             HotelImageUrl: PrimaryHotelImage(c),
-            EscalationReason: c.EscalationReason, EscalationReviewedAsReasonable: c.EscalationReviewedAsReasonable, EscalationReviewNote: c.EscalationReviewNote);
+            EscalationReason: c.EscalationReason, EscalationReviewedAsReasonable: c.EscalationReviewedAsReasonable, EscalationReviewNote: c.EscalationReviewNote,
+            GuestUserId: c.Booking?.GuestUserId);
     }
 
     /// <summary>协调员给这次AI转人工打分：合理还是不合理，不合理要说明原因。只有真的转过人工的
@@ -1041,6 +1195,12 @@ public class CaseService(
         string? excerpt = null;
         string? docName = null;
         int? docVersion = null;
+        var keyword = option.OptionType switch
+        {
+            "cancel" => "refund",
+            "defer" => "deferral due to a disruption",
+            _ => "price difference",
+        };
 
         var hotelId = c.Booking?.HotelId;
         if (hotelId.HasValue)
@@ -1048,15 +1208,17 @@ public class CaseService(
             var hotelPolicy = await hotelRepo.GetActiveRefundPolicyAsync(hotelId.Value, ct);
             if (hotelPolicy is not null)
             {
-                var keyword = option.OptionType switch
-                {
-                    "cancel" => "refund",
-                    "defer" => "deferral due to a disruption",
-                    _ => "price difference",
-                };
-                excerpt = hotelPolicy.Content.Split("\n## ")
-                    .FirstOrDefault(s => s.Contains(keyword, StringComparison.OrdinalIgnoreCase))
-                    ?.Trim()
+                // 优先用向量检索(酒店重新上传/编辑政策时 HotelService 已经把新内容切片+embedding 好了)；
+                // 酒店还没有过 RAG 化的政策(老数据、或这次 embedding 失败过)时退回关键词匹配，不能让
+                // 客人看到"没有政策摘录"。
+                var queryEmbedding = await gemini.EmbedAsync(keyword, ct);
+                var nearestChunk = queryEmbedding is { Length: > 0 }
+                    ? await ragRepository.FindNearestHotelChunkAsync(hotelId.Value, new Vector(queryEmbedding), ct)
+                    : null;
+                excerpt = nearestChunk
+                    ?? hotelPolicy.Content.Split("\n## ")
+                        .FirstOrDefault(s => s.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+                        ?.Trim()
                     ?? hotelPolicy.Content.Trim();
                 docName = $"Hotel policy: {c.Booking?.Hotel?.Name}";
                 docVersion = null;
@@ -1070,12 +1232,6 @@ public class CaseService(
                 || d.Name.Contains("政策", StringComparison.OrdinalIgnoreCase));
             if (policyDoc is not null)
             {
-                var keyword = option.OptionType switch
-                {
-                    "cancel" => "refund",
-                    "defer" => "deferral due to a disruption",
-                    _ => "price difference",
-                };
                 excerpt = policyDoc.Content.Split("\n## ")
                     .FirstOrDefault(s => s.Contains(keyword, StringComparison.OrdinalIgnoreCase))
                     ?.Trim();

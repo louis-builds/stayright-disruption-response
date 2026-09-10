@@ -58,7 +58,7 @@ export function useCaseConversation(caseId: string, role: string, thread: Thread
       // 拿到真实返回后按 id 替换掉，避免出现内容重复的两条。
       const tempId = `temp-${crypto.randomUUID()}`;
       const optimisticMessage: CaseMessage = {
-        id: tempId, caseId, senderRole: "guest", content, vote: null, thread, createdAt: new Date().toISOString(), readAt: null,
+        id: tempId, caseId, senderRole: "guest", content, vote: null, thread, createdAt: new Date().toISOString(), readAt: null, attachmentJson: null,
       };
       setMessages((prev) => [...prev, optimisticMessage]);
 

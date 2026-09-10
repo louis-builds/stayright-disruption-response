@@ -82,6 +82,24 @@ public class CasesController(ICaseService caseService) : ControllerBase
         }
     }
 
+    [HttpGet("{id:guid}/workflow-progress")]
+    public async Task<ActionResult<ApiResponse<List<CaseWorkflowProgressDto>>>> GetWorkflowProgress(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            var result = await caseService.GetWorkflowProgressAsync(id, CurrentUserId, CurrentUserRole, ct);
+            return Ok(ApiResponse<List<CaseWorkflowProgressDto>>.Ok(result));
+        }
+        catch (CaseNotFoundException)
+        {
+            return NotFound(ApiResponse<object?>.Fail(404, "Case not found"));
+        }
+        catch (CaseAccessDeniedException)
+        {
+            return StatusCode(403, ApiResponse.Forbidden());
+        }
+    }
+
     [HttpPost("{id:guid}/messages")]
     public async Task<ActionResult<ApiResponse<MessageDto>>> PostMessage(Guid id, PostMessageRequest request, CancellationToken ct)
     {

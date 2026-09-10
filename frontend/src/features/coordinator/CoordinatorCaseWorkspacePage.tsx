@@ -1,12 +1,23 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../auth";
-import { reviewEscalation } from "../cases/api";
+import { fetchGuestTags, reviewEscalation, type GuestTags } from "../cases/api";
 import { useCaseConversation } from "../cases/useCaseConversation";
 import type { CaseSummary, Thread } from "../cases/types";
 import { CoordinatorDashboardShell } from "./CoordinatorDashboardShell";
 import { escalationReasonLabel } from "./escalationLabels";
 import "./CoordinatorCaseWorkspacePage.css";
+
+const COORDINATOR_QUICK_REPLIES = [
+  "We're currently checking with the hotel and will update you as soon as possible.",
+  "The hotel has confirmed your request. Please review the latest update.",
+  "Your recovery options are now available. Please select the option that works best for you.",
+  "Your date-change request is being processed.",
+  "We're arranging an alternative hotel and will share the details shortly.",
+  "Your refund request has been received and is being processed.",
+  "Could you please provide more information so we can assist you?",
+  "Your case has been resolved. Please let us know if you need any further assistance.",
+] as const;
 
 // 只在真的转过人工的案件上出现——没转人工就没有"这次转人工准不准"这回事。协调员的判断
 // (合理/不合理+理由)是攒 AI 转人工准确率反馈的唯一入口，日后要调阈值/权重全靠这批真实数据。
@@ -103,7 +114,19 @@ export function CoordinatorCaseWorkspacePage() {
   const navigate = useNavigate();
   const [thread, setThread] = useState<Thread>("coordinator");
   const [draft, setDraft] = useState("");
+  const quickRepliesRef = useRef<HTMLDetailsElement>(null);
+  const [guestTags, setGuestTags] = useState<GuestTags | null>(null);
   const { caseInfo, messages, loading, sending, error, sendMessage } = useCaseConversation(id, "coordinator", thread);
+
+  // 客人标签：酒店和协调员可见、客人不可见。案件切换时清空再按新客人重拉。
+  useEffect(() => {
+    setGuestTags(null);
+    if (caseInfo?.guestUserId) {
+      void fetchGuestTags(caseInfo.guestUserId).then((res) => {
+        if (res.code === 0) setGuestTags(res.data);
+      });
+    }
+  }, [caseInfo?.guestUserId]);
 
   const activity = useMemo(() => {
     const rows = messages.slice(-4).reverse().map((message) => ({
@@ -139,7 +162,7 @@ export function CoordinatorCaseWorkspacePage() {
             {loading ? <p className="case-workspace-empty">Loading conversation…</p> : messages.length === 0 ? <p className="case-workspace-empty">No messages in this conversation yet.</p> : messages.map((message) => <article key={message.id} className={`workspace-message ${message.senderRole}`}>{message.senderRole === "coordinator" && user.avatarUrl ? <img src={user.avatarUrl} alt=""/> : <i>{message.senderRole === "coordinator" ? user.nickname.slice(0, 2).toUpperCase() : initials(message.senderRole)}</i>}<div><header><strong>{message.senderRole === "guest" ? "Guest" : message.senderRole === "ai" ? "StayRight AI" : message.senderRole === "coordinator" ? user.nickname : "System"}</strong><time>{new Date(message.createdAt).toLocaleString("en-NZ", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</time></header><p>{message.content}</p>{message.senderRole !== "coordinator" && <small>{message.readAt ? "Read" : "Unread"}</small>}</div></article>)}
           </div>
           {error && <p className="case-workspace-error">{error}</p>}
-          {thread === "coordinator" ? <form onSubmit={submit}><textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Write a message to the guest…"/><button disabled={!draft.trim() || sending}>{sending ? "Sending…" : "Send Message →"}</button></form> : <p className="case-workspace-readonly">AI conversation is read-only for coordinators.</p>}
+          {thread === "coordinator" ? <form onSubmit={submit}><textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Write a message to the guest…"/><div className="case-workspace-composer-actions"><details className="case-workspace-quick-replies" ref={quickRepliesRef}><summary>Quick replies <span aria-hidden="true">⌃</span></summary><div className="case-workspace-quick-replies-menu">{COORDINATOR_QUICK_REPLIES.map((reply) => <button type="button" key={reply} onClick={() => { setDraft(reply); quickRepliesRef.current?.removeAttribute("open"); }}>{reply}</button>)}</div></details><button className="case-workspace-send" disabled={!draft.trim() || sending}>{sending ? "Sending…" : "Send Message →"}</button></div></form> : <p className="case-workspace-readonly">AI conversation is read-only for coordinators.</p>}
         </section>
 
         <aside className="case-workspace-side">
@@ -150,6 +173,21 @@ export function CoordinatorCaseWorkspacePage() {
             <dl className="case-details-core"><div><dt>Disruption</dt><dd>{caseInfo.disruptionTitle ?? "—"}</dd></div><div><dt>Stay dates</dt><dd>{caseInfo.checkIn && caseInfo.checkOut ? `${caseInfo.checkIn} – ${caseInfo.checkOut}` : "Not recorded"}</dd></div><div><dt>Priority</dt><dd><span className={`detail-pill priority ${caseInfo.priority}`}>{caseInfo.priority}</span></dd></div><div><dt>Status</dt><dd><span className={`detail-pill status ${caseInfo.status}`}>{statusTone(caseInfo.statusLabel)}</span></dd></div></dl>
             <EscalationReviewPanel caseInfo={caseInfo} />
             <div className="case-details-contact"><small>Guest contact & booking</small><div><span><b>{caseInfo.guestNickname ?? "Guest"}</b>{caseInfo.guestPhone ?? "No phone"}</span><span><b>Booking</b>{caseInfo.confirmationNo ?? "—"}</span><span><b>Email</b>{caseInfo.guestEmail ?? "—"}</span></div></div>
+            <div className="case-details-tags">
+              <small>Guest tags · staff only, the guest can&apos;t see these</small>
+              {guestTags ? (
+                guestTags.isHighValueGuest || guestTags.emotionallySensitive || guestTags.aiDifficult || guestTags.highRejectionRate || guestTags.slowResponder || guestTags.customTags.length > 0 ? (
+                  <div className="case-details-tag-chips">
+                    {guestTags.isHighValueGuest && <span className="tag tag-status-vip">high value</span>}
+                    {guestTags.emotionallySensitive && <span className="case-tag-chip muted">emotionally sensitive</span>}
+                    {guestTags.aiDifficult && <span className="case-tag-chip muted">AI difficult</span>}
+                    {guestTags.highRejectionRate && <span className="case-tag-chip muted">high rejection</span>}
+                    {guestTags.slowResponder && <span className="case-tag-chip muted">slow responder</span>}
+                    {guestTags.customTags.map((t) => <span key={t.id} className="case-tag-chip">{t.label}</span>)}
+                  </div>
+                ) : <p className="case-workspace-empty">No tags recorded for this guest.</p>
+              ) : <p className="case-workspace-empty">Loading tags…</p>}
+            </div>
             <button className="case-options-action" disabled={caseInfo.status === "closed"} onClick={() => navigate(`/coordinator/cases/${id}/options`)}><span>▰</span>Review Rebooking Options <b>→</b></button>
           </section>}
           <section className="case-activity"><header><h2>Case Activity</h2><small>Latest recorded events</small></header>{activity.length === 0 ? <p className="case-workspace-empty">No recorded activity.</p> : <ol>{activity.map((item, index) => <li key={`${item.at}-${index}`}><i/><div><strong>{item.title}</strong><time>{new Date(item.at).toLocaleString("en-NZ", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</time></div></li>)}</ol>}</section>

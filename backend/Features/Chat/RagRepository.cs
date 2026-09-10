@@ -6,8 +6,52 @@ using TravelDisruptionAgent.Api.Infrastructure.Data.Entities;
 
 namespace TravelDisruptionAgent.Api.Features.Chat;
 
-public class RagRepository(AppDbContext db) : IRagRepository
+public class RagRepository(AppDbContext db, GeminiClient gemini) : IRagRepository
 {
+    private static string HotelDocumentName(Guid hotelId) => $"hotel-refund-policy:{hotelId}";
+
+    // 跟 RagChunkBackfill 对平台默认文档用的切片规则同一套："\n## " 分段，酒店政策文本本来就是
+    // 客人自己填的自由文本 markdown，沿用这个约定而不是另起一套，也是历史上关键词匹配
+    // (CaseService.GetPolicySummaryAsync 迁移前的版本)已经在用的分段方式。
+    public async Task ReplaceHotelPolicyDocumentAsync(Guid hotelId, string content, CancellationToken ct = default)
+    {
+        var existing = await db.RagDocuments.Where(d => d.HotelId == hotelId).ToListAsync(ct);
+        db.RagDocuments.RemoveRange(existing); // chunk 通过 FK Cascade 一并删掉
+
+        var sections = content.Split("\n## ", StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
+        if (sections.Count == 0) sections = [content.Trim()];
+
+        var now = DateTimeOffset.UtcNow;
+        var doc = new RagDocument
+        {
+            Id = Guid.NewGuid(), Name = HotelDocumentName(hotelId), Version = 1, Content = content,
+            IsDefaultVersion = true, SourceType = "hotel-policy", HotelId = hotelId, CreatedAt = now, UpdatedAt = now,
+        };
+        db.RagDocuments.Add(doc);
+
+        for (var i = 0; i < sections.Count; i++)
+        {
+            var embedding = await gemini.EmbedAsync(sections[i], ct);
+            db.RagDocumentChunks.Add(new RagDocumentChunk
+            {
+                Id = Guid.NewGuid(), RagDocumentId = doc.Id, ChunkIndex = i, Content = sections[i],
+                Embedding = embedding is { Length: > 0 } ? new Vector(embedding) : null, CreatedAt = now,
+            });
+        }
+        await db.SaveChangesAsync(ct);
+    }
+
+    public async Task<string?> FindNearestHotelChunkAsync(Guid hotelId, Vector query, CancellationToken ct = default)
+    {
+        var name = HotelDocumentName(hotelId);
+        return await db.RagDocumentChunks
+            .Where(c => c.RagDocument!.Name == name && c.Embedding != null)
+            .OrderBy(c => c.Embedding!.CosineDistance(query))
+            .Select(c => c.Content)
+            .FirstOrDefaultAsync(ct);
+    }
+
     public Task<List<RagDocument>> GetDefaultDocumentsAsync(CancellationToken ct = default) =>
         db.RagDocuments.Where(d => d.IsDefaultVersion).ToListAsync(ct);
 

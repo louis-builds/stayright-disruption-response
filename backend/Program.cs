@@ -8,6 +8,7 @@ using TravelDisruptionAgent.Api.Features.Auth;
 using TravelDisruptionAgent.Api.Features.Bookings;
 using TravelDisruptionAgent.Api.Features.Calls;
 using TravelDisruptionAgent.Api.Features.Tags;
+using TravelDisruptionAgent.Api.Features.Push;
 using TravelDisruptionAgent.Api.Features.Cases;
 using TravelDisruptionAgent.Api.Features.Chat;
 using TravelDisruptionAgent.Api.Features.Coordinator;
@@ -48,11 +49,14 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString, o => o.UseVector()).UseSnakeCaseNamingConvention());
 
 const string FrontendCorsPolicy = "Frontend";
-var frontendOrigin = Environment.GetEnvironmentVariable("FRONTEND_ORIGIN") ?? "http://localhost:5173";
+// 逗号分隔支持多个本地开发前端同时联调(Web:5173、协调员App:8091、客户端App:8092),
+// 不用每次切换测试对象都重启后端换 FRONTEND_ORIGIN。
+var frontendOrigins = (Environment.GetEnvironmentVariable("FRONTEND_ORIGIN") ?? "http://localhost:5173,http://localhost:8091,http://localhost:8092")
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(FrontendCorsPolicy, policy =>
-        policy.WithOrigins(frontendOrigin).AllowAnyHeader().AllowAnyMethod().AllowCredentials());
+        policy.WithOrigins(frontendOrigins).AllowAnyHeader().AllowAnyMethod().AllowCredentials());
 });
 
 builder.Services.AddControllers();
@@ -104,6 +108,7 @@ builder.Services.AddScoped<ICaseService, CaseService>();
 builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 builder.Services.AddSingleton<CaseActionTokenService>();
 builder.Services.AddSingleton<IPolicyDocumentStorage, S3PolicyDocumentStorage>();
+builder.Services.AddSingleton<IRagDocumentSource, RagDocumentSource>();
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<IRagRepository, RagRepository>();
 builder.Services.AddScoped<GeminiClient>();
@@ -136,6 +141,8 @@ builder.Services.AddScoped<ITelephonyProvider, MockTelephonyProvider>();
 builder.Services.AddScoped<IAsrProvider, MockAsrProvider>();
 builder.Services.AddScoped<ITagRepository, TagRepository>();
 builder.Services.AddScoped<ITagService, TagService>();
+builder.Services.AddScoped<IDeviceTokenRepository, DeviceTokenRepository>();
+builder.Services.AddScoped<IExpoPushSender, ExpoPushSender>();
 builder.Services.AddHostedService<FaqClusteringJob>();
 builder.Services.AddHostedService<HandoffIngestJob>();
 
@@ -145,8 +152,9 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     await db.Database.MigrateAsync();
-    await SeedRunner.RunAsync(db, app.Logger);
+    await SeedRunner.RunAsync(db, scope.ServiceProvider.GetRequiredService<IRagDocumentSource>(), app.Logger);
     await RagChunkBackfill.RunAsync(db, scope.ServiceProvider.GetRequiredService<TravelDisruptionAgent.Api.Features.Chat.GeminiClient>(), app.Logger);
+    await RagChunkBackfill.RunHotelPolicyBackfillAsync(db, scope.ServiceProvider.GetRequiredService<TravelDisruptionAgent.Api.Features.Chat.IRagRepository>(), app.Logger);
 }
 
 if (app.Environment.IsDevelopment())

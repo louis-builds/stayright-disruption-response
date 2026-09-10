@@ -92,6 +92,13 @@ public class TagRepository(AppDbContext db) : ITagRepository
     public Task<List<CustomTag>> ListGuestCustomTagsAsync(Guid guestUserId, CancellationToken ct = default) =>
         db.GuestCustomTags.Where(g => g.GuestUserId == guestUserId).Include(g => g.CustomTag).Select(g => g.CustomTag!).ToListAsync(ct);
 
+    public Task<List<GuestCustomTag>> ListGuestCustomTagsForManyAsync(IEnumerable<Guid> guestUserIds, CancellationToken ct = default)
+    {
+        var ids = guestUserIds.Distinct().ToList();
+        if (ids.Count == 0) return Task.FromResult(new List<GuestCustomTag>());
+        return db.GuestCustomTags.Where(g => ids.Contains(g.GuestUserId)).Include(g => g.CustomTag).ToListAsync(ct);
+    }
+
     // 幂等：同一个标签重复打在同一个客人身上不报错，直接当没发生过——这不是用户能感知到的边界情况，
     // 报错只会让前端多写一层错误处理，没有实际价值。
     public async Task ApplyTagAsync(Guid customTagId, Guid guestUserId, Guid appliedByUserId, CancellationToken ct = default)

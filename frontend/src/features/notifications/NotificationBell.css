@@ -53,6 +53,56 @@
   animation: bell-drop-in 0.15s ease;
 }
 
+.bell-dropdown-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0.85rem;
+  border-bottom: 1px solid #e7edf3;
+  background: white;
+}
+
+.bell-dropdown-header > strong {
+  font-size: 0.9rem;
+}
+
+.bell-tabs {
+  display: flex;
+  gap: 0.2rem;
+  padding: 0.2rem;
+  border-radius: 8px;
+  background: #f3f1f8;
+}
+
+.bell-tabs button {
+  border: none;
+  border-radius: 6px;
+  padding: 0.32rem 0.55rem;
+  background: transparent;
+  color: #687386;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.bell-tabs button.active {
+  background: white;
+  color: #7527ed;
+  box-shadow: 0 1px 4px rgba(31, 45, 61, 0.12);
+}
+
+.bell-empty {
+  margin: 0;
+  padding: 1.4rem 1rem;
+  color: #7c8da0;
+  font-size: 0.82rem;
+  text-align: center;
+}
+
 @keyframes bell-drop-in {
   from { opacity: 0; transform: translateY(-6px); }
   to { opacity: 1; transform: translateY(0); }

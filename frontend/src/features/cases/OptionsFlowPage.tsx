@@ -17,6 +17,9 @@ interface OptionPayload {
   currency?: string;
   distance_km?: number;
   reason?: string;
+  room_description?: string;
+  room_amenities?: string[];
+  room_image_urls?: string[];
   refund_amount?: number;
   cancellation_fee?: number;
   eta_business_days?: number;
@@ -405,9 +408,18 @@ export function OptionsFlowPage() {
                       {o.perkNames.length > 0 && (
                         <p className="option-line option-perks">Includes: {o.perkNames.join(", ")}</p>
                       )}
+                      {payload.room_image_urls && payload.room_image_urls.length > 0 && (
+                        <div className="option-room-photos">
+                          {payload.room_image_urls.map((uri, i) => (
+                            <img key={i} src={uri} alt={payload.room_type ?? "Room"} className="option-room-photo" />
+                          ))}
+                        </div>
+                      )}
+                      {payload.room_description && <p className="option-line option-room-description">{payload.room_description}</p>}
                       <dl className="guest-option-detail-grid">
                         {o.optionType !== "cancel" && o.optionType !== "custom" && <div><dt>Hotel</dt><dd>{payload.hotel ?? "Same hotel"}</dd></div>}
                         {payload.room_type && <div><dt>Room type</dt><dd>{payload.room_type}</dd></div>}
+                        {payload.room_amenities && payload.room_amenities.length > 0 && <div><dt>Amenities</dt><dd>{payload.room_amenities.join(", ")}</dd></div>}
                         {payload.distance_km !== undefined && <div><dt>Distance</dt><dd>{payload.distance_km} km</dd></div>}
                         {payload.fee_diff !== undefined && <div><dt>Fee difference</dt><dd className={payload.fee_diff <= 0 ? "positive" : ""}>{payload.fee_diff >= 0 ? "+" : ""}{payload.fee_diff} {payload.currency}</dd></div>}
                         {payload.refund_amount !== undefined && <div><dt>Refund amount</dt><dd>{payload.refund_amount} {payload.currency}</dd></div>}

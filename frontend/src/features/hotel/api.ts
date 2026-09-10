@@ -1,5 +1,5 @@
 import { apiDelete, apiGet, apiPost, apiPostMultipart, apiPut } from "../../shared/api/client";
-import type { HotelPerk, HotelProfile, HotelRefundPolicy, InquiryItem, RoomType, SelectedOptionItem, UpsertHotelRefundPolicyRequest } from "./types";
+import type { CustomTag, GuestTags, HotelPerk, HotelProfile, HotelRefundPolicy, InquiryItem, RoomType, SelectedOptionItem, UpsertHotelRefundPolicyRequest } from "./types";
 
 export function fetchInquiries(status?: string) {
   return apiGet<InquiryItem[]>(`/api/hotel/inquiries${status ? `?status=${status}` : ""}`);
@@ -81,4 +81,34 @@ export function uploadRefundPolicyFile(file: File, body: Omit<UpsertHotelRefundP
   if (body.effectiveUntil) formData.append("effectiveUntil", body.effectiveUntil);
   formData.append("isActive", String(body.isActive ?? true));
   return apiPostMultipart<HotelRefundPolicy>("/api/hotel/profile/refund-policy/file", formData);
+}
+
+// ---------- Guest tags (api/tags, hotel+coordinator only; guests get 403) ----------
+
+export function fetchGuestTags(guestUserId: string) {
+  return apiGet<GuestTags>(`/api/tags/guest/${guestUserId}`);
+}
+
+export function queryGuestTags(guestUserIds: string[]) {
+  return apiPost<Record<string, GuestTags>>("/api/tags/query", { guestUserIds });
+}
+
+export function fetchCustomTags() {
+  return apiGet<CustomTag[]>("/api/tags/custom");
+}
+
+export function createCustomTag(label: string) {
+  return apiPost<CustomTag>("/api/tags/custom", { label });
+}
+
+export function deleteCustomTag(id: string) {
+  return apiDelete<null>(`/api/tags/custom/${id}`);
+}
+
+export function applyTagToGuest(tagId: string, guestUserId: string) {
+  return apiPost<null>(`/api/tags/custom/${tagId}/guests/${guestUserId}`, {});
+}
+
+export function removeTagFromGuest(tagId: string, guestUserId: string) {
+  return apiDelete<null>(`/api/tags/custom/${tagId}/guests/${guestUserId}`);
 }

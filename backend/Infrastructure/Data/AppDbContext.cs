@@ -3,7 +3,7 @@ using TravelDisruptionAgent.Api.Infrastructure.Data.Entities;
 
 namespace TravelDisruptionAgent.Api.Infrastructure.Data;
 
-public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+public class AppDbContext(DbContextOptions<AppDbContext> options, IServiceScopeFactory scopeFactory, ILogger<AppDbContext> logger) : DbContext(options)
 {
     private bool recordingWorkflowHistory;
 
@@ -38,6 +38,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<FaqQuestion> FaqQuestions => Set<FaqQuestion>();
     public DbSet<CaseWorkflowStateHistory> CaseWorkflowStateHistories => Set<CaseWorkflowStateHistory>();
     public DbSet<Call> Calls => Set<Call>();
+    public DbSet<DeviceToken> DeviceTokens => Set<DeviceToken>();
     public DbSet<CallRecording> CallRecordings => Set<CallRecording>();
     public DbSet<CustomTag> CustomTags => Set<CustomTag>();
     public DbSet<GuestCustomTag> GuestCustomTags => Set<GuestCustomTag>();
@@ -59,7 +60,25 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .Distinct()
             .ToList();
 
+        var newNotifications = ChangeTracker.Entries<Notification>()
+            .Where(entry => entry.State == EntityState.Added)
+            .Select(entry => entry.Entity)
+            .ToList();
+
         var changed = await base.SaveChangesAsync(cancellationToken);
+
+        if (newNotifications.Count > 0)
+        {
+            try
+            {
+                await DispatchPushNotificationsAsync(newNotifications, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Push dispatch failed for {Count} notification(s) already saved", newNotifications.Count);
+            }
+        }
+
         if (affectedCaseIds.Count == 0) return changed;
 
         recordingWorkflowHistory = true;
@@ -89,6 +108,29 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             recordingWorkflowHistory = false;
         }
         return changed;
+    }
+
+    private async Task DispatchPushNotificationsAsync(List<Notification> notifications, CancellationToken ct)
+    {
+        using var scope = scopeFactory.CreateScope();
+        var tokenRepo = scope.ServiceProvider.GetRequiredService<Features.Push.IDeviceTokenRepository>();
+        var sender = scope.ServiceProvider.GetRequiredService<Features.Push.IExpoPushSender>();
+
+        var userIds = notifications.Select(n => n.UserId).Distinct().ToList();
+        var tokens = await tokenRepo.GetTokensForUsersAsync(userIds, ct);
+        if (tokens.Count == 0) return;
+
+        var tokensByUser = tokens.ToLookup(t => t.UserId);
+        var messages = new List<Features.Push.PushMessage>();
+        foreach (var n in notifications)
+        {
+            foreach (var token in tokensByUser[n.UserId])
+            {
+                var data = n.CaseId is Guid caseId ? new Dictionary<string, string> { ["caseId"] = caseId.ToString() } : null;
+                messages.Add(new Features.Push.PushMessage(token.ExpoPushToken, n.Title, n.Body, data));
+            }
+        }
+        if (messages.Count > 0) await sender.SendAsync(messages, ct);
     }
 
     private async Task<string?> DeriveWorkflowStateAsync(Guid caseId, CancellationToken ct)
@@ -197,6 +239,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<RagDocument>(e =>
         {
             e.HasIndex(x => new { x.Name, x.Version }).IsUnique();
+            e.HasIndex(x => x.HotelId);
+            e.HasOne(x => x.Hotel).WithMany().HasForeignKey(x => x.HotelId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<RefundConfirmation>(e =>
@@ -264,6 +308,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             e.HasIndex(x => new { x.CustomTagId, x.GuestUserId }).IsUnique();
             e.HasIndex(x => x.GuestUserId);
+        });
+
+        modelBuilder.Entity<DeviceToken>(e =>
+        {
+            e.HasIndex(x => x.ExpoPushToken).IsUnique();
+            e.HasIndex(x => x.UserId);
         });
 
         modelBuilder.Entity<AlertAcknowledgement>(e =>
