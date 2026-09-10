@@ -3,9 +3,10 @@ namespace TravelDisruptionAgent.Api.Features.Disruption;
 public record DisruptionListItemDto(
     Guid Id, string Type, string? EventSubtype, string? Severity, string Title, string Region,
     DateTimeOffset StartAt, DateTimeOffset? EndAtOrWindow,
-    string Status, int AffectedCount, Guid? AssigneeCoordinatorId, string? AssigneeNickname);
+    string Status, int AffectedCount, Guid? AssigneeCoordinatorId, string? AssigneeNickname,
+    double? Lat, double? Lng, int AttentionCount);
 
-// Geo/RawSignal 只在详情里带——列表页只是排队用的一行摘要，不需要这些字段。
+// 列表携带轻量的坐标字段供前端生成地区摘要；半径与原始信号仍只在详情中返回。
 public record DisruptionDetailDto(
     Guid Id, string Type, string? EventSubtype, string? Severity, string Title, string Region,
     double? Lat, double? Lng, double? RadiusKm,

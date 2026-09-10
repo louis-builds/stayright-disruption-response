@@ -5,7 +5,7 @@ namespace TravelDisruptionAgent.Api.Features.Disruption;
 
 public interface IDisruptionRepository
 {
-    Task<List<DisruptionEntity>> ListAsync(string? type, string? region, CancellationToken ct = default);
+    Task<List<DisruptionListItemDto>> ListAsync(string? type, string? region, CancellationToken ct = default);
     Task<DisruptionEntity?> FindByIdAsync(Guid id, CancellationToken ct = default);
     Task AddDisruptionAsync(DisruptionEntity disruption, CancellationToken ct = default);
     Task<int> CountAffectedAsync(Guid disruptionId, CancellationToken ct = default);

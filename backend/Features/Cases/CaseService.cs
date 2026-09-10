@@ -547,16 +547,20 @@ public class CaseService(
     // 客人已经选完"。这里按真实信号(Option.Availability/Selected)推算，不改 Case.Status 本身。
     //
     // 三种方案类型里，只有 defer(原酒店延期)是真的"等原酒店回复"；alternate 是候补酒店（可能是
-    // 完全不同的一家酒店）确认空房，跟原酒店无关；cancel 草稿一生成就是 available，是否该展示给
-    // 客人由 PolicyAllowsCancelAsync 判断（只影响聊天消息文案是否提它，Option 行本身不受影响），
-    // 不代表任何一方"回复"了什么。所以判断"是否已经有能选的方案"时排除 cancel（否则客人只是点开
+    // 完全不同的一家酒店）确认空房，跟原酒店无关；cancel 草稿一生成就是 available，不代表任何
+    // 一方"回复"了什么。所以判断"是否已经有能选的方案"时排除 cancel（否则客人只是点开
     // "查看方案"自动生成草稿就会误判成有进展），但徽章文案不能写死"酒店确认"——三种来源都可能是
     // 这个状态的成因，笼统写"有方案可选"才不会在 alternate/cancel 触发时说错话。
+    //
+    // 这里必须用 ListAllOptionsAsync 而不是 ListOptionsAsync——后者会把 Availability=="unavailable"
+    // 的行(酒店拒绝 defer、没配政策的 cancel)整行隐藏掉，用它算状态时"酒店已拒绝"这个信号连同
+    // 那一行一起消失，案件会一直卡在"Awaiting hotel confirmation"，即使 guest 其实已经有别的
+    // 方案(比如 cancel)能选了——这是真实出现过的 bug，不是假设。
     private async Task<(string Status, string Label)> ResolveDisplayStatusAsync(Case c, CancellationToken ct)
     {
         if (c.Status == "closed") return ("closed", "Completed");
 
-        var options = await cases.ListOptionsAsync(c.Id, ct);
+        var options = await cases.ListAllOptionsAsync(c.Id, ct);
         if (options.Any(o => o.Selected)) return ("guest_selected", "Option selected");
         if (options.Any(o => o.OptionType != "cancel" && o.Availability != "pending"))
             return ("awaiting_guest", "New options ready — pick one");
@@ -569,15 +573,13 @@ public class CaseService(
     public async Task<List<OptionDto>> GetOptionsAsync(Guid caseId, Guid userId, string userRole, CancellationToken ct = default)
     {
         var c = await LoadAuthorizedCaseAsync(cases, caseId, userId, userRole, ct);
-        var hotelId = c.Booking?.HotelId;
         var list = await cases.ListOptionsAsync(caseId, ct);
-        var visible = new List<Option>();
-        foreach (var o in list)
-        {
-            if (o.CoordinatorVisibilityOverride == false) continue;
-            if (o.CoordinatorVisibilityOverride != true && o.OptionType == "cancel" && hotelId.HasValue && !await PolicyAllowsCancelAsync(hotelId.Value, ct)) continue;
-            visible.Add(o);
-        }
+        // cancel 行的 Availability 在生成时(OptionsAdminService.BuildDraftOptionsAsync)已经根据
+        // "酒店有没有配退款政策"定过了——这里不再另外拿政策原文问一遍 Gemini 判断"该不该展示"，
+        // 两套判断依据不同(一个看 structured_rules 数值，一个看大白话文本让模型自由判断)，
+        // 曾经真的出现过 Option 行是 available、这里却因为 Gemini 读大白话文本判"no"而被过滤掉，
+        // 跟聊天里同一份数据算出的退款金额自相矛盾。
+        var visible = list.Where(o => o.CoordinatorVisibilityOverride != false);
         return [.. visible.Select(ToDto)];
     }
 
@@ -890,28 +892,8 @@ public class CaseService(
         _ => o.OptionType,
     };
 
-    /// <summary>退款政策要不要展示给客人得看这家酒店自己配没配政策——没配就代表这家酒店不支持退款，
-    /// 不回退到平台默认政策（那是给"取消费怎么算"这类通用问答兜底用的，不能替酒店做"支不支持退款"这个决定）。
-    /// 配了政策再让 Gemini 读摘录判断这份政策具体怎么说；没配 Gemini key 时保守放行（总比卡住客人、
-    /// 有退款权利却看不到强）。</summary>
-    private async Task<bool> PolicyAllowsCancelAsync(Guid hotelId, CancellationToken ct)
-    {
-        var hotelPolicy = await hotelRepo.GetActiveRefundPolicyAsync(hotelId, ct);
-        if (hotelPolicy is null) return false;
-
-        var section = hotelPolicy.Content.Split("\n## ")
-            .FirstOrDefault(s => s.Contains("refund", StringComparison.OrdinalIgnoreCase))
-            ?? hotelPolicy.Content;
-
-        var prompt = $"Cancellation policy excerpt:\n{section.Trim()}\n\nA guest's stay was disrupted through no fault of their own and " +
-            "may want to cancel for a refund. Based only on the policy above, should we offer them a cancellation/refund option? " +
-            "Reply with exactly one word: yes or no.";
-        var verdict = await gemini.GenerateAsync(prompt, ct);
-        return verdict is null || verdict.TrimStart().StartsWith("yes", StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>酒店在 H1/H2 确认、客人还没选定时调用：把确认的方案（连同其他已可用的方案，退款选项先过一遍
-    /// 政策判断）推进案件聊天窗口，同时落一条应用内通知 + 发邮件——客人当下不在聊天页也能看到。</summary>
+    /// <summary>酒店在 H1/H2 确认、客人还没选定时调用：把确认的方案（连同其他已可用的方案）
+    /// 推进案件聊天窗口，同时落一条应用内通知 + 发邮件——客人当下不在聊天页也能看到。</summary>
     private async Task NotifyGuestOptionConfirmedAsync(Case full, Option confirmed, CancellationToken ct)
     {
         var guest = await users.FindByIdAsync(full.Booking!.GuestUserId, ct);
@@ -925,7 +907,6 @@ public class CaseService(
         foreach (var o in others)
         {
             if (o.CoordinatorVisibilityOverride == false) continue;
-            if (o.CoordinatorVisibilityOverride != true && o.OptionType == "cancel" && full.Booking?.HotelId is { } hotelId && !await PolicyAllowsCancelAsync(hotelId, ct)) continue;
             lines.Add($"Also available: {OptionTitle(o)}.");
         }
         lines.Add("Open your options to compare and confirm.");
