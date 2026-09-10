@@ -19,6 +19,8 @@ from functools import lru_cache
 
 from langchain.tools import tool
 from langchain.chat_models import init_chat_model
+from langchain_mcp_adapters.client import MultiServerMCPClient
+SERVER_SCRIPT = str(Path(__file__).parent / "src\mcp_server\identify_server.py") //need to check the location
 
 
 # 延迟初始化：init_chat_model 在构造时就要 GEMINI_API_KEY，放模块级会让「只想 import
@@ -32,48 +34,41 @@ def get_model():
 def get_model_with_tools():
     return get_model().bind_tools(tools)
 
+##转到mcp中去
+# @tool
+# def search_alternative_properties(
+#     city: str,
+#     check_in: str,
+#     check_out: str,
+#     budget_max: float,
+#     property_type: str = "any",
+# ) -> list[dict]:
+#     """搜索满足条件的替代房源（占位实现，先返回假数据）。
 
-# 这两个工具给 rank_and_explain 节点用：
-# 让 LLM 在"给客人推荐替代方案"时，能主动查真实数据，而不是自己编
-@tool
-def search_alternative_properties(
-    city: str,
-    check_in: str,
-    check_out: str,
-    budget_max: float,
-    property_type: str = "any",
-) -> list[dict]:
-    """搜索满足条件的替代房源（占位实现，先返回假数据）。
-
-    Args:
-        city: 目标城市，例如 "Queenstown"
-        check_in: 入住日期，格式 YYYY-MM-DD
-        check_out: 离店日期，格式 YYYY-MM-DD
-        budget_max: 每晚预算上限（NZD）
-        property_type: 房型偏好，例如 "hotel"、"holiday_park"、"any"
-    """
-    # TODO: 换成真实的房源搜索 API / 数据库查询
-    return [
-        {"property_id": "P001", "name": "Lakeview Motel", "price_per_night": 189},
-        {"property_id": "P002", "name": "Queenstown Holiday Park", "price_per_night": 129},
-    ]
+#     Args:
+#         city: 目标城市，例如 "Queenstown"
+#         check_in: 入住日期，格式 YYYY-MM-DD
+#         check_out: 离店日期，格式 YYYY-MM-DD
+#         budget_max: 每晚预算上限（NZD）
+#         property_type: 房型偏好，例如 "hotel"、"holiday_park"、"any"
+#     """
+#     # TODO: 换成真实的房源搜索 API / 数据库查询
+#     return [
+#         {"property_id": "P001", "name": "Lakeview Motel", "price_per_night": 189},
+#         {"property_id": "P002", "name": "Queenstown Holiday Park", "price_per_night": 129},
+#     ]
 
 
-@tool
-def get_cancellation_policy(property_id: str) -> str:
-    """查询某个房源真实的取消/改签政策原文（占位实现）。
+# @tool
+# def get_cancellation_policy(property_id: str) -> str:
+#     """查询某个房源真实的取消/改签政策原文（占位实现）。
 
-    Args:
-        property_id: 房源 ID
-    """
-    # TODO: 换成真实的政策数据库/知识库检索（RAG），
-    # 绝不能让 LLM 凭记忆编造政策条款
-    return "Free cancellation up to 24 hours before check-in. After that, one night's charge applies."
-
-
-tools = [search_alternative_properties, get_cancellation_policy]
-tools_by_name = {tool.name: tool for tool in tools}
-
+#     Args:
+#         property_id: 房源 ID
+#     """
+#     # TODO: 换成真实的政策数据库/知识库检索（RAG），
+#     # 绝不能让 LLM 凭记忆编造政策条款
+#     return "Free cancellation up to 24 hours before check-in. After that, one night's charge applies."
 
 # ---------- Step 2: 定义 State ----------
 from langchain.messages import AnyMessage
@@ -92,6 +87,18 @@ class DisruptionState(TypedDict):
     final_message: Optional[str]
     messages: Annotated[list[AnyMessage], operator.add]
     llm_calls: int
+
+client = MultiServerMCPClient(
+        {
+            "kakapo": {
+                "command": "python",
+                "args": [SERVER_SCRIPT],
+                "transport": "stdio",
+            }
+        }
+    )
+    tools = await client.get_tools()
+    tools_by_name = {tool.name: tool for tool in tools}
 
 
 # ---------- Step 3: 定义各节点 ----------
@@ -118,23 +125,23 @@ def _serialise_booking(row: dict) -> dict:
         "lng": row["lng"],
     }
 
+## 这部分转到mcp中去
+# def identify_bookings(state: DisruptionState, config: RunnableConfig | None = None) -> dict:
+#     """按 DisruptionEvent 的地理 + 时间范围查受影响订单（复用 src/identify，不走 LLM）。
 
-def identify_bookings(state: DisruptionState, config: RunnableConfig | None = None) -> dict:
-    """按 DisruptionEvent 的地理 + 时间范围查受影响订单（复用 src/identify，不走 LLM）。
+#     连接工厂从 config["configurable"]["connect"] 取，默认 src.identify.db.get_connection；
+#     测试里传一个返回 mock 连接的 callable 就能脱库跑（见 tests/test_identify.py 的 _mock_conn）。
+#     """
+#     event = DisruptionEvent.model_validate(state["disruption_event"])
+#     connect = ((config or {}).get("configurable") or {}).get("connect", get_connection)
 
-    连接工厂从 config["configurable"]["connect"] 取，默认 src.identify.db.get_connection；
-    测试里传一个返回 mock 连接的 callable 就能脱库跑（见 tests/test_identify.py 的 _mock_conn）。
-    """
-    event = DisruptionEvent.model_validate(state["disruption_event"])
-    connect = ((config or {}).get("configurable") or {}).get("connect", get_connection)
+#     conn = connect()
+#     try:
+#         rows = find_affected_bookings(event, conn)
+#     finally:
+#         conn.close()
 
-    conn = connect()
-    try:
-        rows = find_affected_bookings(event, conn)
-    finally:
-        conn.close()
-
-    return {"affected_bookings": [_serialise_booking(r) for r in rows]}
+#     return {"affected_bookings": [_serialise_booking(r) for r in rows]}
 
 
 def check_case_type(state: DisruptionState) -> dict:
@@ -148,27 +155,45 @@ def notify_affected_guest(state: DisruptionState) -> dict:
     return {}
 
 
-def rank_and_explain(state: DisruptionState) -> dict:
+async def rank_and_explain(state: DisruptionState) -> dict:
     """LLM 节点：结合客人偏好，调用工具搜索替代房源 + 查真实政策，
     生成排序后的推荐方案和解释文案"""
-    return {
-        "messages": [
-            get_model_with_tools().invoke(
-                [
-                    SystemMessage(
-                        content=(
-                            "You are a travel disruption assistant for StayRight NZ. "
-                            "Use the tools to search real alternative properties and "
-                            "check their real cancellation policy before recommending "
-                            "anything to the guest. Never invent policy terms."
-                        )
-                    )
-                ]
-                + state["messages"]
+    bookings = state.get("affected_bookings") or []
+    bookings_summary = "\n".join(
+        f"- Booking {b['booking_id']}: {b['hotel_name']}, {b['check_in']} to {b['check_out']}"
+        for b in bookings
+    ) or "(no affected bookings identified)"
+
+    response = await get_model_with_tools().ainvoke(
+        [
+            SystemMessage(
+                content=(
+                    "You are a travel disruption assistant for StayRight NZ. "
+                    "Use the tools to search real alternative properties and "
+                    "check their real cancellation policy before recommending "
+                    "anything to the guest. Never invent policy terms.\n\n"
+                    "Affected bookings:\n" + bookings_summary + "\n\n"
+                    "Infer the city from each hotel's name when calling "
+                    "search_alternative_properties. The guest's budget isn't "
+                    "tracked yet, so use a reasonable mid-range NZD nightly rate "
+                    "for the property type as budget_max."
+                )
             )
-        ],
+        ]
+        + state["messages"]
+    )
+
+    result: dict = {
+        "messages": [response],
         "llm_calls": state.get("llm_calls", 0) + 1,
     }
+    if not response.tool_calls:
+        # LLM 决定不再调用工具了——如果这整轮下来一次工具都没调过，说明它是凭空回答，
+        # 没有真实房源/政策数据兜底，不该被当成可信推荐，交给 route_after_rank 的
+        # 置信度检查转人工（在此之前 ranking_confidence 从来没被赋值过，那条检查形同虚设）。
+        used_real_data = any(isinstance(m, ToolMessage) for m in state["messages"])
+        result["ranking_confidence"] = 0.9 if used_real_data else 0.3
+    return result
 
 
 def rank_tool_node(state: DisruptionState) -> dict:
@@ -182,15 +207,21 @@ def rank_tool_node(state: DisruptionState) -> dict:
 
 
 def generate_message(state: DisruptionState) -> dict:
-    """LLM 节点：生成发给客人的最终通知文案（不需要工具，直接总结）"""
-    return {
-        "final_message": get_model().invoke(
-            [
-                SystemMessage(content="Write a warm, clear message to the guest summarising the rebooking outcome.")
-            ]
-            + state["messages"]
-        ).content
-    }
+    """LLM 节点：生成发给客人的最终通知文案（不需要工具，直接总结）。
+
+    gemini-2.5-flash 在这个节点上实测有相当高概率(接近一半)返回 finish_reason=STOP 但
+    output_tokens=0 的空结果——不是网络错误也不是被安全过滤挡了，就是没写。试过用
+    thinking_budget=0 关掉思考预算，复现率没变化，不是思考预算吃满输出配额的问题，原因
+    不明。重试几次基本能拿到非空结果；真的一直空，退到一句兜底文案，不能让客人收到空消息。
+    """
+    prompt = [SystemMessage(content="Write a warm, clear message to the guest summarising the rebooking outcome.")] + state["messages"]
+
+    for _ in range(3):
+        content = get_model().invoke(prompt).content
+        if content:
+            return {"final_message": content}
+
+    return {"final_message": "We've found some rebooking options for your affected stay and will follow up shortly with the details."}
 
 
 def coordinate_booking(state: DisruptionState) -> dict:
