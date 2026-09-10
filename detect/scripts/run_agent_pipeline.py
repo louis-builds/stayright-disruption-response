@@ -25,6 +25,8 @@ agent/langgraph_framework.py 的 LangGraph 流程。
 from __future__ import annotations
 
 import argparse
+import asyncio
+import logging
 import os
 import time
 from datetime import datetime, timezone
@@ -33,7 +35,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from langgraph.checkpoint.memory import InMemorySaver
 
-from agent.langgraph_framework import agent_builder, build_initial_state
+from agent.langgraph_framework import build_agent_graph, build_initial_state
 from scripts.run_detect import (
     _sim_flight_status,
     _sim_forecast,
@@ -51,13 +53,15 @@ SOURCE_CHOICES = ["weather", "volcano", "flight", "road", "all"]
 STOP_AFTER_NODE = "identify_bookings"  # 非 --full 时，图跑到这个节点就中断
 
 
-def compile_graph(*, full: bool):
+async def compile_graph(*, full: bool):
     """编译 langgraph_framework 的图。非 full 模式用 interrupt_after 让它跑完 identify_bookings 就停，
-    下游（check_case_type / notify / rank_and_explain …）一律不执行。"""
+    下游（check_case_type / notify / rank_and_explain …）一律不执行。
+
+    build_agent_graph 要 await（MCP 工具在装配期就要连一次 server 拿 schema）。"""
     kwargs: dict = {"checkpointer": InMemorySaver()}
     if not full:
         kwargs["interrupt_after"] = [STOP_AFTER_NODE]
-    return agent_builder.compile(**kwargs)
+    return (await build_agent_graph()).compile(**kwargs)
 
 
 def poll_sources(sources: list[str], *, simulate: bool, mock_flight: bool = False) -> list[DisruptionEvent]:
@@ -130,16 +134,17 @@ def describe_event(event: DisruptionEvent) -> str:
     return f"{head} {why} | window {window}"
 
 
-def run_event_through_graph(event: DisruptionEvent, graph, *, full: bool) -> None:
+async def run_event_through_graph(event: DisruptionEvent, graph, *, full: bool) -> None:
     """把一个 DisruptionEvent 灌进图，逐节点打印产出。
 
     非 full 模式下图在 identify_bookings 后 interrupt，check_case_type 及之后一律不跑。
+    identify_bookings / rank_* 节点走 MCP（async），所以用 astream。
     """
     state = build_initial_state(event)
     config = {"configurable": {"thread_id": event.event_id}}
     print(f"  event {event.event_id} [{event.source.value}/{event.event_type}] -> 进入图")
 
-    for step in graph.stream(state, config, stream_mode="updates"):
+    async for step in graph.astream(state, config, stream_mode="updates"):
         for node, update in step.items():
             if node == "__interrupt__":
                 continue  # langgraph 的中断信号，不是真节点
@@ -176,9 +181,11 @@ def main() -> None:
     args = parser.parse_args()
 
     load_dotenv()
+    # 让 identify_bookings 的「经 MCP 调 …」和子进程 matched_bookings 的日志都打到控制台
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     sources = list(SOURCE_CHOICES[:-1]) if args.source == "all" else [args.source]
     max_iterations = 1 if args.once else args.iterations
-    graph = compile_graph(full=args.full)
+    graph = asyncio.run(compile_graph(full=args.full))
 
     print(f"run_agent_pipeline ({'simulate' if args.simulate else 'live'}) "
           f"sources={sources} interval={args.interval:g}s "
@@ -206,7 +213,7 @@ def main() -> None:
                     print(f"  event {event.event_id} [{_dedup_key(event)}/{event.event_type}] "
                           f"跳过（{args.dedup_cooldown_minutes:g} 分钟内已喂过、严重度没升级）")
                     continue
-                run_event_through_graph(event, graph, full=args.full)
+                asyncio.run(run_event_through_graph(event, graph, full=args.full))
 
             if max_iterations and iteration >= max_iterations:
                 print("\n达到轮次上限，停止。")

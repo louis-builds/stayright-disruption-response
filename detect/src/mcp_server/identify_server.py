@@ -1,22 +1,46 @@
 import sys, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
+import logging
+
 from mcp.server.mcpserver import MCPServer
 from src.identify.matcher import find_affected_bookings
 from src.identify.db import get_connection
 from src.detect.models import DisruptionEvent
 
+# stdout 归 MCP 的 JSON-RPC 用，日志只能走 stderr（logging 默认就是 stderr）
+logging.basicConfig(level=logging.INFO, stream=sys.stderr, format="%(levelname)s %(name)s: %(message)s")
+log = logging.getLogger("kakapo.identify_server")
+
 mcp = MCPServer("kakapo")
 
+
+def _serialise_booking(row: dict) -> dict:
+    """matcher 返回的行里 booking_id/guest_id/hotel_id 是 UUID、check_in/check_out
+    是 date —— 都过不了 MCP 的 JSON 序列化，统一转成字符串。放 server 端做，任何
+    MCP client（LangGraph / Claude Desktop / C#）拿到的都是 JSON-safe 的 dict。"""
+    return {
+        "booking_id": str(row["booking_id"]),
+        "guest_id": str(row["guest_id"]),
+        "hotel_id": str(row["hotel_id"]),
+        "hotel_name": row["hotel_name"],
+        "check_in": row["check_in"].isoformat(),
+        "check_out": row["check_out"].isoformat(),
+        "lat": row["lat"],
+        "lng": row["lng"],
+    }
+
+
 @mcp.tool()
-def matched_bookings(disruption_event:dict) -> list[dict]:
+def matched_bookings(disruption_event: dict) -> list[dict]:
     """根据 DisruptionEvent 的地理和时间范围，返回受影响的订单列表。"""
+    log.info("matched_bookings called: %s", disruption_event)
     event = DisruptionEvent.model_validate(disruption_event)
     with get_connection() as conn:
-        return find_affected_bookings(event, conn)
+        rows = find_affected_bookings(event, conn)
+    log.info("matched_bookings -> %d row(s)", len(rows))
+    return [_serialise_booking(row) for row in rows]
 
-# 这两个工具给 rank_and_explain 节点用：
-# 让 LLM 在"给客人推荐替代方案"时，能主动查真实数据，而不是自己编
-@mcp.tool
+@mcp.tool()
 def search_alternative_properties(
     city: str,
     check_in: str,
@@ -40,7 +64,7 @@ def search_alternative_properties(
     ]
 
 
-@mcp.tool
+@mcp.tool()
 def get_cancellation_policy(property_id: str) -> str:
     """查询某个房源真实的取消/改签政策原文（占位实现）。
 
