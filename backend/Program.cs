@@ -183,14 +183,19 @@ app.Run();
 
 static string BuildConnectionString(IConfiguration config)
 {
-    string Env(string key, string fallback) =>
-        Environment.GetEnvironmentVariable(key) ?? config[key] ?? fallback;
+    string Env(string key, string pgKey, string fallback) =>
+        Environment.GetEnvironmentVariable(key)
+        ?? Environment.GetEnvironmentVariable(pgKey)
+        ?? config[key]
+        ?? config[pgKey]
+        ?? fallback;
 
-    var host = Env("POSTGRES_HOST", "localhost");
-    var port = Env("POSTGRES_PORT", "5432");
-    var db = Env("POSTGRES_DB", "travel_disruption");
-    var user = Env("POSTGRES_USER", "app");
-    var password = Env("POSTGRES_PASSWORD", "app_password");
+    // Support both the project's POSTGRES_* names and libpq's standard PG* names.
+    var host = Env("POSTGRES_HOST", "PGHOST", "localhost");
+    var port = Env("POSTGRES_PORT", "PGPORT", "5432");
+    var db = Env("POSTGRES_DB", "PGDATABASE", "travel_disruption");
+    var user = Env("POSTGRES_USER", "PGUSER", "app");
+    var password = Env("POSTGRES_PASSWORD", "PGPASSWORD", "app_password");
 
     return $"Host={host};Port={port};Database={db};Username={user};Password={password}";
 }
