@@ -111,18 +111,86 @@ public class GeminiClient(IHttpClientFactory httpClientFactory, ILogger<GeminiCl
         }
     }
 
-    /// <summary>用 Gemini responseSchema 强制返回结构化布尔值，判断客人是不是在确认要一个刚提到的
-    /// 更便宜/更远的候补方案——不用正则抠自由文本，遵循项目对"新增结构化输出需求"的约定。
-    /// 只走 Gemini，不降级 Bedrock：这是锦上添花的自动化判断，拿不到就跳过这次自动重算，
-    /// 不阻断本轮对话的正常回复。</summary>
-    public async Task<bool?> ClassifyConfirmsCheaperAlternativeAsync(string previousAiMessage, string guestMessage, CancellationToken ct = default)
+    public record AlternateRequestIntent(bool WantsAlternate, string? Criterion);
+
+    /// <summary>用 Gemini responseSchema 判断客人这句话是不是在要求换一个候补方案，以及图什么
+    /// (更便宜/更近/房间更大/说不清)——不用关键词硬判，客人可能说"离市区近点"/"房间大点"，
+    /// 不是只有"cheap"这一种问法。criterion 只在 wants_alternate=true 时有意义。
+    /// 只走 Gemini，不降级 Bedrock：拿不到就当这轮没有换方案的请求，不阻断正常回复。</summary>
+    public async Task<AlternateRequestIntent?> ClassifyAlternateRequestAsync(string guestMessage, CancellationToken ct = default)
     {
         var apiKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
         var model = Environment.GetEnvironmentVariable("GEMINI_MODEL") ?? "gemini-2.5-flash";
         if (string.IsNullOrEmpty(apiKey)) return null;
 
         var url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}";
-        var prompt = $"An assistant told a hotel guest: \"{previousAiMessage}\"\nThe guest then replied: \"{guestMessage}\"\nDoes the guest's reply confirm they want to proceed with a cheaper, farther-away alternative hotel option that was just mentioned? Answer only based on what's given.";
+        var prompt = $"A hotel guest sent this message in a support chat: \"{guestMessage}\"\nIs the guest asking to switch to a different alternate hotel/room option, for any reason (cheaper, closer to the original hotel, a bigger room, or anything else)? If yes, what's the main criterion they care about: \"cheaper\", \"closer\", \"larger\", or \"other\" if unclear or some other reason. Answer only based on what's given.";
+        var requestBody = new
+        {
+            contents = new[] { new { role = "user", parts = new[] { new { text = prompt } } } },
+            generationConfig = new
+            {
+                temperature = 0.0,
+                maxOutputTokens = 50,
+                thinkingConfig = new { thinkingBudget = 0 },
+                responseMimeType = "application/json",
+                responseSchema = new
+                {
+                    type = "OBJECT",
+                    properties = new
+                    {
+                        wants_alternate = new { type = "BOOLEAN" },
+                        criterion = new { type = "STRING", @enum = new[] { "cheaper", "closer", "larger", "other" } },
+                    },
+                    required = new[] { "wants_alternate" },
+                },
+            },
+        };
+
+        try
+        {
+            var client = httpClientFactory.CreateClient("gemini");
+            using var response = await client.PostAsync(url,
+                new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json"), ct);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogWarning("Gemini alternate-request classification returned {Status}: {Body}",
+                    response.StatusCode, await response.Content.ReadAsStringAsync(ct));
+                return null;
+            }
+
+            using var stream = await response.Content.ReadAsStreamAsync(ct);
+            using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+            var text = doc.RootElement.GetProperty("candidates")[0].GetProperty("content")
+                .GetProperty("parts")[0].GetProperty("text").GetString();
+            if (text is null) return null;
+
+            using var parsed = JsonDocument.Parse(text);
+            var root = parsed.RootElement;
+            var wantsAlternate = root.GetProperty("wants_alternate").GetBoolean();
+            var criterion = root.TryGetProperty("criterion", out var c) ? c.GetString() : null;
+            return new AlternateRequestIntent(wantsAlternate, criterion);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Gemini alternate-request classification failed");
+            return null;
+        }
+    }
+
+    /// <summary>用 Gemini responseSchema 强制返回结构化布尔值，判断客人是不是在确认要一个刚推荐的
+    /// 候补方案——不用正则抠自由文本，遵循项目对"新增结构化输出需求"的约定。
+    /// 只走 Gemini，不降级 Bedrock：这是锦上添花的自动化判断，拿不到就跳过这次自动重算，
+    /// 不阻断本轮对话的正常回复。</summary>
+    public async Task<bool?> ClassifyConfirmsAlternativeSwitchAsync(string previousAiMessage, string guestMessage, CancellationToken ct = default)
+    {
+        var apiKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
+        var model = Environment.GetEnvironmentVariable("GEMINI_MODEL") ?? "gemini-2.5-flash";
+        if (string.IsNullOrEmpty(apiKey)) return null;
+
+        var url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}";
+        var prompt = $"An assistant recommended a specific alternate hotel option to a guest: \"{previousAiMessage}\"\nThe guest then replied: \"{guestMessage}\"\nDoes the guest's reply confirm they want to switch to that alternate option? Answer only based on what's given.";
         var requestBody = new
         {
             contents = new[] { new { role = "user", parts = new[] { new { text = prompt } } } },
@@ -149,7 +217,7 @@ public class GeminiClient(IHttpClientFactory httpClientFactory, ILogger<GeminiCl
 
             if (!response.IsSuccessStatusCode)
             {
-                logger.LogWarning("Gemini cheaper-alternative classification returned {Status}: {Body}",
+                logger.LogWarning("Gemini alternate-switch confirmation classification returned {Status}: {Body}",
                     response.StatusCode, await response.Content.ReadAsStringAsync(ct));
                 return null;
             }
@@ -165,7 +233,7 @@ public class GeminiClient(IHttpClientFactory httpClientFactory, ILogger<GeminiCl
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Gemini cheaper-alternative classification failed");
+            logger.LogWarning(ex, "Gemini alternate-switch confirmation classification failed");
             return null;
         }
     }

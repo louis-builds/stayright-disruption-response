@@ -11,8 +11,8 @@ public interface IOptionsAdminService
     Task LockAsync(Guid caseId, Guid optionId, Guid actorUserId, CancellationToken ct = default);
     Task UnlockAsync(Guid caseId, Guid optionId, Guid actorUserId, string reason, CancellationToken ct = default);
     Task RegenerateAsync(Guid caseId, CancellationToken ct = default);
-    Task<Option?> RegenerateAlternateAsync(Guid caseId, bool preferCheaper, CancellationToken ct = default);
-    Task<AlternateCandidatePreviewDto?> PreviewCheaperAlternateAsync(Guid caseId, CancellationToken ct = default);
+    Task<Option?> RegenerateAlternateAsync(Guid caseId, string? preference, CancellationToken ct = default);
+    Task<AlternateCandidatePreviewDto?> PreviewAlternateAsync(Guid caseId, string? preference, CancellationToken ct = default);
     Task<PushOptionsStatusDto> GetPushStatusAsync(Guid caseId, CancellationToken ct = default);
     Task<PushOptionsResultDto> PushAsync(Guid caseId, CancellationToken ct = default);
 }
