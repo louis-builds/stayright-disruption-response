@@ -95,15 +95,14 @@ export function DisruptionOperationsDashboard({ data, syncedAt, onOpenDisruption
         setDisruptions(d.data);
         const defaultEvent = [...d.data].filter((item) => item.status === "active").sort((a, b) => b.affectedCount - a.affectedCount)[0] ?? d.data[0];
         setSelectedDisruptionId((current) => current ?? defaultEvent?.id ?? null);
-        void Promise.all(d.data.map(async (item) => {
-          const [detail, cases] = await Promise.all([api.fetchDisruption(item.id), api.fetchDisruptionCases(item.id)]);
-          const region = item.region.trim() || (detail.code === 0 ? inferredRegion(detail.data.lat, detail.data.lng) : "Unknown region");
+        setEventPresentation(Object.fromEntries(d.data.map((item) => {
+          const region = item.region.trim() || inferredRegion(item.lat ?? null, item.lng ?? null);
           return [item.id, {
             title: readableEventTitle(item, region),
             region,
-            handovers: cases.code === 0 ? cases.data.filter(isOpenAttentionCase).length : 0,
+            handovers: item.attentionCount ?? 0,
           }] as const;
-        })).then((rows) => setEventPresentation(Object.fromEntries(rows)));
+        })));
       }
       if (c.code === 0) setRecent(c.data.slice(0, 3));
     });

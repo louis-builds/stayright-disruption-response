@@ -7,12 +7,26 @@ namespace TravelDisruptionAgent.Api.Features.Disruption;
 
 public class DisruptionRepository(AppDbContext db) : IDisruptionRepository
 {
-    public Task<List<DisruptionEntity>> ListAsync(string? type, string? region, CancellationToken ct = default)
+    public Task<List<DisruptionListItemDto>> ListAsync(string? type, string? region, CancellationToken ct = default)
     {
-        var q = db.Disruptions.AsQueryable();
+        var q = db.Disruptions.AsNoTracking().AsQueryable();
         if (!string.IsNullOrWhiteSpace(type)) q = q.Where(d => d.Type == type);
         if (!string.IsNullOrWhiteSpace(region)) q = q.Where(d => EF.Functions.ILike(d.Region, $"%{region}%"));
-        return q.OrderByDescending(d => d.CreatedAt).ToListAsync(ct);
+        var overdueBefore = DateTimeOffset.UtcNow.AddHours(-24);
+        return q.OrderByDescending(d => d.CreatedAt)
+            .Select(d => new DisruptionListItemDto(
+                d.Id, d.Type, d.EventSubtype, d.Severity, d.Title, d.Region,
+                d.StartAt, d.EndAtOrWindow, d.Status,
+                db.Cases.Count(c => c.DisruptionId == d.Id),
+                d.AssigneeCoordinatorId,
+                d.AssigneeCoordinatorId == null
+                    ? null
+                    : db.Users.Where(u => u.Id == d.AssigneeCoordinatorId).Select(u => u.Nickname).FirstOrDefault(),
+                d.Lat, d.Lng,
+                db.Cases.Count(c => c.DisruptionId == d.Id && c.Status != "closed" &&
+                    (c.Priority == "high" || c.EscalationReason != null ||
+                     (c.Status == "in_progress" && c.CreatedAt < overdueBefore)))))
+            .ToListAsync(ct);
     }
 
     public Task<DisruptionEntity?> FindByIdAsync(Guid id, CancellationToken ct = default) =>
