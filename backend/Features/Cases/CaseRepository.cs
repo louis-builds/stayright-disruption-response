@@ -58,6 +58,12 @@ public class CaseRepository(AppDbContext db) : ICaseRepository
         return [.. options.OrderBy(o => OptionTypeOrder.GetValueOrDefault(o.OptionType, 99)).ThenBy(o => o.CreatedAt)];
     }
 
+    public async Task<List<Option>> ListAllOptionsAsync(Guid caseId, CancellationToken ct = default)
+    {
+        var options = await db.Options.Where(o => o.CaseId == caseId).ToListAsync(ct);
+        return [.. options.OrderBy(o => OptionTypeOrder.GetValueOrDefault(o.OptionType, 99)).ThenBy(o => o.CreatedAt)];
+    }
+
     public Task<Option?> FindOptionAsync(Guid optionId, Guid caseId, CancellationToken ct = default) =>
         db.Options.FirstOrDefaultAsync(o => o.Id == optionId && o.CaseId == caseId, ct);
 
