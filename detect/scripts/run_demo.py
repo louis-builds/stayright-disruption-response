@@ -20,7 +20,7 @@ replaces the file's previous contents -- it always holds only the most
 recently detected event, not a growing log.
 
 Usage:
-    docker compose up -d
+    # open the SSM tunnel first (see docs/DATABASE_ACCESS.md), then:
     python -m scripts.run_demo
     python -m scripts.run_demo --interval 10 --mock-at 3 --iterations 6
     python -m scripts.run_demo --output output/handoff.jsonl

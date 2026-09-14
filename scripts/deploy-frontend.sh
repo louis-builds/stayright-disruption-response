@@ -10,8 +10,8 @@
 set -euo pipefail
 
 REGION="${AWS_REGION:-ap-southeast-2}"
-SITE_BUCKET="${SITE_BUCKET:-stayright-dev-site-990393187001}"
-CF_DIST_ID="${CF_DIST_ID:-E3CNDKHDSY3D1I}"
+SITE_BUCKET="${SITE_BUCKET:?Set SITE_BUCKET (no cross-account default)}"
+CF_DIST_ID="${CF_DIST_ID:?Set CF_DIST_ID (no cross-account default)}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FE="$REPO_ROOT/frontend"
 
@@ -34,4 +34,4 @@ INV_ID=$(aws cloudfront create-invalidation --distribution-id "$CF_DIST_ID" --pa
 echo "invalidation: $INV_ID"
 
 say "✅ 前端部署完成"
-echo "验证： curl -s https://d2y6g16anevc6h.cloudfront.net/ | grep -oE 'assets/index-[A-Za-z0-9_-]+\\.js'"
+echo "验证（把 \$SITE_URL 换成本账户的 CloudFront 域名）： curl -s \$SITE_URL/ | grep -oE 'assets/index-[A-Za-z0-9_-]+\\.js'"

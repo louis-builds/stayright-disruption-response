@@ -26,22 +26,26 @@
 #                            （DetectChanges=true，盯 main 分支）
 #   Test 分支自身不触发部署——只有 PR gate。部署只从 main 出。
 #
-# 用法：./infra/bootstrap-cicd.sh
+# 用法：ACCOUNT_ID=... RAW_BUCKET=... SITE_BUCKET=... CF_DIST_ID=... EC2_INSTANCE_ID=... ./infra/bootstrap-cicd.sh
+#
+# 这五个值是账户/环境专属的资源标识，没有默认值——每次在新 AWS 账户（如课程
+# 分配的新账户）里跑，都必须显式传入目标账户自己的值，防止漏传时误用上一次
+# 跑过的账户的值，把 IAM 策略/资源授权指向错误账户。
 
 set -euo pipefail
 
 REGION="ap-southeast-2"
-ACCOUNT_ID="990393187001"
-RAW_BUCKET="stayright-dev-raw-990393187001"
-SITE_BUCKET="stayright-dev-site-990393187001"
-CF_DIST_ID="E3CNDKHDSY3D1I"
-EC2_INSTANCE_ID="i-0d71260ab44ceb0c3"
-GITHUB_OWNER="CS778-S2-2026-AWS-Challenge"
-GITHUB_REPO="Kakapo"
-GITHUB_BRANCH="main"                 # pipeline 盯的分支：合并进 main 即触发部署流程
-PR_GATE_BASE_REFS="^refs/heads/(Test|main)$"   # PR gate webhook 覆盖的目标分支
-CONNECTION_NAME="stayright-github"
-PIPELINE_ARTIFACT_PREFIX="codepipeline-artifacts"
+ACCOUNT_ID="${ACCOUNT_ID:?Set ACCOUNT_ID to the target AWS account (no cross-account default)}"
+RAW_BUCKET="${RAW_BUCKET:?Set RAW_BUCKET (no cross-account default)}"
+SITE_BUCKET="${SITE_BUCKET:?Set SITE_BUCKET (no cross-account default)}"
+CF_DIST_ID="${CF_DIST_ID:?Set CF_DIST_ID (no cross-account default)}"
+EC2_INSTANCE_ID="${EC2_INSTANCE_ID:?Set EC2_INSTANCE_ID (no cross-account default)}"
+GITHUB_OWNER="${GITHUB_OWNER:-CS778-S2-2026-AWS-Challenge}"
+GITHUB_REPO="${GITHUB_REPO:-Kakapo}"
+GITHUB_BRANCH="${GITHUB_BRANCH:-main}"                 # pipeline 盯的分支：合并进 main 即触发部署流程
+PR_GATE_BASE_REFS="${PR_GATE_BASE_REFS:-^refs/heads/(Test|main)$}"   # PR gate webhook 覆盖的目标分支
+CONNECTION_NAME="${CONNECTION_NAME:-stayright-github}"
+PIPELINE_ARTIFACT_PREFIX="${PIPELINE_ARTIFACT_PREFIX:-codepipeline-artifacts}"
 
 say() { printf '\n\033[1;36m== %s\033[0m\n' "$*"; }
 

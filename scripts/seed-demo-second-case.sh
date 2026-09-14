@@ -29,9 +29,9 @@
 # 前置：scripts/.env.demo 里有 INGEST_KEY；AWS 凭证可用（WLG2 预订每次重建都走 EC2 SSM）。
 set -euo pipefail
 
-BASE="${BASE:-https://d2y6g16anevc6h.cloudfront.net}"
+BASE="${BASE:?Set BASE (no cross-account default, e.g. https://<your-cloudfront-domain>)}"
 REGION_AWS="${AWS_REGION:-ap-southeast-2}"
-EC2_ID="${EC2_INSTANCE_ID:-i-0d71260ab44ceb0c3}"
+EC2_ID="${EC2_INSTANCE_ID:?Set EC2_INSTANCE_ID (no cross-account default)}"
 COORD_EMAIL="${COORD_EMAIL:-coord1@example.com}"
 COORD_PASS="${COORD_PASS:-Password123!}"
 GUEST_NICK="${GUEST_NAME:-Alice}"

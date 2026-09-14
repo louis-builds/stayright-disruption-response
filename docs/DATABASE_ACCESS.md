@@ -1,188 +1,39 @@
 # 数据库连接与管理指南
 
-> 适用对象：StayRight NZ 全体开发者 ｜ 最后更新：2026-08-21
+> 适用对象：StayRight NZ 全体开发者 ｜ 最后更新：2026-09-10
 > 数据库形态：PostgreSQL 16 + PostGIS 3.4 + pgvector 0.8（**不用 ORM**，驱动 `psycopg` v3）
 
 ---
 
-## 0. 先搞清楚你要连哪个库
+## 0. 只有一个库：线上 EC2 的共享 `stayright` 库
 
-**九成情况下你连的是自己电脑上的库，不是线上那个。**
+**2026-09-10 起（Zachary 拍板）：不再本地跑 Docker Postgres。** 本地开发一律经
+SSM 端口转发隧道连线上 EC2 的共享 `stayright` 库。根目录 `docker-compose.yml` /
+`Dockerfile.postgres` 已删除。
 
-| | 场景 A · 本地开发库 | 场景 B · 线上库（EC2） |
-|---|---|---|
-| 什么时候用 | 写代码、跑单测、试 SQL、改 schema | 集成验证、排查线上数据、演示彩排 |
-| 谁能用 | **所有人，立刻** | 需要 Zachary 发 IAM 权限 |
-| 需要 AWS 账号 | ❌ 不需要 | ✅ 需要 |
-| 数据 | 自己的，随便删 | **共享的，改之前先说一声** |
-| 章节 | §1 → §2 → §3 | §4 → §5 |
+| | 说明 |
+|---|---|
+| 谁能用 | 需要 AWS IAM 用户 + `ssm:StartSession` 权限——**找 Zachary 申请** |
+| 数据 | **全员共享**，改数据前在群里说一声 |
+| 连法 | 开 SSM 隧道 → 本地 `localhost:15432` → EC2 容器 `pg:5432`（§2–§4） |
+| schema 变更 | 只走 EF Core 迁移，且**默认不在本地自动执行**（§5） |
 
-> ⚠️ **不要五个人连同一个开发库。** 很快会变成"谁把我的表 drop 了"。本地库和线上库版本、扩展、schema 完全一致，本地跑通线上就能跑。
+> 📌 **线上实机形态**：Postgres 跑在 EC2 上的 Docker 容器 `pg`（镜像
+> `postgis/postgis:16-3.4` + 补装 pgvector，监听 `127.0.0.1:5432`），不是系统服务。
+> 在 EC2 上直接执行 SQL 用 `sudo docker exec pg psql -U app -d stayright -c "..."`。
+> EC2 **按需开停**，平时停机——连不上先确认实例在跑（§3.1）。
 
 ---
 
-# 场景 A · 本地开发库
+## 1. 为什么共用一个库（背景）
 
-## 1. 装 Docker
-
-### macOS
-
-```bash
-brew install --cask docker
-open -a Docker          # 首次启动要点几下同意
-```
-
-没有 Homebrew 的话先装：
-```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-```
-
-### Windows
-
-用 winget（Windows 10/11 自带）：
-
-```powershell
-winget install Docker.DockerDesktop
-```
-
-或到 <https://www.docker.com/products/docker-desktop/> 下载安装包。
-
-⚠️ **Windows 必须启用 WSL 2**。Docker Desktop 安装时会提示，按它说的做；如果它让你重启，就重启。装完在 PowerShell 里验证：
-
-```powershell
-docker --version
-```
+- 本地库和线上库"版本一致"只是理论，实际总会漂移；共用一个库，"本地跑通线上必跑通"。
+- 省掉每人一套 Docker + pgvector 补装的踩坑。
+- 代价：schema 变更必须小心（见 §5），离线开发做不了，EC2 停机时开发受阻。
 
 ---
 
-## 2. 起数据库容器
-
-镜像和线上完全一致。⚠️ **`postgis/postgis` 镜像不含 pgvector，必须补装**——这是实测踩过的坑。
-
-### macOS / Linux
-
-```bash
-docker run -d --name sr-pg --restart unless-stopped \
-  -e POSTGRES_PASSWORD=devpassword -e POSTGRES_DB=stayright \
-  -p 5432:5432 -v sr-pgdata:/var/lib/postgresql/data \
-  postgis/postgis:16-3.4
-
-# 等容器起来
-sleep 20
-
-# 补装 pgvector
-docker exec sr-pg bash -c "apt-get update -qq && apt-get install -y -qq postgresql-16-pgvector"
-docker restart sr-pg && sleep 15
-
-# 建扩展 + 应用用户（用户名必须是 app，与代码里的 DSN 一致）
-docker exec sr-pg psql -U postgres -d stayright -c "
-  CREATE EXTENSION IF NOT EXISTS postgis;
-  CREATE EXTENSION IF NOT EXISTS vector;
-  CREATE ROLE app LOGIN PASSWORD 'devpassword';
-  GRANT ALL ON DATABASE stayright TO app;
-  GRANT ALL ON SCHEMA public TO app;"
-```
-
-### Windows（PowerShell）
-
-PowerShell 用反引号 `` ` `` 续行，不是反斜杠：
-
-```powershell
-docker run -d --name sr-pg --restart unless-stopped `
-  -e POSTGRES_PASSWORD=devpassword -e POSTGRES_DB=stayright `
-  -p 5432:5432 -v sr-pgdata:/var/lib/postgresql/data `
-  postgis/postgis:16-3.4
-
-Start-Sleep -Seconds 20
-
-docker exec sr-pg bash -c "apt-get update -qq && apt-get install -y -qq postgresql-16-pgvector"
-docker restart sr-pg
-Start-Sleep -Seconds 15
-
-docker exec sr-pg psql -U postgres -d stayright -c "CREATE EXTENSION IF NOT EXISTS postgis; CREATE EXTENSION IF NOT EXISTS vector; CREATE ROLE app LOGIN PASSWORD 'devpassword'; GRANT ALL ON DATABASE stayright TO app; GRANT ALL ON SCHEMA public TO app;"
-```
-
-### ✅ 验收（两个系统相同）
-
-```bash
-docker exec sr-pg psql -U postgres -d stayright -c "\dx"
-```
-
-必须看到 `postgis` 和 `vector` 两行。看不到就是补装那步失败了，重跑一遍。
-
-### 日常操作
-
-| 动作 | 命令 |
-|---|---|
-| 停 | `docker stop sr-pg` |
-| 起 | `docker start sr-pg` |
-| 进 psql | `docker exec -it sr-pg psql -U app -d stayright` |
-| **推倒重来** | `docker rm -f sr-pg && docker volume rm sr-pgdata` 然后重跑 §2 |
-
----
-
-## 3. 装 DBeaver 并连接
-
-图形界面，能看表结构、直接改数据、画 ER 图，还能**把 PostGIS 几何渲染成地图**。
-
-### 安装
-
-| 系统 | 命令 |
-|---|---|
-| macOS | `brew install --cask dbeaver-community` |
-| Windows | `winget install dbeaver.dbeaver` |
-
-或到 <https://dbeaver.io/download/> 下载（选 **Community Edition**，免费）。
-
-### 新建连接
-
-左上角**插头图标**（新建数据库连接）→ 选 **PostgreSQL** → 下一步 → 填：
-
-| 字段 | 值 |
-|---|---|
-| Host | `localhost` |
-| Port | `5432` |
-| Database | `stayright` |
-| Username | `app` |
-| Password | `devpassword` |
-| Save password | ✅ 勾上 |
-
-点 **Test Connection** → 显示 `Connected` 和 `PostgreSQL 16.x` → **Finish**。
-
-> 首次会提示下载 PostgreSQL JDBC 驱动，点同意。
-
-### 三个常用功能
-
-| 功能 | 怎么用 |
-|---|---|
-| 看表结构 | 双击表 → **Properties** 标签页（列、约束、索引、外键） |
-| **直接改数据** | 双击表 → **Data** 标签页 → 双击单元格改 → `Cmd/Ctrl + S` 提交 |
-| **看地图** 🗺️ | 点几何列的单元格，右侧值面板会渲染成地图——看房源分布、影响范围很直观 |
-| ER 图 | 右键表 → View Diagram |
-| 跑 SQL | `Cmd/Ctrl + ]` 开编辑器，`Cmd/Ctrl + Enter` 执行 |
-
-### 你会看到的系统对象（不是你们的表）
-
-刚建好的库里已经有一些东西，别以为搞错了：
-
-| 对象 | 来源 | 说明 |
-|---|---|---|
-| `public.spatial_ref_sys` | PostGIS | 全球坐标系定义，约 8500 行。**项目统一用 SRID `4326`**（WGS84 经纬度） |
-| `tiger` / `tiger_data` schema | `postgis_tiger_geocoder` | 美国地址地理编码，本项目用不上 |
-| `topology` schema | `postgis_topology` | 拓扑分析，用不上 |
-
-业务表都建在 `public` schema 下。
-
----
-
-# 场景 B · 连线上库（EC2）
-
-> 🔴 **先决条件**：需要 AWS IAM 用户 + `ssm:StartSession` 权限。**找 Zachary 申请**，说明你要做什么。
-> 日常开发不需要这个——只有集成验证、排查线上数据时才用。
-
-> 📌 **线上实机形态（2026-08-27 实测）**：Postgres 跑在 EC2 上的 **Docker 容器 `pg`**（镜像 `postgis/postgis:16-3.4`，监听 `127.0.0.1:5432`），不是系统服务——机器上没有 `postgres` 系统用户，在 EC2 上执行 SQL 用 `sudo docker exec pg psql -U postgres -d stayright -c "..."`。库 `stayright` 目前是空库（仅 PostGIS/pgvector 系统对象，无业务表），等应用首次迁移建表。容器当前 `POSTGRES_PASSWORD` 为与本地相同的 dev 密码；与 Secrets Manager `stayright/dev/db/password` 是否一致尚未核对，上线统一前先确认。
-
-## 4. 装 AWS CLI 与 Session Manager 插件
+## 2. 装 AWS CLI 与 Session Manager 插件
 
 线上数据库**只监听 `127.0.0.1`**，EC2 **不开任何入站端口**（没有 22，没有 5432）。唯一通道是 AWS Systems Manager 的端口转发。
 
@@ -237,9 +88,9 @@ aws sts get-caller-identity --profile stayright
 
 ---
 
-## 5. 开隧道并连接
+## 3. 开隧道
 
-### 5.1 确认实例开着
+### 3.1 确认实例开着
 
 线上 EC2 **按需开停**，平时是停机状态。先问 Zachary，或者自己查（需要 `ec2:DescribeInstances` 权限）：
 
@@ -251,46 +102,116 @@ aws ec2 describe-instances --profile stayright --region ap-southeast-2 \
 
 状态不是 `running` 就找 Zachary 开机。
 
-### 5.2 开端口转发
+### 3.2 开端口转发（保活方式）
 
-**新开一个终端窗口，这个窗口要一直挂着**——关掉隧道就断。
+裸 `aws ssm start-session` 会因为 **SSM 空闲 20 分钟自动断**、网络抖动、笔记本睡眠
+而掉线，且不会自己重连。用仓库里的保活脚本：它断了自动重连（带退避），并每 20s 发
+一次真实 Postgres 流量顶掉空闲超时。
 
-**macOS / Linux：**
+**推荐：`scripts/dev.sh`（隧道跟着项目一起起/停）**
 
 ```bash
-aws ssm start-session --profile stayright --region ap-southeast-2 \
-  --target <实例ID> \
+# 实例 ID 找 Zachary；用命名 profile 再加 AWS_PROFILE=...
+EC2_INSTANCE_ID=i-xxxxxxxx scripts/dev.sh          # 隧道 + 后端 + 前端
+EC2_INSTANCE_ID=i-xxxxxxxx scripts/dev.sh backend  # 只要隧道 + 后端
+scripts/dev.sh frontend                            # 只起前端，不碰隧道
+```
+
+Ctrl+C 一次性把隧道、后端、前端全部停掉——**不会常驻**，不跑项目时不连 EC2。
+2026-09-11 起改为默认方案（原先 `db-tunnel-install.sh` 装的开机常驻 launchd 服务已卸载）。
+
+**备选：装成开机自启的常驻服务**（想让隧道一直在，不跟项目启停走可以用这个）：
+
+```bash
+EC2_INSTANCE_ID=i-xxxxxxxx scripts/db-tunnel-install.sh
+```
+
+- 看日志：`tail -f ~/Library/Logs/stayright-db-tunnel.log`
+- 卸载：`scripts/db-tunnel-install.sh uninstall`
+
+**临时前台跑一次隧道本身**（任意平台，Ctrl+C 结束，不带后端/前端）：
+
+```bash
+EC2_INSTANCE_ID=i-xxxxxxxx scripts/db-tunnel.sh
+```
+
+**手动一条命令**（不想用脚本时，注意断了要自己重开）：
+
+```bash
+aws ssm start-session --region ap-southeast-2 --target <实例ID> \
   --document-name AWS-StartPortForwardingSession \
   --parameters '{"portNumber":["5432"],"localPortNumber":["15432"]}'
 ```
 
-**Windows（PowerShell，注意 JSON 的引号要转义）：**
+> Windows / Linux：没有 launchd，用脚本前台跑，或自己包一层 `nssm` / systemd user service
+> 拉起 `db-tunnel.sh`（脚本本身是 bash，Windows 需 Git Bash / WSL）。
 
-```powershell
-aws ssm start-session --profile stayright --region ap-southeast-2 `
-  --target <实例ID> `
-  --document-name AWS-StartPortForwardingSession `
-  --parameters '{\"portNumber\":[\"5432\"],\"localPortNumber\":[\"15432\"]}'
+### 3.3 把 SSM 空闲超时提到 60 分钟（账号级，Zachary 做一次）
+
+默认 20 分钟。保活脚本已能顶住，但提高上限多一层保险：
+
+```bash
+cat > /tmp/ssm-prefs.json <<'JSON'
+{ "schemaVersion": "1.0", "description": "Session Manager defaults",
+  "sessionType": "Standard_Stream",
+  "inputs": { "idleSessionTimeout": "60", "maxSessionDuration": "",
+              "shellProfile": { "linux": "", "windows": "" } } }
+JSON
+aws ssm create-document --region ap-southeast-2 --name SSM-SessionManagerRunShell \
+  --document-type Session --document-format JSON --content file:///tmp/ssm-prefs.json
+# 已存在就换成： aws ssm update-document --name SSM-SessionManagerRunShell \
+#   --document-version '$LATEST' --document-format JSON --content file:///tmp/ssm-prefs.json
 ```
 
-看到 `Waiting for connections...` 就成功了。
+### 3.4 用完
 
-### 5.3 在 DBeaver 里新建第二个连接
+停常驻服务：`scripts/db-tunnel-install.sh uninstall`。EC2 用完通知 Zachary 可以停机
+（按需开停省成本；实例停了隧道自然连不上，重开机后保活脚本会自动接上）。
 
-和 §3 一样，只改两处：
+---
+
+## 4. 用 DBeaver 看库（可选）
+
+图形界面，能看表结构、直接改数据、画 ER 图，还能**把 PostGIS 几何渲染成地图**。
+
+| 系统 | 安装 |
+|---|---|
+| macOS | `brew install --cask dbeaver-community` |
+| Windows | `winget install dbeaver.dbeaver` |
+
+新建连接（插头图标 → PostgreSQL），隧道开着的前提下填：
 
 | 字段 | 值 |
 |---|---|
-| Port | **`15432`** ← 不是 5432 |
-| 连接名 | 建议改成 **`stayright-线上`**，和本地库区分开 |
+| Host | `127.0.0.1` |
+| Port | **`15432`** |
+| Database | `stayright` |
+| Username | `app` |
+| Password | 见 Secrets Manager `stayright/dev/db/password`（找 Zachary） |
 
-其余（Database / Username / Password）相同。
+点 **Test Connection** → `Connected` → **Finish**（首次会提示下载 JDBC 驱动，同意）。
 
-> 💡 用 **15432** 这个本地映射端口，是为了让本地库和线上库能同时开着互不打架。
+常用：双击表 → **Properties** 看结构 / **Data** 改数据（`Cmd/Ctrl+S` 提交）；
+点几何列单元格右侧值面板渲染成地图；`Cmd/Ctrl+]` 开 SQL 编辑器。
 
-### 5.4 用完关掉隧道
+**系统对象**（不是业务表，别以为搞错）：`public.spatial_ref_sys`（PostGIS 坐标系，
+项目统一 SRID `4326`）、`tiger` / `topology` schema（用不上）。业务表都在 `public` 下。
 
-回到隧道那个终端按 `Ctrl + C`。
+---
+
+## 5. schema 变更：本地默认不自动迁移
+
+全员共用一个库，如果每个人 `dotnet run` 都自动跑 EF 迁移，一个人分支上未合并的迁移
+就会打到大家共用的库上。所以：
+
+- **`backend/Program.cs` 默认不执行迁移/seed**——只有 `ASPNETCORE_ENVIRONMENT=Production`
+  （EC2 部署）或显式 `RUN_DB_MIGRATE=1` 时才跑。
+- 日常本地开发：直接 `dotnet run`，只连库、不动 schema。
+- 要应用自己的新迁移做本地验证：`RUN_DB_MIGRATE=1 dotnet run`。⚠️ **这会改共用库**——
+  确保迁移已经过 review、准备合并；改完在群里说一声。
+- 正式的 schema 变更由部署流水线在合并进 `main` 后执行。
+- `docs/AWS_SDK_SPEC.md` / 本文 §7.4 提到的 `db/migrations/NNN_xxx.sql` 那套原始 SQL
+  迁移**没有在用**（`db/` 目录不存在），schema 唯一来源是 `backend/Migrations/*.cs`。
 
 ---
 
@@ -299,8 +220,9 @@ aws ssm start-session --profile stayright --region ap-southeast-2 `
 | 规则 | 原因 |
 |---|---|
 | 🔴 **改数据前先在群里说一声** | 共享库，别人可能正在用 |
-| 🔴 **不要在线上库跑 `DROP` / `TRUNCATE`** | 需要清理找 Zachary |
-| 🔴 **schema 变更一律走迁移脚本**，不要在 DBeaver 里手动改表 | 手改不进 Git，下次重建就没了 |
+| 🔴 **不要跑 `DROP` / `TRUNCATE`** | 需要清理找 Zachary |
+| 🔴 **schema 变更只走 EF 迁移**，不要在 DBeaver 里手动改表 | 手改不进 Git，下次重建就没了 |
+| 🔴 **未合并的迁移不要 `RUN_DB_MIGRATE=1` 打上去** | 见 §5 |
 | 🟡 查询加 `LIMIT` | 别把大表全拉到本地 |
 | 🟡 用完关隧道、通知可以停机 | EC2 按需开停省成本 |
 
@@ -348,19 +270,16 @@ aws ssm start-session --profile stayright --region ap-southeast-2 `
 
 ## 7.4 schema 变更流程
 
-```
-db/migrations/
-├── 001_init.sql
-├── 002_add_policy_rules.sql
-└── ...
-```
+> ⚠️ **现状**：schema 唯一来源是 `backend/Migrations/*.cs`（EF Core 迁移）。
+> 下面这套 `db/migrations/NNN_xxx.sql` 原始 SQL 迁移**没有在用**（`db/` 目录不存在）。
+> 执行时机与"本地默认不自动迁移"见 §5。
 
 | 规则 | 说明 |
 |---|---|
-| 每次变更一个新文件，**编号递增，只增不改** | 已合并的迁移文件不许再动 |
-| 文件里写 `CREATE TABLE IF NOT EXISTS` 之类的幂等语句 | 重复执行不报错 |
-| **本地先跑通再提 PR** | 别拿线上库当试验场 |
+| 每次变更一个新迁移，**已合并的不许再改** | `dotnet ef migrations add <Name>` 生成 |
+| **本地用 `RUN_DB_MIGRATE=1 dotnet run` 验证过再提 PR**（§5） | 共享库，别拿它当试验场 |
 | 迁移涉及数据删除的，PR 描述里必须写清楚 | 评审要看得见 |
+| 未合并进 `main` 的迁移不要打到共享库上 | 别人会撞上你的半成品表结构 |
 
 ## 7.5 给 AI 的设计要点
 
@@ -371,7 +290,7 @@ db/migrations/
 3. 时间字段是不是 `timestamptz`？
 4. 查询里所有参数是不是命名参数？
 5. 这张表会不会被 SQS 消费者并发写？→ 需要幂等键（见 `processed_events` 模式）
-6. 新表是不是要加进 `db/migrations/` 的新编号文件？
+6. 新表的 schema 变更是不是走 `backend/Migrations/` 的 EF 迁移？（`db/migrations/` 那套没在用，见 §5）
 
 ---
 
@@ -379,27 +298,27 @@ db/migrations/
 
 | 现象 | 原因 | 解法 |
 |---|---|---|
-| `Connection refused`（本地） | 容器没起 | `docker start sr-pg` |
-| `Connection refused`（线上） | 隧道断了 | 重开 §5.2，那个终端不能关 |
-| `role "app" does not exist` | §2 最后一步没执行 | 重跑那条 `CREATE ROLE` |
-| `extension "vector" is not available` | pgvector 没补装 | 重跑 §2 的 `apt-get install postgresql-16-pgvector` |
-| `SessionManagerPlugin is not found` | 插件没装或 PATH 没刷新 | 见 §4，Windows 装完要重开终端 |
+| `Connection refused`（连 15432） | 隧道没开 / 刚断还没重连上 | 装了常驻服务的话等几秒会自动回来，看 `~/Library/Logs/stayright-db-tunnel.log`；没装就 §3.2 |
+| 隧道反复断 | SSM 空闲超时 / 网络抖动 | 用 §3.2 的保活脚本而不是裸命令；让 Zachary 做 §3.3 |
 | `TargetNotConnected` | EC2 停机中 | 找 Zachary 开机 |
+| `SessionManagerPlugin is not found` | 插件没装或 PATH 没刷新 | 见 §2，Windows 装完要重开终端 |
 | `An error occurred (AccessDenied)` | IAM 缺 `ssm:StartSession` | 找 Zachary 加权限 |
-| 端口 5432 被占用（Windows） | 本机装过 PostgreSQL | 改容器映射为 `-p 5433:5432`，DBeaver 连 5433 |
-| Docker 在 Windows 起不来 | WSL 2 没装/没启用 | 以管理员运行 `wsl --install`，重启 |
+| 端口 15432 被占用 | 已经开着一个隧道，或残留进程 | `lsof -i:15432` 找到杀掉再重开 |
+| 后端起来但报 `relation ... does not exist` | 本地分支有未应用的迁移 | 见 §5，确认无误后 `RUN_DB_MIGRATE=1 dotnet run` |
 
 ---
 
 ## 附：连接信息速查
 
-| | 本地开发库 | 线上库（经隧道） |
-|---|---|---|
-| Host | `localhost` | `localhost` |
-| Port | `5432` | **`15432`** |
-| Database | `stayright` | `stayright` |
-| User | `app` | `app` |
-| Password | `devpassword` | 见 Secrets Manager `stayright/dev/db/password` |
-| 代码里的 DSN | `postgresql://app:{secret('db/password')}@localhost:5432/stayright` | 同左（代码永远连本机 5432，因为它跑在 EC2 上） |
+| 字段 | 值 |
+|---|---|
+| Host | `127.0.0.1` |
+| Port | **`15432`**（SSM 隧道本地端口） |
+| Database | `stayright` |
+| User | `app` |
+| Password | 见 Secrets Manager `stayright/dev/db/password`（本地 `.env` 暂用 dev 口令，找 Zachary） |
+| C# 连接串 | 由 `backend/Program.cs` 从 `POSTGRES_*` / `PG*` 环境变量拼，本地走根目录 `.env` |
+| Python DSN | `detect/` 走 `PG*` 环境变量（同一个 `.env`），`psycopg` 原生读取 |
 
 > 代码里**绝不硬编码密码**，一律 `secret("db/password")` 从 Secrets Manager 读。详见 `docs/AWS_SDK_SPEC.md` §4.3。
+> EC2 上的应用（Production）连的是 `localhost:5432`（数据库容器同机），不走隧道。

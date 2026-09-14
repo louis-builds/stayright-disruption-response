@@ -596,7 +596,7 @@ except ClientError as e:
 | `FailedEntryCount > 0` | 事件格式错或权限不足 | 打印 `resp["Entries"]` 看 `ErrorCode` |
 | 消息被重复处理 | `VisibilityTimeout` 太短 / 没做幂等 | 调大超时 + 查幂等表 |
 | `EndpointConnectionError` | 区域写错 | 必须是 `ap-southeast-2` |
-| 连不上数据库 | **EC2 可能是停机状态**（按需开停省成本） | 找 Zachary 开机；或本地起 Docker（§11.2） |
+| 连不上数据库 | **EC2 可能是停机状态**（按需开停省成本），或 SSM 隧道没开 | 找 Zachary 开机；开隧道（§11.2 / `DATABASE_ACCESS.md`） |
 | `SessionManagerPlugin is not found` | 缺插件 | `brew install --cask session-manager-plugin` |
 
 ---
@@ -692,45 +692,31 @@ STAYRIGHT_LOCAL=1 make test                        # 全绿 + 覆盖率门禁
 
 | ❌ 不需要 | 原因 |
 |---|---|
-| AWS 账号 / Access Key | 本地走假实现；线上走 IAM 角色 |
-| 连上 EC2 | 数据库本地起一个就行 |
-| 装 AWS CLI | 除非你要排错 |
+| AWS 账号 / Access Key（只跑 `detect/` 测试） | 测试走假实现 / mock |
+| 本地 Postgres | 不再有；数据库统一连线上（见 §11.2） |
 
-### 11.2 你需要的（一次性，约 10 分钟）
+### 11.2 你需要的
+
+`detect/` 的单元测试不碰库，`cd detect && python -m pytest` 即可。
+
+**要跑起后端/前端联调，或跑 `identify` / e2e 脚本，就要连数据库**。2026-09-10 起
+不再本地跑 Docker Postgres，一律经 SSM 端口转发隧道连线上 EC2 的共享 `stayright` 库：
 
 ```bash
 # Python 3.12 + 依赖
 python3.12 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
-# 本地 Postgres（与线上同版本、同扩展）
-docker run -d --name sr-pg \
-  -e POSTGRES_PASSWORD=devpassword -e POSTGRES_DB=stayright \
-  -p 5432:5432 postgis/postgis:16-3.4
-
-# ⚠️ 该镜像不含 pgvector，需补装（线上也是这么做的）
-docker exec sr-pg bash -c "apt-get update -qq && apt-get install -y -qq postgresql-16-pgvector"
-docker restart sr-pg && sleep 15
-docker exec sr-pg psql -U postgres -d stayright -c \
-  "CREATE EXTENSION IF NOT EXISTS postgis; CREATE EXTENSION IF NOT EXISTS vector;
-   CREATE ROLE app LOGIN PASSWORD 'devpassword';
-   GRANT ALL ON DATABASE stayright TO app; GRANT ALL ON SCHEMA public TO app;"
-
-# 跑测试
-STAYRIGHT_LOCAL=1 make test
-```
-
-### 11.3 需要连线上数据库时（少数情况）
-
-EC2 零入站端口，走 SSM 端口转发，**不开任何端口**：
-
-```bash
-aws ssm start-session --target <实例ID> \
+# 开隧道（新终端，一直挂着）——需要 IAM ssm:StartSession，实例 ID / 口令找 Zachary
+aws ssm start-session --region ap-southeast-2 --target <实例ID> \
   --document-name AWS-StartPortForwardingSession \
   --parameters '{"portNumber":["5432"],"localPortNumber":["15432"]}'
+
+# 根目录 .env 的 PG* / POSTGRES_* 已指向 127.0.0.1:15432 / stayright
 ```
 
-然后 GUI 工具连 `localhost:15432`。实例 ID 和口令找 Zachary 要（在 `infra/连接信息.md`）。
+完整连法、DBeaver、schema 变更纪律见 `docs/DATABASE_ACCESS.md`。
+⚠️ 共享库，`dotnet run` 默认不再自动迁移——见 `DATABASE_ACCESS.md` §5。
 
 ---
 

@@ -1,10 +1,10 @@
 """Manual end-to-end run: detect -> identify, against the real upstream
-APIs and a real local Postgres. Not part of the automated pytest suite
-(that suite must run without network or a live database) -- this script
-is for demoing/verifying the modules wired together.
+APIs and the shared remote stayright DB. Not part of the automated pytest
+suite (that suite must run without network or a live database) -- this
+script is for demoing/verifying the modules wired together.
 
 Usage:
-    docker compose up -d
+    # open the SSM tunnel first (see docs/DATABASE_ACCESS.md), then:
     python -m scripts.run_local_e2e                     # poll Open-Meteo (weather)
     python -m scripts.run_local_e2e --simulate          # canned Queenstown storm, no API call
     python -m scripts.run_local_e2e --source volcano    # poll GeoNet volcano alert levels
