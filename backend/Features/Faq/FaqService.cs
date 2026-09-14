@@ -59,7 +59,7 @@ public class FaqService(IFaqRepository repo, ISystemSettingsRepository settingsR
 
     public async Task<List<FaqQuestionDto>> GetTopQuestionsAsync(CancellationToken ct = default)
     {
-        var top = await repo.ListTopAsync(3, ct);
+        var top = await repo.ListTopAsync(5, ct);
         return [.. top.Select(f => new FaqQuestionDto(f.QuestionText, f.AskCount))];
     }
 }
