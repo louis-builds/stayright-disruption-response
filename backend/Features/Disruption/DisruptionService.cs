@@ -20,16 +20,7 @@ public class DisruptionService(
 
     public async Task<List<DisruptionListItemDto>> ListAsync(string? type, string? region, CancellationToken ct = default)
     {
-        var list = await repo.ListAsync(type, region, ct);
-        var names = await CoordinatorNamesAsync(ct);
-        var result = new List<DisruptionListItemDto>();
-        foreach (var d in list)
-        {
-            var affected = await repo.CountAffectedAsync(d.Id, ct);
-            result.Add(new DisruptionListItemDto(d.Id, d.Type, d.EventSubtype, d.Severity, d.Title, d.Region, d.StartAt, d.EndAtOrWindow,
-                d.Status, affected, d.AssigneeCoordinatorId, Name(d.AssigneeCoordinatorId, names)));
-        }
-        return result;
+        return await repo.ListAsync(type, region, ct);
     }
 
     public async Task<Guid> IngestAsync(CreateDisruptionRequest request, CancellationToken ct = default)

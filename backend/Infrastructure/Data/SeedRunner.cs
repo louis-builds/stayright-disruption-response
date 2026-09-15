@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using TravelDisruptionAgent.Api.Infrastructure.Data.Entities;
+using TravelDisruptionAgent.Api.Infrastructure.Storage;
 
 namespace TravelDisruptionAgent.Api.Infrastructure.Data;
 
@@ -16,7 +17,11 @@ public static class SeedRunner
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
     };
 
-    public static async Task RunAsync(AppDbContext db, ILogger logger, CancellationToken ct = default)
+    // 这两份是唯一走 S3/本地全局开关的种子 RAG 文档；取消与改订政策.md 保持固定读本地仓库文件，
+    // 不受 RAG_DOC_SOURCE 影响（团队决定：那份还在走别的审核/发布流程，先不搬）。
+    private static readonly HashSet<string> S3EligibleRagDocFiles = ["使用说明.md", "常见问题.md"];
+
+    public static async Task RunAsync(AppDbContext db, IRagDocumentSource ragDocumentSource, ILogger logger, CancellationToken ct = default)
     {
         if (await db.Users.AnyAsync(ct))
         {
@@ -40,6 +45,13 @@ public static class SeedRunner
             Id = r.Id, HotelId = r.HotelId, Name = r.Name, Description = r.Description,
             Amenities = r.Amenities, Capacity = r.Capacity, PriceAmount = r.PriceAmount,
             Currency = r.Currency, ImageUrls = r.ImageUrls, CreatedAt = now, UpdatedAt = now,
+        }));
+
+        var hotelPolicies = Load<HotelRefundPolicySeed>(seedDir, "hotel_refund_policies.json");
+        db.HotelRefundPolicies.AddRange(hotelPolicies.Select(p => new HotelRefundPolicy
+        {
+            Id = p.Id, HotelId = p.HotelId, Content = p.Content, StructuredRulesJson = p.StructuredRulesJson,
+            IsActive = p.IsActive, CreatedAt = now, UpdatedAt = now,
         }));
 
         var users = Load<UserSeed>(seedDir, "users.json");
@@ -115,12 +127,18 @@ public static class SeedRunner
         }));
 
         var ragDocs = Load<RagDocumentSeed>(seedDir, "rag_documents.json");
-        db.RagDocuments.AddRange(ragDocs.Select(r => new RagDocument
+        foreach (var r in ragDocs)
         {
-            Id = r.Id, Name = r.Name, Version = r.Version,
-            Content = File.ReadAllText(Path.Combine(seedDir, r.File)),
-            IsDefaultVersion = r.IsDefaultVersion, CreatedAt = now, UpdatedAt = now,
-        }));
+            var localPath = Path.Combine(seedDir, r.File);
+            var content = S3EligibleRagDocFiles.Contains(r.File)
+                ? await ragDocumentSource.ReadAsync(r.File, localPath, ct)
+                : await File.ReadAllTextAsync(localPath, ct);
+            db.RagDocuments.Add(new RagDocument
+            {
+                Id = r.Id, Name = r.Name, Version = r.Version, Content = content,
+                IsDefaultVersion = r.IsDefaultVersion, CreatedAt = now, UpdatedAt = now,
+            });
+        }
 
         var goldenTests = Load<GoldenTestSeed>(seedDir, "golden_tests.json");
         db.GoldenTests.AddRange(goldenTests.Select(g => new GoldenTest
@@ -145,13 +163,16 @@ public static class SeedRunner
     private record RoomTypeSeed(Guid Id, Guid HotelId, string Name, string Description, List<string> Amenities,
         int Capacity, decimal PriceAmount, string Currency, List<string> ImageUrls);
 
+    private record HotelRefundPolicySeed(Guid Id, Guid HotelId, string Content, string? StructuredRulesJson, bool IsActive);
+
     private record UserSeed(Guid Id, string Role, string Email, string Phone, string Nickname, string Gender,
         string Language, string PasswordPlaintext, Guid? HotelId, string Status);
 
     private record BookingSeed(Guid Id, string ConfirmationNo, Guid GuestUserId, Guid HotelId, Guid RoomTypeId,
         int CheckInOffsetDays, int CheckOutOffsetDays, int GuestsCount, decimal TotalAmount, string Currency, string Status);
 
-    // EventSubtype/Severity/Lat/Lng/RadiusKm/RawSignalJson 对齐 docs/handoff.jsonl 的对接结构，
+    // EventSubtype/Severity/Lat/Lng/RadiusKm/RawSignalJson 对齐 detect/src/identify/handoff.py
+    // 的 build_handoff_payloads() 写出的对接结构，
     // 目前只有 weather/storm 这条会填，其它 disruption 留 null 照样能反序列化。
     private record DisruptionSeed(Guid Id, string Type, string Title, string Region,
         double StartOffsetHours, double EndOffsetHours, string Status, string RawSignalText,

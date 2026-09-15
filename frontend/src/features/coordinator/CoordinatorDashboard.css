@@ -57,6 +57,16 @@
 .entry-work-grid{grid-template-columns:minmax(680px,1.5fr) minmax(360px,.72fr);gap:16px;margin-top:16px}.entry-table-head,.entry-case-row{grid-template-columns:125px 115px minmax(155px,1fr) 105px minmax(175px,1.1fr) 100px;min-width:820px}
 .entry-handoff>section{margin:14px;border-radius:9px}.entry-handoff>button{width:calc(100% - 28px);margin:0 14px 14px;border-radius:7px}
 .entry-recent{margin-top:16px;background:transparent;border-color:transparent;box-shadow:none;overflow:visible}.entry-recent header{padding:10px 4px;border:0}.entry-recent>div{gap:14px;padding:0}.entry-recent>div>button{min-height:105px;border-radius:10px;background:#fff;box-shadow:0 3px 12px rgba(48,42,82,.04)}
+.entry-recent .entry-recent-list{display:block;padding:0;overflow:hidden;border:1px solid #e7eaf1;border-radius:12px;background:#fff;box-shadow:0 3px 12px rgba(48,42,82,.04)}
+.entry-recent-head,.entry-recent-row{display:grid;grid-template-columns:minmax(180px,.8fr) minmax(280px,1.5fr) 120px 120px;align-items:center;gap:18px;padding:12px 18px}
+.entry-recent-head{background:#f7f8fc;color:#7e8294;font-size:11px;font-weight:700;letter-spacing:.035em;text-transform:uppercase}
+.entry-recent .entry-recent-row{width:100%;min-height:68px;border:0;border-top:1px solid #eceef4;border-radius:0;background:#fff;box-shadow:none;color:#202438;text-align:left;cursor:pointer}
+.entry-recent .entry-recent-row:hover{background:#faf8ff}
+.entry-recent-booking{display:flex;min-width:0;flex-direction:column;gap:4px}.entry-recent .entry-recent-booking b{font-size:14px}.entry-recent .entry-recent-booking small{font-size:12px}
+.entry-recent-disruption{overflow:hidden;color:#4e5365;font-size:13px;text-overflow:ellipsis;white-space:nowrap}
+.entry-recent .entry-recent-row>strong{justify-self:start;width:auto;padding:5px 10px;border-radius:999px;background:#e4faf4;color:#079b78;font-size:11px;text-transform:uppercase}
+.entry-recent .entry-recent-row>i{grid-column:auto;justify-self:end;color:#7628e8;font-size:12px;font-style:normal;font-weight:700}
+@media(max-width:760px){.entry-recent .entry-recent-list{overflow-x:auto}.entry-recent-head,.entry-recent-row{min-width:700px}}
 @media(max-width:1350px){.entry-top-grid,.entry-work-grid{grid-template-columns:1fr}.entry-map{min-height:370px}}
 
 /* Disruption -> map -> affected booking -> AI handoff interaction. */
@@ -72,6 +82,17 @@
 .entry-affected-row{width:100%;min-height:76px;padding:12px 15px;border:0;border-bottom:1px solid #eceef4;background:#fff;color:#33384a;font-size:13px;text-align:left;cursor:pointer}
 .entry-affected-row:hover,.entry-affected-row.selected{background:#f7f3ff}.entry-affected-row.selected{box-shadow:inset 4px 0 #7628e8}.entry-affected-row>span{line-height:1.45;overflow-wrap:anywhere}.entry-affected-row>time{font-size:13px}.entry-affected-row>time.overdue{color:#e44863;font-weight:700}.entry-affected-row>em{font-style:normal;text-transform:capitalize}.entry-affected-row>i{padding:8px 10px;border:1px solid #7628e8;border-radius:6px;color:#7628e8;font-style:normal;text-align:center}
 .entry-handoff-details>section{margin-block:10px;padding-block:12px}.entry-handoff-details>section p.unavailable{color:#969aaa;font-style:italic}.entry-handoff-details>button{position:sticky;bottom:12px}
+.entry-handoff-details header{align-items:center;background:linear-gradient(135deg,#fff 0%,#fbf9ff 100%)}
+.entry-handoff-eyebrow{display:block;margin-bottom:5px;color:#7628e8;font-size:10px;font-weight:800;letter-spacing:.07em;text-transform:uppercase}
+.entry-handoff-status{flex:none;padding:6px 10px;border-radius:999px;background:#fff1e6;color:#bd6400;font-size:10px;font-style:normal;font-weight:700;text-transform:uppercase}
+.entry-handoff-content{padding:16px}
+.entry-handoff-content>section{margin:0;padding:0;border:0;background:transparent}
+.entry-handoff-content>section+section{margin-top:16px;padding-top:16px;border-top:1px solid #eceaf2}
+.entry-handoff-content small{display:block;margin-bottom:7px;color:#8c90a0;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.entry-handoff-reason strong{display:inline-flex;padding:8px 11px;border-radius:8px;background:#f1eaff;color:#65429d;font-size:13px;line-height:1.35}
+.entry-handoff-action p{color:#454a5d;font-size:13px;line-height:1.55}
+.entry-handoff-content>button{display:flex;width:100%;align-items:center;justify-content:center;gap:8px;margin-top:18px;padding:11px 14px;border:1px solid #7628e8;border-radius:8px;background:#7628e8;color:#fff;font-size:13px;font-weight:700;cursor:pointer}
+.entry-handoff-content>button:hover{background:#6420c9}.entry-handoff-content>button span{font-size:17px;line-height:1}
 @media(max-width:760px){.entry-disruption-list,.entry-my-cases{overflow-x:auto}.entry-disruption-head,.entry-disruption-body>button{min-width:650px}.entry-affected-head,.entry-affected-row{min-width:850px}}
 
 /* Expandable disruption detail card: light, compact and readable over the map. */

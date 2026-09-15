@@ -11,6 +11,9 @@ public class Message
     // in_app/email)撞名。
     public string Thread { get; set; } = "ai"; // ai|coordinator
     public string Content { get; set; } = "";
+    /// <summary>小段结构化附件(如 {"kind":"room_card", hotel, room_type, room_image_urls, reason})，
+    /// 目前只在"确认更便宜候补方案"后的系统消息上使用，前端据 kind 渲染成图文卡片。null=纯文本消息。</summary>
+    public string? AttachmentJson { get; set; }
     public string? Vote { get; set; } // like|dislike|null，供 P9 差评分析
     public bool Escalated { get; set; } // AI 回复触发了转人工，供看板"转人工率"统计
     /// <summary>协调员对"被踩+没转人工"的AI回复复核：这条其实该转人工吗。用来补

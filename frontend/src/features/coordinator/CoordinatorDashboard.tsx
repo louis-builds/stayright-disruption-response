@@ -49,6 +49,16 @@ function reasonLabel(value: string) {
   return translations[value] ?? value;
 }
 
+function CoordinatorKpiIcon({ type }: { type: "attention" | "overdue" | "hotel" | "assigned" }) {
+  const paths = {
+    attention: <><path d="M10.3 3.7 2.6 17a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.7a2 2 0 0 0-3.4 0Z" /><path d="M12 9v4M12 17h.01" /></>,
+    overdue: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2M18.4 5.6l1.4-1.4" /></>,
+    hotel: <><path d="M5 21V4a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v17" /><path d="M15 9h3a1 1 0 0 1 1 1v11M3 21h18M8 7h1M11 7h1M8 11h1M11 11h1M8 15h1M11 15h1" /></>,
+    assigned: <><circle cx="10" cy="8" r="4" /><path d="M3 21v-2a6 6 0 0 1 6-6h2M16 16l2 2 4-4" /></>,
+  };
+  return <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[type]}</svg>;
+}
+
 const KNOWN_LOCATIONS = [
   { name: "Auckland", lat: -36.8485, lng: 174.7633 },
   { name: "Wellington", lat: -41.2865, lng: 174.7762 },
@@ -85,15 +95,14 @@ export function DisruptionOperationsDashboard({ data, syncedAt, onOpenDisruption
         setDisruptions(d.data);
         const defaultEvent = [...d.data].filter((item) => item.status === "active").sort((a, b) => b.affectedCount - a.affectedCount)[0] ?? d.data[0];
         setSelectedDisruptionId((current) => current ?? defaultEvent?.id ?? null);
-        void Promise.all(d.data.map(async (item) => {
-          const [detail, cases] = await Promise.all([api.fetchDisruption(item.id), api.fetchDisruptionCases(item.id)]);
-          const region = item.region.trim() || (detail.code === 0 ? inferredRegion(detail.data.lat, detail.data.lng) : "Unknown region");
+        setEventPresentation(Object.fromEntries(d.data.map((item) => {
+          const region = item.region.trim() || inferredRegion(item.lat ?? null, item.lng ?? null);
           return [item.id, {
             title: readableEventTitle(item, region),
             region,
-            handovers: cases.code === 0 ? cases.data.filter(isOpenAttentionCase).length : 0,
+            handovers: item.attentionCount ?? 0,
           }] as const;
-        })).then((rows) => setEventPresentation(Object.fromEntries(rows)));
+        })));
       }
       if (c.code === 0) setRecent(c.data.slice(0, 3));
     });
@@ -172,10 +181,45 @@ export function DisruptionOperationsDashboard({ data, syncedAt, onOpenDisruption
     <div className="entry-work-grid">
       <section className="entry-my-cases"><header><div><h2>Affected Bookings Requiring Attention</h2><p>{selectedDisruption ? `Human-review bookings linked to ${selectedDisruption.title}` : "Select a disruption above"}</p></div></header><div className="entry-affected-head"><span>Booking & guest</span><span>Impact</span><span>AI handoff reason</span><span>Waiting</span><span>Status</span><span>Action</span></div>{affectedBookings.length === 0 ? <p className="entry-empty">No human-review bookings are linked to this disruption.</p> : affectedBookings.slice(0, 6).map((item) => <button className={`entry-affected-row ${selectedBooking?.caseId === item.caseId ? "selected" : ""}`} key={item.caseId} onClick={() => setSelectedCaseId(item.caseId)}><span className="entry-booking"><i>{initials(item.guestNickname)}</i><b>{item.confirmationNo || caseCode(item.caseId)}</b><small>{item.guestNickname}</small></span><span>{item.disruptionTitle}</span><span>{displayReason(item)}</span><time className={item.overdue ? "overdue" : ""}>{waitLabel(item.waitTime)}</time><em>{item.status.replaceAll("_", " ")}</em><i onClick={(event) => { event.stopPropagation(); onOpenCase(item.caseId); }}>{item.status === "in_progress" ? "Resume" : "Review"}</i></button>)}</section>
 
-      <aside className="entry-handoff entry-handoff-details"><header><div><h2>AI Handoff Details</h2><p>{selectedBooking ? `${selectedBooking.confirmationNo || caseCode(selectedBooking.caseId)} · ${selectedBooking.guestNickname}` : "Select an affected booking"}</p></div></header>{selectedBooking ? <><section><b>Guest's request</b><p className="unavailable">Not available in the dashboard API.</p></section><section><b>What AI tried</b><p className="unavailable">Not available in the dashboard API.</p></section><section><b>Why AI escalated</b><p>{selectedBooking.escalationReason ?? "No AI escalation reason was recorded."}</p></section><section><b>Missing or conflicting information</b><p className="unavailable">Not available in the dashboard API.</p></section><section><b>Suggested first action</b><p>Open the Case Workspace and review the conversation history and confirmed case evidence.</p></section><button onClick={() => onOpenCase(selectedBooking.caseId)}>Open Case Workspace →</button></> : <p className="entry-empty">Select a booking to view its AI handoff.</p>}</aside>
+      <aside className="entry-handoff entry-handoff-details">
+        <header>
+          <div>
+            <span className="entry-handoff-eyebrow">Handoff summary</span>
+            <h2>AI Handoff</h2>
+            <p>{selectedBooking ? `${selectedBooking.confirmationNo || caseCode(selectedBooking.caseId)} · ${selectedBooking.guestNickname}` : "Select an affected booking"}</p>
+          </div>
+          {selectedBooking && <i className="entry-handoff-status">Needs review</i>}
+        </header>
+        {selectedBooking ? <div className="entry-handoff-content">
+          <section className="entry-handoff-reason">
+            <small>Reason for handoff</small>
+            <strong>{selectedBooking.escalationReason ?? "Manual review requested"}</strong>
+          </section>
+          <section className="entry-handoff-action">
+            <small>Suggested action</small>
+            <p>Review the conversation and confirmed case details before responding.</p>
+          </section>
+          <button onClick={() => onOpenCase(selectedBooking.caseId)}>Open Case Workspace <span>→</span></button>
+        </div> : <p className="entry-empty">Select a booking to view its AI handoff.</p>}
+      </aside>
     </div>
 
-    <section className="entry-recent"><header><div><h2>Recent Resolutions</h2><p>Cases closed during the last seven days</p></div></header><div>{recent.length === 0 ? <p className="entry-empty">No recent resolutions.</p> : recent.map((item) => <button key={item.caseId} onClick={() => onOpenCase(item.caseId)}><span><b>{item.confirmationNo || caseCode(item.caseId)}</b><small>{item.guestNickname}</small></span><em>{item.disruptionTitle}</em><strong>Resolved</strong><i>View history →</i></button>)}</div></section>
+    <section className="entry-recent">
+      <header><div><h2>Recent Resolutions</h2><p>Cases closed during the last seven days</p></div></header>
+      <div className="entry-recent-list">
+        {recent.length === 0 ? <p className="entry-empty">No recent resolutions.</p> : <>
+          <div className="entry-recent-head"><span>Booking &amp; guest</span><span>Disruption</span><span>Status</span><span>Action</span></div>
+          {recent.map((item) => (
+            <button className="entry-recent-row" key={item.caseId} onClick={() => onOpenCase(item.caseId)}>
+              <span className="entry-recent-booking"><b>{item.confirmationNo || caseCode(item.caseId)}</b><small>{item.guestNickname}</small></span>
+              <span className="entry-recent-disruption">{item.disruptionTitle}</span>
+              <strong>Resolved</strong>
+              <i>View details →</i>
+            </button>
+          ))}
+        </>}
+      </div>
+    </section>
   </div>;
 }
 
@@ -224,9 +268,11 @@ export function CoordinatorDashboard({ data, opsData, syncedAt, onOpenCases, onO
   const reasons = [...reasonCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
   const maxReason = Math.max(...reasons.map(([, value]) => value), 1);
 
-  const handoverByTitle = new Map<string, number>();
-  attention.forEach((item) => handoverByTitle.set(item.disruptionTitle, (handoverByTitle.get(item.disruptionTitle) ?? 0) + 1));
-  const disruptionWork = disruptions.map((item) => ({ ...item, handovers: handoverByTitle.get(item.title) ?? 0 }))
+  const handoverByDisruptionId = new Map<string, number>();
+  attention.forEach((item) => handoverByDisruptionId.set(item.disruptionId, (handoverByDisruptionId.get(item.disruptionId) ?? 0) + 1));
+  const disruptionWork = disruptions
+    .filter((item) => item.status === "active")
+    .map((item) => ({ ...item, handovers: handoverByDisruptionId.get(item.id) ?? 0 }))
     .filter((item) => item.handovers > 0).sort((a, b) => b.handovers - a.handovers).slice(0, 5);
   const maxHandover = Math.max(...disruptionWork.map((item) => item.handovers), 1);
 
@@ -250,10 +296,10 @@ export function CoordinatorDashboard({ data, opsData, syncedAt, onOpenCases, onO
     <header className="analytics-heading"><div><span>Operations overview</span><h1>Operations Analytics &amp; Intelligence</h1><p>Monitor workload, AI handovers, hotel delays and resolution performance.</p></div><aside><b><i/>Live data</b>{syncedAt && <small>Updated {syncedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</small>}</aside></header>
 
     <section className="analytics-kpis">
-      <button className="attention" onClick={onOpenCases}><span>Cases requiring attention</span><strong>{attention.length}</strong><i className="amber">△</i><div><small>AI handovers and urgent cases</small><em>Filter cases&nbsp; →</em></div></button>
-      <button className="overdue" onClick={onOpenCases}><span>Overdue cases</span><strong>{data.overdueInProgressCount}</strong><i className="rose">♧</i><div><small>SLA threshold exceeded</small><em>Urgent filter&nbsp; →</em></div></button>
-      <button className="hotel" onClick={onOpenCases}><span>Waiting for hotel</span><strong>{opsData?.hotelOverdueInquiryCount ?? "—"}</strong><i className="violet">▦</i><div><small>Responses requiring follow-up</small><em>Hotel filter&nbsp; →</em></div></button>
-      <button className="mine" onClick={onOpenMyCases}><span>My active cases</span><strong>{mine.length}</strong><i className="teal">♙</i><div><small>Open cases assigned to you</small><em>Assigned filter&nbsp; →</em></div></button>
+      <button className="attention" onClick={onOpenCases}><span>Cases requiring attention</span><strong>{attention.length}</strong><i className="amber"><CoordinatorKpiIcon type="attention" /></i><div><small>AI handovers and urgent cases</small><em>Filter cases&nbsp; →</em></div></button>
+      <button className="overdue" onClick={onOpenCases}><span>Overdue cases</span><strong>{data.overdueInProgressCount}</strong><i className="rose"><CoordinatorKpiIcon type="overdue" /></i><div><small>SLA threshold exceeded</small><em>Urgent filter&nbsp; →</em></div></button>
+      <button className="hotel" onClick={onOpenCases}><span>Waiting for hotel</span><strong>{opsData?.hotelOverdueInquiryCount ?? "—"}</strong><i className="violet"><CoordinatorKpiIcon type="hotel" /></i><div><small>Responses requiring follow-up</small><em>Hotel filter&nbsp; →</em></div></button>
+      <button className="mine" onClick={onOpenMyCases}><span>My active cases</span><strong>{mine.length}</strong><i className="teal"><CoordinatorKpiIcon type="assigned" /></i><div><small>Open cases assigned to you</small><em>Assigned filter&nbsp; →</em></div></button>
     </section>
 
     <section className="analytics-primary-grid">

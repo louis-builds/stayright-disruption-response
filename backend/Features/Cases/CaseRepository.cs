@@ -17,6 +17,7 @@ public class CaseRepository(AppDbContext db) : ICaseRepository
         var query = db.Cases
             .Include(c => c.Disruption)
             .Include(c => c.Booking).ThenInclude(b => b!.Hotel)
+            .Include(c => c.Booking).ThenInclude(b => b!.RoomType)
             .Where(c => c.Booking!.GuestUserId == guestUserId);
 
         if (!includeClosed) query = query.Where(c => c.Status != "closed");
@@ -28,7 +29,15 @@ public class CaseRepository(AppDbContext db) : ICaseRepository
         db.Cases
             .Include(c => c.Disruption)
             .Include(c => c.Booking).ThenInclude(b => b!.Hotel)
+            .Include(c => c.Booking).ThenInclude(b => b!.RoomType)
             .FirstOrDefaultAsync(c => c.Id == caseId, ct);
+
+    public Task<List<CaseWorkflowStateHistory>> ListWorkflowHistoryAsync(Guid caseId, CancellationToken ct = default) =>
+        db.CaseWorkflowStateHistories
+            .Where(item => item.CaseId == caseId)
+            .OrderBy(item => item.StartedAt)
+            .AsNoTracking()
+            .ToListAsync(ct);
 
     public Task<bool> IsHotelConfirmedAsync(Guid caseId, CancellationToken ct = default) =>
         db.Inquiries.AnyAsync(i => i.CaseId == caseId && i.Status == "accepted", ct);
@@ -46,6 +55,12 @@ public class CaseRepository(AppDbContext db) : ICaseRepository
     public async Task<List<Option>> ListOptionsAsync(Guid caseId, CancellationToken ct = default)
     {
         var options = await db.Options.Where(o => o.CaseId == caseId && o.Availability != "unavailable").ToListAsync(ct);
+        return [.. options.OrderBy(o => OptionTypeOrder.GetValueOrDefault(o.OptionType, 99)).ThenBy(o => o.CreatedAt)];
+    }
+
+    public async Task<List<Option>> ListAllOptionsAsync(Guid caseId, CancellationToken ct = default)
+    {
+        var options = await db.Options.Where(o => o.CaseId == caseId).ToListAsync(ct);
         return [.. options.OrderBy(o => OptionTypeOrder.GetValueOrDefault(o.OptionType, 99)).ThenBy(o => o.CreatedAt)];
     }
 

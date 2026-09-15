@@ -3,7 +3,7 @@ using TravelDisruptionAgent.Api.Infrastructure.Data.Entities;
 
 namespace TravelDisruptionAgent.Api.Infrastructure.Data;
 
-public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+public class AppDbContext(DbContextOptions<AppDbContext> options, IServiceScopeFactory scopeFactory, ILogger<AppDbContext> logger) : DbContext(options)
 {
     private bool recordingWorkflowHistory;
 
@@ -37,6 +37,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<SystemSettings> SystemSettings => Set<SystemSettings>();
     public DbSet<FaqQuestion> FaqQuestions => Set<FaqQuestion>();
     public DbSet<CaseWorkflowStateHistory> CaseWorkflowStateHistories => Set<CaseWorkflowStateHistory>();
+    public DbSet<Call> Calls => Set<Call>();
+    public DbSet<DeviceToken> DeviceTokens => Set<DeviceToken>();
+    public DbSet<CallRecording> CallRecordings => Set<CallRecording>();
+    public DbSet<CustomTag> CustomTags => Set<CustomTag>();
+    public DbSet<GuestCustomTag> GuestCustomTags => Set<GuestCustomTag>();
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
@@ -55,7 +60,25 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .Distinct()
             .ToList();
 
+        var newNotifications = ChangeTracker.Entries<Notification>()
+            .Where(entry => entry.State == EntityState.Added)
+            .Select(entry => entry.Entity)
+            .ToList();
+
         var changed = await base.SaveChangesAsync(cancellationToken);
+
+        if (newNotifications.Count > 0)
+        {
+            try
+            {
+                await DispatchPushNotificationsAsync(newNotifications, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Push dispatch failed for {Count} notification(s) already saved", newNotifications.Count);
+            }
+        }
+
         if (affectedCaseIds.Count == 0) return changed;
 
         recordingWorkflowHistory = true;
@@ -87,6 +110,29 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         return changed;
     }
 
+    private async Task DispatchPushNotificationsAsync(List<Notification> notifications, CancellationToken ct)
+    {
+        using var scope = scopeFactory.CreateScope();
+        var tokenRepo = scope.ServiceProvider.GetRequiredService<Features.Push.IDeviceTokenRepository>();
+        var sender = scope.ServiceProvider.GetRequiredService<Features.Push.IExpoPushSender>();
+
+        var userIds = notifications.Select(n => n.UserId).Distinct().ToList();
+        var tokens = await tokenRepo.GetTokensForUsersAsync(userIds, ct);
+        if (tokens.Count == 0) return;
+
+        var tokensByUser = tokens.ToLookup(t => t.UserId);
+        var messages = new List<Features.Push.PushMessage>();
+        foreach (var n in notifications)
+        {
+            foreach (var token in tokensByUser[n.UserId])
+            {
+                var data = n.CaseId is Guid caseId ? new Dictionary<string, string> { ["caseId"] = caseId.ToString() } : null;
+                messages.Add(new Features.Push.PushMessage(token.ExpoPushToken, n.Title, n.Body, data));
+            }
+        }
+        if (messages.Count > 0) await sender.SendAsync(messages, ct);
+    }
+
     private async Task<string?> DeriveWorkflowStateAsync(Guid caseId, CancellationToken ct)
     {
         var status = await Cases.Where(c => c.Id == caseId).Select(c => c.Status).FirstOrDefaultAsync(ct);
@@ -101,6 +147,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     {
         // 开发规范.md 第3节：表名/字段名走 EFCore.NamingConventions 的 snake_case（见 Program.cs 注册），
         // 这里只补充索引、唯一约束、jsonb 列类型等 Fluent 配置。
+        modelBuilder.HasPostgresExtension("vector");
 
         modelBuilder.Entity<User>(e =>
         {
@@ -192,6 +239,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<RagDocument>(e =>
         {
             e.HasIndex(x => new { x.Name, x.Version }).IsUnique();
+            e.HasIndex(x => x.HotelId);
+            e.HasOne(x => x.Hotel).WithMany().HasForeignKey(x => x.HotelId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<RefundConfirmation>(e =>
@@ -239,6 +288,34 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasIndex(x => x.UserId);
         });
 
+        modelBuilder.Entity<Call>(e =>
+        {
+            e.HasIndex(x => x.CaseId);
+            e.HasIndex(x => x.InitiatedByCoordinatorId);
+        });
+
+        modelBuilder.Entity<CallRecording>(e =>
+        {
+            e.HasIndex(x => x.CallId).IsUnique();
+        });
+
+        modelBuilder.Entity<CustomTag>(e =>
+        {
+            e.HasIndex(x => new { x.OwnerRole, x.HotelId });
+        });
+
+        modelBuilder.Entity<GuestCustomTag>(e =>
+        {
+            e.HasIndex(x => new { x.CustomTagId, x.GuestUserId }).IsUnique();
+            e.HasIndex(x => x.GuestUserId);
+        });
+
+        modelBuilder.Entity<DeviceToken>(e =>
+        {
+            e.HasIndex(x => x.ExpoPushToken).IsUnique();
+            e.HasIndex(x => x.UserId);
+        });
+
         modelBuilder.Entity<AlertAcknowledgement>(e =>
         {
             e.HasIndex(x => new { x.AlertKey, x.AcknowledgedDate }).IsUnique();
@@ -248,6 +325,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             e.HasIndex(x => x.RagDocumentId);
             e.HasOne(x => x.RagDocument).WithMany(d => d.Chunks).HasForeignKey(x => x.RagDocumentId).OnDelete(DeleteBehavior.Cascade);
+            e.Property(x => x.Embedding).HasColumnType($"vector({EmbeddingVector.Dimensions})");
+        });
+
+        modelBuilder.Entity<FaqQuestion>(e =>
+        {
+            e.Property(x => x.Embedding).HasColumnType($"vector({EmbeddingVector.Dimensions})");
         });
 
         modelBuilder.Entity<GoldenTestRunItem>(e =>

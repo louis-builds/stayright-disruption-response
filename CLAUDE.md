@@ -12,11 +12,13 @@
 
 技术栈已定，AWS 环境已搭好并通过冒烟验收（2026-08-21）。
 
-**目录结构与实际代码的对应关系**（2026-08-31 核对代码后补充）：
+**目录结构与实际代码的对应关系**（2026-08-31 核对代码后补充，2026-09-08 补记新增模块）：
 
 | 目录 | 内容 | 对应 CI job |
 |---|---|---|
 | `detect/` | Python 3.12 采集器/检测逻辑（`src/`、`tests/`、`requirements.txt`、`pyproject.toml`） | `gate.yml` 的 `python` job |
+| `detect/agent/` | ⚠️ 新增、未在本文件其他章节说明：`langgraph_framework.py`，基于 LangGraph 的"扰动处理 & 改签"agent 骨架（工具函数为占位桩）。不在 `src/` 下，靠 `sys.path.insert` 挂路径，游离于下文三层分层约束之外——架构定位待 Zachary 确认 | 未纳入 `gate.yml`（不在 `src/`，`pytest` 覆盖不到） |
+| `detect/src/mcp_server/` | ⚠️ 新增、未在本文件其他章节说明：`identify_server.py`，MCP server，用途/调用方待补文档 | 随 `python` job 一并跑 pytest（若有对应测试） |
 | `backend/` | .NET 服务（`backend.sln`、`Program.cs`、`Controllers/`、`Features/` 等） | `gate.yml` 的 `backend` job |
 | `frontend/` | React + TypeScript + Vite 运营台（`package.json` 含 `lint`/`build`） | `gate.yml` 的 `frontend` job |
 
@@ -34,7 +36,7 @@
 | AWS SDK | Python 侧 **boto3**（唯一）；C# 侧 AWS SDK for .NET（目前仅 Bedrock fallback 用到） |
 | 云区域 | **`ap-southeast-2`（悉尼）** |
 | CI | GitHub Actions（`.github/workflows/gate.yml`，触发分支 `Test`）：`pytest` + `dotnet build` + 前端 `lint`/`build` |
-| 运行环境（规划） | EC2 模块化单体 + 5 个 Lambda（4 采集器 + 1 回调）。目前只有 `detect/src/runtimes/lambda_weather_collector.py`；volcano/flight/road 三个源当前是 `detect/src/detect/` 下的库模块 |
+| 运行环境（规划） | EC2 模块化单体 + 5 个 Lambda（4 采集器 + 1 回调）。4 个采集器（weather/volcano/flight/road）已于 2026-09-03 随 SAM 栈 `stayright-dev-weather-collector` 部署上线并实测；回调 Lambda（第 5 个）代码未写、未部署。详见 `docs/AWS_SDK_SPEC.md` §13.2 部署时间线 |
 | IaC（规划） | 非代码资源用脚本创建、Lambda 走 AWS SAM（`detect/template.yaml`）。`infra/` 目前是空占位 |
 | CD（规划） | 合并即部署的流水线尚未建；`gate.yml` 只做检查、不做部署 |
 
@@ -162,7 +164,7 @@ src/runtimes/   进程外壳（EC2 worker / ttl_scanner / Lambda handlers）
 ## 环境现状
 
 AWS 环境已就绪（SSM / Secrets / S3 / SQS / EventBridge / Bedrock / SES / EC2+PostGIS+pgvector）。
-Lambda ×5 待部署。**详见 `docs/AWS_SDK_SPEC.md` §1。**
+Lambda ×5：4 个采集器（weather/volcano/flight/road）已于 2026-09-03 部署上线并实测；回调 Lambda（第 5 个）未写。详见 `docs/AWS_SDK_SPEC.md` §13.2。
 
 ⚠️ 两件最容易踩的：**SES 处于沙箱模式，每个新收件邮箱都要单独验证**；**EC2 按需开停，平时是停机状态**。
 需要真机环境（连线上数据库、跑真 AWS、加 SES 收件邮箱）时找 Zachary。

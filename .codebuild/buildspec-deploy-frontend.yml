@@ -1,0 +1,14 @@
+version: 0.2
+
+# 直接复用 scripts/deploy-frontend.sh（S3 sync 不带 --delete + CloudFront
+# 失效），不在这里重写。
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 20
+
+  build:
+    commands:
+      - chmod +x scripts/deploy-frontend.sh
+      - ./scripts/deploy-frontend.sh

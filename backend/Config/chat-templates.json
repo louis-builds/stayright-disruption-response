@@ -1,9 +1,4 @@
 {
-  "outOfScopeKeywords": [
-    "world cup", "世界杯", "夺冠", "champion", "football score", "nba", "world series",
-    "who is the president", "capital of", "tell me a joke", "stock price", "crypto",
-    "weather forecast for tomorrow", "movie recommendation", "sing a song"
-  ],
   "outOfScopeTemplate": {
     "en": "I can only help with your booking, disruption, and rebooking/refund questions here — I'm not able to answer that.",
     "zh": "我只能帮您处理与本次预订、行程中断、改订或退款相关的问题，无法回答这个问题。",
@@ -18,20 +13,11 @@
     "zh": "出于安全考虑，我无法在这里处理密码或查询其他客人的信息。如需账号相关帮助，请直接联系客服。",
     "mi": "Mō tō haumaru, kāore e taea e au te tuhi kupuhipa, kupu huna rānei i konei. Whakapā tika atu ki te tautoko."
   },
-  "escalationKeywords": [
-    "speak to a human", "talk to a person", "speak to someone", "escalate", "supervisor", "manager",
-    "lawsuit", "sue", "unacceptable", "this is ridiculous", "人工", "转人工", "投诉", "律师"
-  ],
   "escalationTemplate": {
     "en": "Please hold on, a coordinator is looking into this for you — click here to chat with them.",
     "zh": "请稍等，协调员正在处理，点此对话。",
     "mi": "Tēnā koa tatari, kei te tirotiro tētahi kaiwhakarite i tēnei mea māu — pāwhiritia ki konei ki te kōrero."
   },
-  "hotelAvailabilityKeywords": [
-    "vacant room", "vacant rooms", "room availability", "any rooms available", "rooms available",
-    "extend my stay", "extend stay", "room upgrade", "upgrade my room", "free upgrade",
-    "空房", "有没有房", "还有房吗", "延期入住", "延长入住", "升级房型", "免费升房", "升房"
-  ],
   "hotelAvailabilityTemplate": {
     "en": "That's something only the hotel can confirm — I've reached out to them to check and will update you as soon as they respond. You can also view your rebooking options in the meantime.",
     "zh": "这个只有酒店能确认，我已经联系酒店核实，一有结果就会通知您。您也可以先看看改签方案。",

@@ -4,6 +4,7 @@ import { AppShell } from "../../shared/components/AppShell";
 import { RoleTopNav } from "../../shared/components/RoleTopNav";
 import { useAuth } from "../auth";
 import { GuestDashboardShell } from "../home/GuestDashboardShell";
+import { HotelDashboardShell } from "../hotel/HotelDashboardShell";
 import * as api from "./api";
 import type { CaseOption, CaseSummary, ConfirmExecutionResult, OptionType, PolicySummary } from "./types";
 import "./OptionsFlowPage.css";
@@ -16,6 +17,9 @@ interface OptionPayload {
   currency?: string;
   distance_km?: number;
   reason?: string;
+  room_description?: string;
+  room_amenities?: string[];
+  room_image_urls?: string[];
   refund_amount?: number;
   cancellation_fee?: number;
   eta_business_days?: number;
@@ -221,11 +225,20 @@ export function OptionsFlowPage() {
 
   if (!user) return null;
 
-  const renderPage = (content: ReactNode) => user.role === "guest" ? (
-    <GuestDashboardShell active="dashboard">{content}</GuestDashboardShell>
-  ) : (
-    <AppShell centerContent={<RoleTopNav role={user.role} />} showBack>{content}</AppShell>
-  );
+  const renderPage = (content: ReactNode) => {
+    if (user.role === "hotel") {
+      return (
+        <HotelDashboardShell active="todo" onNavigate={() => navigate("/hotel/home")} onSearch={() => navigate("/hotel/home")}>
+          {content}
+        </HotelDashboardShell>
+      );
+    }
+    return user.role === "guest" ? (
+      <GuestDashboardShell active="dashboard">{content}</GuestDashboardShell>
+    ) : (
+      <AppShell centerContent={<RoleTopNav role={user.role} />} showBack>{content}</AppShell>
+    );
+  };
 
   const availableCount = options.filter((option) => option.availability !== "unavailable").length;
   const contextHeader = (
@@ -395,9 +408,18 @@ export function OptionsFlowPage() {
                       {o.perkNames.length > 0 && (
                         <p className="option-line option-perks">Includes: {o.perkNames.join(", ")}</p>
                       )}
+                      {payload.room_image_urls && payload.room_image_urls.length > 0 && (
+                        <div className="option-room-photos">
+                          {payload.room_image_urls.map((uri, i) => (
+                            <img key={i} src={uri} alt={payload.room_type ?? "Room"} className="option-room-photo" />
+                          ))}
+                        </div>
+                      )}
+                      {payload.room_description && <p className="option-line option-room-description">{payload.room_description}</p>}
                       <dl className="guest-option-detail-grid">
                         {o.optionType !== "cancel" && o.optionType !== "custom" && <div><dt>Hotel</dt><dd>{payload.hotel ?? "Same hotel"}</dd></div>}
                         {payload.room_type && <div><dt>Room type</dt><dd>{payload.room_type}</dd></div>}
+                        {payload.room_amenities && payload.room_amenities.length > 0 && <div><dt>Amenities</dt><dd>{payload.room_amenities.join(", ")}</dd></div>}
                         {payload.distance_km !== undefined && <div><dt>Distance</dt><dd>{payload.distance_km} km</dd></div>}
                         {payload.fee_diff !== undefined && <div><dt>Fee difference</dt><dd className={payload.fee_diff <= 0 ? "positive" : ""}>{payload.fee_diff >= 0 ? "+" : ""}{payload.fee_diff} {payload.currency}</dd></div>}
                         {payload.refund_amount !== undefined && <div><dt>Refund amount</dt><dd>{payload.refund_amount} {payload.currency}</dd></div>}

@@ -2,9 +2,13 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
+using Pgvector.EntityFrameworkCore;
 using Serilog;
 using TravelDisruptionAgent.Api.Features.Auth;
 using TravelDisruptionAgent.Api.Features.Bookings;
+using TravelDisruptionAgent.Api.Features.Calls;
+using TravelDisruptionAgent.Api.Features.Tags;
+using TravelDisruptionAgent.Api.Features.Push;
 using TravelDisruptionAgent.Api.Features.Cases;
 using TravelDisruptionAgent.Api.Features.Chat;
 using TravelDisruptionAgent.Api.Features.Coordinator;
@@ -42,14 +46,17 @@ builder.Host.UseSerilog((context, services, config) =>
 
 var connectionString = BuildConnectionString(builder.Configuration);
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(connectionString).UseSnakeCaseNamingConvention());
+    options.UseNpgsql(connectionString, o => o.UseVector()).UseSnakeCaseNamingConvention());
 
 const string FrontendCorsPolicy = "Frontend";
-var frontendOrigin = Environment.GetEnvironmentVariable("FRONTEND_ORIGIN") ?? "http://localhost:5173";
+// 逗号分隔支持多个本地开发前端同时联调(Web:5173、协调员App:8091、客户端App:8092),
+// 不用每次切换测试对象都重启后端换 FRONTEND_ORIGIN。
+var frontendOrigins = (Environment.GetEnvironmentVariable("FRONTEND_ORIGIN") ?? "http://localhost:5173,http://localhost:8091,http://localhost:8092")
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(FrontendCorsPolicy, policy =>
-        policy.WithOrigins(frontendOrigin).AllowAnyHeader().AllowAnyMethod().AllowCredentials());
+        policy.WithOrigins(frontendOrigins).AllowAnyHeader().AllowAnyMethod().AllowCredentials());
 });
 
 builder.Services.AddControllers();
@@ -101,6 +108,7 @@ builder.Services.AddScoped<ICaseService, CaseService>();
 builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 builder.Services.AddSingleton<CaseActionTokenService>();
 builder.Services.AddSingleton<IPolicyDocumentStorage, S3PolicyDocumentStorage>();
+builder.Services.AddSingleton<IRagDocumentSource, RagDocumentSource>();
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<IRagRepository, RagRepository>();
 builder.Services.AddScoped<GeminiClient>();
@@ -127,6 +135,14 @@ builder.Services.AddScoped<RefundPolicyRuleExtractor>();
 builder.Services.AddScoped<IHotelService, HotelService>();
 builder.Services.AddScoped<IFaqRepository, FaqRepository>();
 builder.Services.AddScoped<IFaqService, FaqService>();
+builder.Services.AddScoped<ICallRepository, CallRepository>();
+builder.Services.AddScoped<ICallService, CallService>();
+builder.Services.AddScoped<ITelephonyProvider, MockTelephonyProvider>();
+builder.Services.AddScoped<IAsrProvider, MockAsrProvider>();
+builder.Services.AddScoped<ITagRepository, TagRepository>();
+builder.Services.AddScoped<ITagService, TagService>();
+builder.Services.AddScoped<IDeviceTokenRepository, DeviceTokenRepository>();
+builder.Services.AddScoped<IExpoPushSender, ExpoPushSender>();
 builder.Services.AddHostedService<FaqClusteringJob>();
 builder.Services.AddHostedService<HandoffIngestJob>();
 
@@ -136,8 +152,9 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     await db.Database.MigrateAsync();
-    await SeedRunner.RunAsync(db, app.Logger);
+    await SeedRunner.RunAsync(db, scope.ServiceProvider.GetRequiredService<IRagDocumentSource>(), app.Logger);
     await RagChunkBackfill.RunAsync(db, scope.ServiceProvider.GetRequiredService<TravelDisruptionAgent.Api.Features.Chat.GeminiClient>(), app.Logger);
+    await RagChunkBackfill.RunHotelPolicyBackfillAsync(db, scope.ServiceProvider.GetRequiredService<TravelDisruptionAgent.Api.Features.Chat.IRagRepository>(), app.Logger);
 }
 
 if (app.Environment.IsDevelopment())
@@ -151,6 +168,10 @@ if (!app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 }
 
+// Mock 电话录音文件走静态托管(wwwroot/mock-recordings)——真实 Twilio 接入后录音会存在对象存储，
+// 这块直接删掉换成真实 URL 即可，不用鉴权保护(跟真实录音 URL 惯例一致，通常是带签名的临时直链)。
+app.UseStaticFiles();
+
 app.UseCors(FrontendCorsPolicy);
 app.UseAuthentication();
 app.UseMiddleware<ForbiddenResponseMiddleware>();
@@ -162,14 +183,19 @@ app.Run();
 
 static string BuildConnectionString(IConfiguration config)
 {
-    string Env(string key, string fallback) =>
-        Environment.GetEnvironmentVariable(key) ?? config[key] ?? fallback;
+    string Env(string key, string pgKey, string fallback) =>
+        Environment.GetEnvironmentVariable(key)
+        ?? Environment.GetEnvironmentVariable(pgKey)
+        ?? config[key]
+        ?? config[pgKey]
+        ?? fallback;
 
-    var host = Env("POSTGRES_HOST", "localhost");
-    var port = Env("POSTGRES_PORT", "5432");
-    var db = Env("POSTGRES_DB", "travel_disruption");
-    var user = Env("POSTGRES_USER", "app");
-    var password = Env("POSTGRES_PASSWORD", "app_password");
+    // Support both the project's POSTGRES_* names and libpq's standard PG* names.
+    var host = Env("POSTGRES_HOST", "PGHOST", "localhost");
+    var port = Env("POSTGRES_PORT", "PGPORT", "5432");
+    var db = Env("POSTGRES_DB", "PGDATABASE", "travel_disruption");
+    var user = Env("POSTGRES_USER", "PGUSER", "app");
+    var password = Env("POSTGRES_PASSWORD", "PGPASSWORD", "app_password");
 
     return $"Host={host};Port={port};Database={db};Username={user};Password={password}";
 }

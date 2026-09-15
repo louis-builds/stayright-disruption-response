@@ -24,7 +24,7 @@ public class S3PolicyDocumentStorage(ILogger<S3PolicyDocumentStorage> logger) : 
 
     private static string? Bucket => Environment.GetEnvironmentVariable("S3_POLICY_BUCKET");
 
-    public async Task<string?> UploadAsync(Guid hotelId, Guid policyId, string fileName, string? contentType, Stream content, CancellationToken ct = default)
+    public async Task<string?> UploadAsync(Guid hotelId, string? hotelName, Guid policyId, string fileName, string? contentType, Stream content, CancellationToken ct = default)
     {
         var bucket = Bucket;
         if (string.IsNullOrWhiteSpace(bucket))
@@ -33,7 +33,7 @@ public class S3PolicyDocumentStorage(ILogger<S3PolicyDocumentStorage> logger) : 
             return null;
         }
 
-        var key = $"hotel-policies/{hotelId}/{DateTime.UtcNow:yyyyMMdd}/{policyId}-{Sanitize(fileName)}";
+        var key = $"hotel-policies/{HotelFolder(hotelId, hotelName)}/{DateTime.UtcNow:yyyyMMdd}/{policyId}-{Sanitize(fileName)}";
         var request = new PutObjectRequest
         {
             BucketName = bucket,
@@ -67,11 +67,23 @@ public class S3PolicyDocumentStorage(ILogger<S3PolicyDocumentStorage> logger) : 
         }
     }
 
-    // S3 key 里不能有空格/中文/路径分隔符之类，只留安全字符，长度截断防止超长 key。
+    // S3 key 里不能有空格/路径分隔符之类，只留安全字符，长度截断防止超长 key。
     private static string Sanitize(string fileName)
     {
         var name = Path.GetFileName(fileName);
         name = Regex.Replace(name, "[^a-zA-Z0-9._-]", "_");
         return name.Length <= 80 ? name : name[..80];
+    }
+
+    // 文件夹名 = {hotelId}-{名字slug}：id 保证唯一，slug 只是给人看的。ASCII 转小写、
+    // 空格等不安全字符转 '-'，中文等其它字符保留（S3 key 支持 UTF-8，控制台能正常显示）；
+    // slug 空（比如名字全是符号）时退回纯 id。
+    private static string HotelFolder(Guid hotelId, string? hotelName)
+    {
+        if (string.IsNullOrWhiteSpace(hotelName)) return hotelId.ToString();
+        var slug = Regex.Replace(hotelName.Trim().ToLowerInvariant(), @"[^a-z0-9\p{IsCJKUnifiedIdeographs}._-]+", "-");
+        slug = Regex.Replace(slug, "-{2,}", "-").Trim('-', '.');
+        if (slug.Length > 40) slug = slug[..40].Trim('-', '.');
+        return string.IsNullOrEmpty(slug) ? hotelId.ToString() : $"{hotelId}-{slug}";
     }
 }
