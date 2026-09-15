@@ -124,12 +124,12 @@ src/runtimes/   进程外壳（EC2 worker / ttl_scanner / Lambda handlers）
 
 ## 新账户（课程 demo 账户）约束
 
-> 2026-09-15 新增。这是 `docs/proposals/AWS_PROD_ENV_LAMBDA_MIGRATION.md` §7 决策点 4 里"prod 建在独立新账户"的落地——课程分配的账户（`ictgs-team1`）已到位，定位为**课程 demo/评分用途**，不是长期商业化 prod。账户具体 ID / 控制台入口等敏感信息不进本文件，见本地 gitignore 的 `infra/连接信息.md`（沿用 `docs/AWS_SDK_SPEC.md` 已有的惯例）。开新账户上线前，对照 `docs/NEW_ACCOUNT_CHECKLIST.md` 逐项执行。
+> 2026-09-15 新增。这是 `docs/proposals/AWS_PROD_ENV_LAMBDA_MIGRATION.md` §7 决策点 4 里"prod 建在独立新账户"的落地——课程分配的账户（`ictgs-team5`，账户 ID 025066268612）已到位，定位为**课程 demo/评分用途**，不是长期商业化 prod。账户具体 ID / 控制台入口等敏感信息不进本文件，见本地 gitignore 的 `infra/连接信息.md`（沿用 `docs/AWS_SDK_SPEC.md` 已有的惯例）。开新账户上线前，对照 `docs/NEW_ACCOUNT_CHECKLIST.md` 逐项执行。
 
 - **单一 cloud owner**：Zachary 是本账户唯一持有 IAM 访问权限的人。其他人需要资源变更，走他代为操作或 PR review，不直接分发 console/CLI 权限
 - **预算硬约束**：$200 额度。创建任何新资源前先用 [AWS Price Calculator](https://calculator.aws) 估算；账户里要设置 AWS Budgets 告警（如 $50/$100/$150 三档邮件告警）
 - **实例规格一律选最小可用、优先 serverless**：默认选型沿用 `docs/proposals/AWS_PROD_ENV_LAMBDA_MIGRATION.md` 的推荐（RDS `db.t4g.micro`、Lambda 而非常驻 EC2、不上 NAT Gateway / RDS Proxy），不必重新讨论
-- **🚫 禁止触碰账户内预置资源**：任何 Lambda / CloudFormation 栈名包含 `AWSAccelerator`、`ControlTower`、`CloudHealth` 的，禁止修改、删除，也禁止被自动化脚本（`infra/bootstrap-cicd.sh`、清理脚本等）扫描或波及。写自动化/清理脚本必须显式按 `stayright-*` 前缀过滤资源，不能用"操作账户里所有 XX 类资源"这种宽泛逻辑
+- **🚫 禁止触碰账户内预置资源**：任何 Lambda / CloudFormation 栈名包含 `AWSAccelerator`、`ControlTower`、`CloudHealth`、`TenableOrgOnboardStackset`、`AzureDefenderforCloud` 的，禁止修改、删除，也禁止被自动化脚本（`infra/bootstrap-cicd.sh`、清理脚本等）扫描或波及（后两项为 2026-09-15 用 `aws cloudformation list-stacks` 实测核查时新发现，此前文档未记录）。写自动化/清理脚本必须显式按 `stayright-*` 前缀过滤资源，不能用"操作账户里所有 XX 类资源"这种宽泛逻辑；完整清单见本地 `infra/连接信息.md`
 - **区域**：沿用 `ap-southeast-2`（无变化，仅确认）
 - **凭证**：沿用现有"不落地长期密钥、走 SSM/Secrets Manager"的铁律；在新账户里要重新建一遍这 12 个 SSM key + 3～4 个 Secrets（见下方两条铁律），不是复用 dev 账户的值
 - **移动端依赖提醒**：移动端 App（开发中，复用现有 C#/.NET 后端 API，不需要新增 AWS 服务）会把新账户的 API 入口地址（API Gateway 或 Lambda Function URL）直接写入 App 配置，变更成本高于网页端。地址一旦确定并给到移动端团队，尽量不再变更；若必须变更需提前同步
@@ -375,4 +375,5 @@ gate = pytest（detect/）+ dotnet build（backend/）+ 前端 lint & build
 | 2026-09-09 | CI/CD 定案（Zachary 拍板） | 弃用 GitHub Actions（组织策略 `local_only` 卡死），删除 `.github/workflows/gate.yml`；CI/CD 全走 AWS CodePipeline + CodeBuild。分支模型：`开发分支 → Test（集成）→ main（发布）`，部署只从 `main` 出（`DetectChanges: true`）；PR 进 `Test`/`main` 经 GitHub webhook 跑 gate（`stayright-gate-pr`）。详见 `docs/AWS_SDK_SPEC.md` §12、`infra/bootstrap-cicd.sh` |
 | 2026-09-10 | 本地开发统一连线上库（Zachary 拍板） | 废弃本地 Docker Postgres，删除根目录 `docker-compose.yml` / `Dockerfile.postgres`；本地开发一律经 SSM 隧道连线上 EC2 共享 `stayright` 库（`localhost:15432`）。因全员共库，`backend/Program.cs` 的启动自动迁移/seed 改为默认关闭，仅 Production 或 `RUN_DB_MIGRATE=1` 执行。`docs/DATABASE_ACCESS.md`、`.env.example`、`detect/README.md` 同步更新 |
 | 2026-09-11 | 数据库隧道改为跟随项目启停（Zachary 拍板） | 新增 `scripts/dev.sh`（隧道 + 后端 + 前端一起起、Ctrl+C 一起停），设为默认方案；卸载此前用 `db-tunnel-install.sh` 装的开机常驻 launchd 服务——不跑项目时不再自动连 EC2。`db-tunnel-install.sh` 保留作为可选的常驻方案。`docs/DATABASE_ACCESS.md` §3.2 同步更新 |
-| 2026-09-15 | 新增「新账户（课程 demo 账户）约束」 | 课程分配的新 AWS 账户（`ictgs-team1`，$200 额度）到位，落地 `docs/proposals/AWS_PROD_ENV_LAMBDA_MIGRATION.md` §7 决策点 4 的"独立新账户"方案；新增单一 cloud owner、预算告警、最小规格/serverless 优先、禁止触碰账户内预置的 `AWSAccelerator`/`ControlTower`/`CloudHealth` 资源、移动端 API 地址稳定性等约束。新增 `docs/NEW_ACCOUNT_CHECKLIST.md` 配套执行清单；同步更新该 proposal 文档与 `scripts/`/`infra/bootstrap-cicd.sh` 的账户可移植性 |
+| 2026-09-15 | 新增「新账户（课程 demo 账户）约束」 | 课程分配的新 AWS 账户（`ictgs-team5`，$200 额度）到位，落地 `docs/proposals/AWS_PROD_ENV_LAMBDA_MIGRATION.md` §7 决策点 4 的"独立新账户"方案；新增单一 cloud owner、预算告警、最小规格/serverless 优先、禁止触碰账户内预置的 `AWSAccelerator`/`ControlTower`/`CloudHealth` 资源、移动端 API 地址稳定性等约束。新增 `docs/NEW_ACCOUNT_CHECKLIST.md` 配套执行清单；同步更新该 proposal 文档与 `scripts/`/`infra/bootstrap-cicd.sh` 的账户可移植性 |
+| 2026-09-15（补） | 新账户接入实测 | 账户团队名订正为 `ictgs-team5`（账户 ID `025066268612`，此前误写 `ictgs-team1`）；CLI 用 `aws configure sso` 接入（SSO 自动续期）；`list-stacks` 核查账户内预置资源，新发现 `TenableOrgOnboardStackset`/`AzureDefenderforCloud` 两类禁止触碰的基线栈，已补进上一条的禁止清单；建好 AWS Budgets 三档告警（$50/$100/$150 → `szha564@aucklanduni.ac.nz`）；发现账户在建任何项目资源前已有 ~$15/月基线花费，会挤占 $200 额度。VPC/RDS/EC2 等实际建资源步骤暂停，等 tutor 确认方案后再继续。详见 `docs/AWS_SDK_SPEC.md` §13.2 2026-09-15 条目、`docs/NEW_ACCOUNT_CHECKLIST.md` 打勾进度 |

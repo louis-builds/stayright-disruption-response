@@ -771,6 +771,8 @@ aws ssm start-session --region ap-southeast-2 --target <实例ID> \
 | ADR #1 | 云区域固定 `ap-southeast-2`（悉尼），不使用其他区域 | 数据驻留要求（NZ 用户数据留在澳新地区）；Bedrock 模型 ID 前缀只能 `au.`/`apac.`，禁止 `global.` 也是同一条决策的延伸 |
 | ADR #18 | ⑤⑥⑦ 层（match/gate/verdict）收在一台 EC2 的单个 Python 进程里，做成模块化单体，而不是拆成多个 Lambda | 权衡：MVP 阶段减少运维复杂度；4 个采集器 + 1 个回调仍走 Lambda |
 | ADR #18.2 | 采集器 Lambda 部署在 VPC 外 | 原因：采集器不需要直连 EC2 里的 Postgres（只经 HTTPS POST 给 C# 后端摄入），留在 VPC 外可以零 NAT 网关成本 |
+| ADR #19 | prod 环境建在独立新账户 `ictgs-team5`（账户 ID `025066268612`），课程分配，$200 额度，定位课程 demo/评分用途 | 落地 `docs/proposals/AWS_PROD_ENV_LAMBDA_MIGRATION.md` §7 决策点 4；Zachary 是唯一 cloud owner；账户内有教学团队预置的安全基线栈（`AWSAccelerator`/`ControlTower`/`CloudHealth`/`TenableOrgOnboardStackset`/`AzureDefenderforCloud`），禁止触碰，见本地 `infra/连接信息.md` |
+| ADR #20 | prod 的 C# 后端维持常驻 EC2，不上 Lambda；只把数据库单独拆到 RDS | 原推 §3–§6 的"C# 也上 Lambda"方案已废弃；理由是 15 分钟扰动响应 SLA 下 Lambda 冷启动不可预测（Golec et al. 等文献支撑），详见 proposal §8 |
 
 > 后续新的架构级决策（比如本轮对话里定的「D4：embedding 供应商维持 Gemini」「D6：backend SSM 铁律范围」「prod 环境建在独立新账户」）如果需要长期可查，按同样的表格追加编号即可，不必每条决策单独开文件。
 
@@ -1517,12 +1519,22 @@ SSM `send-command` 被 Claude Code 安全分类器硬拦（在生产 EC2 上跑�
   - 通用:采集器硬编码端点 URL,没读 SSM `SIGNAL_ENDPOINT_*`（违背 CLAUDE.md AWS 铁律 1）
 - 待团队拍板:天气用 Open-Meteo 还是 MetService CAP;道路 JSON/XML + zoom level。
 
+### 2026-09-15：新账户（`ictgs-team5`）接入实测
+
+- **账户确认**：课程分配账户团队名是 `ictgs-team5`（账户 ID `025066268612`），此前文档误写成 `ictgs-team1`，已在 `CLAUDE.md`、`docs/NEW_ACCOUNT_CHECKLIST.md`、`docs/proposals/AWS_PROD_ENV_LAMBDA_MIGRATION.md` §7 更新块中一并订正。
+- **CLI 接入**：`~/.aws/config`/`credentials` 新增 profile `ictgs-team5`，最终改用 `aws configure sso --profile ictgs-team5`（SSO 起始 URL `https://identitycenter.amazonaws.com/ssoins-82596a7dc8914808`，SSO 区域 `ap-southeast-2`）配成自动续期，过期后只需 `aws sso login --profile ictgs-team5`，不用再手动复制控制台的临时 access key/secret/session token。
+- **账户内资源核查**（`aws cloudformation list-stacks --region ap-southeast-2 --profile ictgs-team5`）：确认账户内有教学团队/组织预置的安全基线栈——除文档已知的 `AWSAccelerator-*`、`StackSet-AWSControlTowerBP-*`、`StackSet-cybercx-cloudhealth-*` 外，**新发现两类此前未记录的**：`StackSet-TenableOrgOnboardStackset-*`（Tenable 安全扫描）、`StackSet-AzureDefenderforCloud-*`（Azure Defender）。全部与 `stayright-*` 前缀无冲突，但自动化脚本必须显式排除。完整清单存本地 `infra/连接信息.md`（gitignore，不进仓库）。已同步补进 `CLAUDE.md`「新账户约束」小节的禁止清单。
+- **AWS Budgets 告警**：用 `aws budgets create-budget` 建了 `stayright-team5-monthly-200usd`（$200/月），三档 `ACTUAL` 阈值 25%/50%/75%（即 $50/$100/$150），邮件发 `szha564@aucklanduni.ac.nz`。
+- ⚠️ **建告警时发现**：账户在还没建任何 `stayright-*` 资源前，当月已有 **$15.28 实际花费 / $31.4 预测花费**，推断来自账户自带的安全基线服务（GuardDuty S3 恶意软件扫描等）。这部分开销不受项目控制，但会挤占 $200 总额度，做预算规划时需要把这个基线扣除在外。
+- **本轮未做**：VPC/RDS/EC2/Lambda 独立部署等实际建资源的步骤——按 Zachary 要求暂停，方案需先发给 tutor 确认后再继续。清单进度见 `docs/NEW_ACCOUNT_CHECKLIST.md`。
+
 ### 更新记录
 
 | 日期 | 变更 |
 |---|---|
 | 2026-09-03 | 三轨全量部署完成：A 采集器 SAM 上线（含 flight 401/403 跳过修复、新采集器降频 rate(1 day)）+ C 前端上线 + B 后端上线（迁移 AddCaseWorkflowStateHistory 自动应用，transfer 路由已验证）；部署流程固化为 `scripts/deploy-backend.sh` / `scripts/deploy-frontend.sh` |
 | 2026-09-03（补） | 航班源定为 AeroDataBox；有效 RapidAPI key 写入 Secret `stayright/dev/oag/api-key`；flight 采集器实测跑通（`{"ingested": 0}`，无 skip）；记录检测管线排查简报（A 扰动去重 #31 / B 数据源与文档不一致） |
+| 2026-09-15 | 新增 ADR #19/#20（新账户 `ictgs-team5` + prod C# 维持 EC2、DB 拆到 RDS）；新账户 CLI 接入（SSO 自动续期）、账户内预置资源核查（新发现 Tenable/Azure Defender 基线）、Budgets 三档告警落地；实测发现账户基线花费会挤占预算 |
 
 ---
 

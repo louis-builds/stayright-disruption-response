@@ -2,7 +2,7 @@
 
 > 2026-09-15 新增。配套 `CLAUDE.md`「新账户（课程 demo 账户）约束」一节和
 > `docs/proposals/AWS_PROD_ENV_LAMBDA_MIGRATION.md` §7 决策点 4 的更新。
-> 用途：在课程分配的新 AWS 账户（`ictgs-team1`，$200 额度）里实际创建资源前，
+> 用途：在课程分配的新 AWS 账户（`ictgs-team5`，账户 ID 025066268612，$200 额度）里实际创建资源前，
 > 对照本清单逐项执行，避免遗漏账户级约束或误伤账户内预置资源。
 >
 > 本清单只列步骤，不重复写法——具体 SSM key / boto3 写法看 `docs/AWS_SDK_SPEC.md`，
@@ -11,10 +11,10 @@
 
 ## 账户准备
 
-- [ ] 用 `ICTGSStudentPermisionSet` 登录 <https://uoa-sso.awsapps.com/start/#/>，控制台右上角确认区域已切到 **Sydney (ap-southeast-2)**
-- [ ] `aws cloudformation list-stacks --region ap-southeast-2` + 控制台核查账户内现有栈/Lambda，记录任何名字包含 `AWSAccelerator`、`ControlTower`、`CloudHealth` 的资源——列成一份"禁止触碰清单"存到 `infra/连接信息.md`（本地 gitignore 文件），后续所有自动化脚本都要避开这些资源
+- [x] 用 `ICTGSStudentPermissionSet` 登录 SSO 起始 URL（`https://identitycenter.amazonaws.com/ssoins-82596a7dc8914808`，SSO 区域 `ap-southeast-2`），控制台右上角确认区域已切到 **Sydney (ap-southeast-2)**（2026-09-15 完成，CLI profile `ictgs-team5` 已配置为 SSO 自动刷新）
+- [x] `aws cloudformation list-stacks --region ap-southeast-2` + 控制台核查账户内现有栈/Lambda，记录任何名字包含 `AWSAccelerator`、`ControlTower`、`CloudHealth` 的资源——列成一份"禁止触碰清单"存到 `infra/连接信息.md`（本地 gitignore 文件），后续所有自动化脚本都要避开这些资源（2026-09-15 完成，另发现 `TenableOrgOnboardStackset`/`AzureDefenderforCloud` 两类此前未记录的资源，已一并列入）
 - [ ] 用 [AWS Price Calculator](https://calculator.aws) 对 `AWS_PROD_ENV_LAMBDA_MIGRATION.md` §6 的月成本估算做一次独立校验，确认在 $200 额度内有余量
-- [ ] 在 Billing 里设置 AWS Budgets 告警（建议 $50 / $100 / $150 三档邮件告警）
+- [x] 在 Billing 里设置 AWS Budgets 告警（建议 $50 / $100 / $150 三档邮件告警）（2026-09-15 完成，`stayright-team5-monthly-200usd`，告警邮箱 `szha564@aucklanduni.ac.nz`；⚠️ 建好后发现账户在未建任何 stayright 资源前已有 $15.28 当月实际花费/$31.4 预测花费，来自账户预置的安全基线服务，会挤占可用预算）
 
 ## 基建搭建（对应 `AWS_PROD_ENV_LAMBDA_MIGRATION.md` §5 六步迁移路径）
 
