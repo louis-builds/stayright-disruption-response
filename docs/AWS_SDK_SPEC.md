@@ -617,6 +617,65 @@ except ClientError as e:
 
 > EC2 实例角色 `stayright-dev-ec2-role` 已具备上述全部权限。
 
+### 8.1 新账户：开发团队 prod 数据库隧道权限（规划，2026-09-16 定案，未执行）
+
+背景：新账户 `ictgs-team5` 是课程实验账户（学校自己有权限管控），Zachary 拍板允许开发团队直接在这个 prod RDS 上做读写测试，不需要额外做 dev/prod 数据隔离。但仍要遵守「单一 cloud owner」约束——不给团队 console 或除连库外的任何 AWS 权限。
+
+**方案**：在 `ictgs-team5` 账户内新建 **4 个原生 IAM User**（不走 IAM Identity Center/SSO——那是 ControlTower 落地区管理的组织级配置，学生账号大概率无权新建 Permission Set，且改动它有误触禁区风险）。四人共用一条自定义 policy，仅允许通过 SSM 端口转发隧道连 RDS，不给任何其他 AWS 权限：
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "StartTunnelToBastion",
+      "Effect": "Allow",
+      "Action": "ssm:StartSession",
+      "Resource": "arn:aws:ec2:ap-southeast-2:*:instance/*",
+      "Condition": {
+        "StringEquals": { "ssm:resourceTag/Name": "stayright-prod-bastion" }
+      }
+    },
+    {
+      "Sid": "UsePortForwardingDocument",
+      "Effect": "Allow",
+      "Action": "ssm:StartSession",
+      "Resource": "arn:aws:ssm:ap-southeast-2::document/AWS-StartPortForwardingSessionToRemoteHost"
+    },
+    {
+      "Sid": "ManageOwnSessions",
+      "Effect": "Allow",
+      "Action": ["ssm:TerminateSession", "ssm:ResumeSession", "ssm:DescribeSessions"],
+      "Resource": "*",
+      "Condition": {
+        "StringLike": { "ssm:resourceTag/aws:ssmmessages:session-id": "${aws:username}-*" }
+      }
+    }
+  ]
+}
+```
+
+要点：
+- 用 `ssm:resourceTag/Name = stayright-prod-bastion` 收窄到指定 EC2，而不是硬编码实例 ARN——policy 现在就能建，EC2 建好后打上这个 tag 即生效，不必等 VPC/RDS/EC2 落地才能设计权限
+- 只放行 `AWS-StartPortForwardingSessionToRemoteHost` 一个 SSM 文档（隧道转发到远端 RDS host:port），不给交互式 shell 会话文档
+- 不挂任何其他 policy → 默认拒绝 S3/EC2 控制台/Secrets Manager 读取等一切其他 AWS API，符合"不能调用/创建其他 AWS 资源"的要求
+- DB 密码不通过这条权限获取，仍由 Zachary 走现有 Secrets Manager 流程手动分发
+
+**执行顺序（依赖）**：这一步排在 VPC/EC2/RDS 之后——EC2 跳板机不存在，`ssm:resourceTag/Name` 条件就没有实际约束对象；且要先给 EC2 打好 `Name=stayright-prod-bastion` 的 tag，policy 才生效。**本次只落方案，不创建 IAM User**，进度见 `docs/NEW_ACCOUNT_CHECKLIST.md`。
+
+创建命令（待 EC2 建好、tag 打好后执行）：
+
+```bash
+aws iam create-policy --policy-name stayright-prod-db-tunnel --policy-document file://policy.json --profile ictgs-team5
+for i in 1 2 3 4; do
+  aws iam create-user --user-name stayright-prod-dev$i --profile ictgs-team5
+  aws iam attach-user-policy --user-name stayright-prod-dev$i --policy-arn arn:aws:iam::025066268612:policy/stayright-prod-db-tunnel --profile ictgs-team5
+  aws iam create-access-key --user-name stayright-prod-dev$i --profile ictgs-team5
+done
+```
+
+Access key 生成后不进 Git、不进聊天记录，由 Zachary 私下渠道分发给对应的人。
+
 ---
 
 ## 9. ⭐ 本地假实现（AWS 在不在线都不影响你）
@@ -1528,13 +1587,31 @@ SSM `send-command` 被 Claude Code 安全分类器硬拦（在生产 EC2 上跑�
 - ⚠️ **建告警时发现**：账户在还没建任何 `stayright-*` 资源前，当月已有 **$15.28 实际花费 / $31.4 预测花费**，推断来自账户自带的安全基线服务（GuardDuty S3 恶意软件扫描等）。这部分开销不受项目控制，但会挤占 $200 总额度，做预算规划时需要把这个基线扣除在外。
 - **本轮未做**：VPC/RDS/EC2/Lambda 独立部署等实际建资源的步骤——按 Zachary 要求暂停，方案需先发给 tutor 确认后再继续。清单进度见 `docs/NEW_ACCOUNT_CHECKLIST.md`。
 
+### 2026-09-15（补）：RAG embedding 管线现状核查 + 未来方向记录（规划，未实现）
+
+排查「新账户要不要重新 embed 向量数据」时，顺带核实了当前 RAG/pgvector 管线的实际实现，并记录 Zachary 提出的未来方向，供以后落地时对照：
+
+**当前实现（已核实，代码即文档）**：
+- 内容来源是仓库里打包的本地 markdown 文件 `backend/SeedData/rag/*.md`，**不涉及 S3、不涉及 PDF 解析**。
+- `backend/Infrastructure/Data/SeedRunner.cs` 读 `SeedData/rag_documents.json` 把文件原始文本写入 `RagDocument` 表（仅在 `Users` 表为空、且 `RUN_DB_MIGRATE=1` 或 Production 时跑，同 `CLAUDE.md`「本地开发统一连线上库」一节的启动迁移门禁）。
+- 紧接着 `backend/Infrastructure/Data/RagChunkBackfill.cs` 在启动时扫描"还没有 chunk"的 `RagDocument`（及未索引的酒店退改政策），按 `\n## ` 切段，逐段调 `GeminiClient.EmbedAsync`（模型硬编码 `gemini-embedding-001`，1024 维，`EmbeddingVector.Dimensions` 常量）算 embedding 写入 `RagDocumentChunk.Embedding`（pgvector 列）。整个过程幂等、自动触发，**不需要手动跑"重新 embedding"这一步**——新账户空库首次启动即可自动补齐。
+- ⚠️ 遗留问题（顺带发现，未修）：`GEMINI_API_KEY` 走的是普通环境变量 `Environment.GetEnvironmentVariable`，**没有走 SSM/Secrets Manager**，违反 CLAUDE.md「密钥一律 `secret()` 从 Secrets Manager 读」的铁律；且 key 缺失时 `EmbedAsync` 只打 warning、返回 `null`，chunk 会被静默插入但 `Embedding` 为空，RAG 检索悄悄失效而不报错——新账户上线前需确认这个 key 已配置到位，且建议评估收进 Secrets Manager。
+- embedding 模型/维度（`gemini-embedding-001` / 1024）目前只在 C# 常量里，本文件此前未记录，此处补一笔，避免以后换供应商/维度时漏改。
+
+**规划中的未来方向（Zachary 提出，尚未写任何代码，非当前架构）**：
+- 设想流程改为：运营/开发团队把最新版 policy **PDF** 上传到 S3 → 后端直接从 S3 读取该 PDF → 解析文本 → embedding → 写入 RDS 的 pgvector。
+- 与现状的差距：需要新增 S3 桶/前缀（走 `cfg("KEY")`，不得硬编码）、新增 PDF 文本提取能力（当前零 PDF 解析代码）、`RagChunkBackfill` 触发方式要从"扫本地文件"改成"扫 S3 对象"（轮询或 S3 事件触发）。
+- 这属于架构级改动，改动前需与 Zachary 讨论定案（同「AWS 与架构约束」维护约定），本次只做记录，代码未改。
+
 ### 更新记录
 
 | 日期 | 变更 |
 |---|---|
+| 2026-09-16 | 定案「开发团队 prod 数据库隧道权限」方案（§8.1）：4 个原生 IAM User + 1 条自定义 policy，仅 SSM 隧道连 RDS 读写，不给其他 AWS 权限；本轮只写方案未执行，排在 VPC/EC2/RDS 之后，等 EC2 建好打上 `Name=stayright-prod-bastion` tag 后再建 User |
 | 2026-09-03 | 三轨全量部署完成：A 采集器 SAM 上线（含 flight 401/403 跳过修复、新采集器降频 rate(1 day)）+ C 前端上线 + B 后端上线（迁移 AddCaseWorkflowStateHistory 自动应用，transfer 路由已验证）；部署流程固化为 `scripts/deploy-backend.sh` / `scripts/deploy-frontend.sh` |
 | 2026-09-03（补） | 航班源定为 AeroDataBox；有效 RapidAPI key 写入 Secret `stayright/dev/oag/api-key`；flight 采集器实测跑通（`{"ingested": 0}`，无 skip）；记录检测管线排查简报（A 扰动去重 #31 / B 数据源与文档不一致） |
 | 2026-09-15 | 新增 ADR #19/#20（新账户 `ictgs-team5` + prod C# 维持 EC2、DB 拆到 RDS）；新账户 CLI 接入（SSO 自动续期）、账户内预置资源核查（新发现 Tenable/Azure Defender 基线）、Budgets 三档告警落地；实测发现账户基线花费会挤占预算 |
+| 2026-09-15（补） | 核实 RAG embedding 管线现状（本地 md 文件 + 启动时自动 backfill，Gemini `gemini-embedding-001`/1024 维，`GEMINI_API_KEY` 未走 Secrets Manager 待跟进）；记录 Zachary 提出的「S3 存 PDF → 后端直接解析+embedding→RDS」未来方向（规划，未实现，需另行讨论定案） |
 
 ---
 

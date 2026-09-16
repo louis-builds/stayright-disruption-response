@@ -25,6 +25,8 @@
 - [ ] C# API 打 Lambda（容器镜像 + SnapStart）或维持 EC2 部署（视课程时间预算而定，非本清单强制项）
 - [ ] 4 个采集器 Lambda（weather/volcano/flight/road）用 `detect/template.yaml` 独立 `sam deploy` 到新账户——**不要**共享 dev 账户的部署
 - [ ] CloudFront + S3 前端复用现有部署模式（`scripts/deploy-frontend.sh`），但要传入新账户自己的 `SITE_BUCKET`/`CF_DIST_ID`
+- [ ] 给 EC2 跳板机打上 `Name=stayright-prod-bastion` tag（供下一项 IAM policy 的 `ssm:resourceTag` 条件收窄用）
+- [ ] 建开发团队 prod DB 隧道权限：4 个原生 IAM User + 1 条自定义 policy（仅 `ssm:StartSession` 走端口转发隧道连 RDS，不给其他 AWS 权限），policy 内容/创建命令见 `docs/AWS_SDK_SPEC.md` §8.1。**排在本节 VPC/RDS/EC2 之后执行**，且依赖上一条 tag 先打好
 
 ## 脚本联调（改造后的脚本不再有 dev 账户默认值，必须显式传参）
 
