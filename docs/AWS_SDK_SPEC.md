@@ -617,64 +617,37 @@ except ClientError as e:
 
 > EC2 实例角色 `stayright-dev-ec2-role` 已具备上述全部权限。
 
-### 8.1 新账户：开发团队 prod 数据库隧道权限（规划，2026-09-16 定案，未执行）
+### 8.1 新账户：开发团队 prod 数据库访问（2026-09-16，方案已变更，实际落地见下）
 
-背景：新账户 `ictgs-team5` 是课程实验账户（学校自己有权限管控），Zachary 拍板允许开发团队直接在这个 prod RDS 上做读写测试，不需要额外做 dev/prod 数据隔离。但仍要遵守「单一 cloud owner」约束——不给团队 console 或除连库外的任何 AWS 权限。
+背景：新账户 `ictgs-team5` 是课程实验账户（学校自己有权限管控），Zachary 拍板允许开发团队直接在这个 prod RDS 上做读写测试，不需要额外做 dev/prod 数据隔离。
 
-**方案**：在 `ictgs-team5` 账户内新建 **4 个原生 IAM User**（不走 IAM Identity Center/SSO——那是 ControlTower 落地区管理的组织级配置，学生账号大概率无权新建 Permission Set，且改动它有误触禁区风险）。四人共用一条自定义 policy，仅允许通过 SSM 端口转发隧道连 RDS，不给任何其他 AWS 权限：
+**原方案（已放弃）**：4 个原生 IAM User + 自定义 policy，仅允许 `ssm:StartSession` 走端口转发隧道连 RDS。**实际执行时发现登录用的权限集 `ICTGSStudentPermissionSet` 没有任何 IAM 写权限**（`iam:CreateRole`/`AttachRolePolicy`/`CreateInstanceProfile`/`CreateUser` 全部 `AccessDenied`）——这不是"Zachary 一个人管 IAM"的问题，是这个身份本身就不能创建任何 IAM 实体，包括给 EC2 挂 SSM 权限用的 instance role。SSM 隧道方案因此整体作废：没有 instance profile，EC2 上的 SSM agent 无法向 Systems Manager 注册，`ssm:StartSession` 对任何人都用不了，与连接者自己的权限无关。
 
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "StartTunnelToBastion",
-      "Effect": "Allow",
-      "Action": "ssm:StartSession",
-      "Resource": "arn:aws:ec2:ap-southeast-2:*:instance/*",
-      "Condition": {
-        "StringEquals": { "ssm:resourceTag/Name": "stayright-prod-bastion" }
-      }
-    },
-    {
-      "Sid": "UsePortForwardingDocument",
-      "Effect": "Allow",
-      "Action": "ssm:StartSession",
-      "Resource": "arn:aws:ssm:ap-southeast-2::document/AWS-StartPortForwardingSessionToRemoteHost"
-    },
-    {
-      "Sid": "ManageOwnSessions",
-      "Effect": "Allow",
-      "Action": ["ssm:TerminateSession", "ssm:ResumeSession", "ssm:DescribeSessions"],
-      "Resource": "*",
-      "Condition": {
-        "StringLike": { "ssm:resourceTag/aws:ssmmessages:session-id": "${aws:username}-*" }
-      }
-    }
-  ]
-}
-```
+⚠️ **顺带发现**：`aws iam list-roles` 返回大量与本项目无关的角色（人名类 `Harris`/`Steven`/`Rumble`、`jenkins`、多个 `AWSAccelerator-*`，以及 `AWSReservedSSO_AWSAdministratorAccess_*` 等其他权限集）——暗示 `025066268612` 可能是全班/多团队共用的账户，只靠资源命名前缀（`stayright-*`）自行隔离，不是 team5 专属沙箱。这个边界问题此前文档未提及，建议找 tutor 确认，本次未深究。
 
-要点：
-- 用 `ssm:resourceTag/Name = stayright-prod-bastion` 收窄到指定 EC2，而不是硬编码实例 ARN——policy 现在就能建，EC2 建好后打上这个 tag 即生效，不必等 VPC/RDS/EC2 落地才能设计权限
-- 只放行 `AWS-StartPortForwardingSessionToRemoteHost` 一个 SSM 文档（隧道转发到远端 RDS host:port），不给交互式 shell 会话文档
-- 不挂任何其他 policy → 默认拒绝 S3/EC2 控制台/Secrets Manager 读取等一切其他 AWS API，符合"不能调用/创建其他 AWS 资源"的要求
-- DB 密码不通过这条权限获取，仍由 Zachary 走现有 Secrets Manager 流程手动分发
+**实际方案（已落地）**：放弃团队直连 prod 库的诉求，改为「EC2 跳板机 + SSH key，仅 Zachary 本人管理数据库」；后续如需团队本地开发统一连库，走项目配置 + 共享隧道脚本（见下方"实际创建的资源"之后的待办）。EC2 安全组对 22 端口开放 `0.0.0.0/0`，仅靠 SSH key 认证防护（无 IAM 依赖，`ec2:CreateKeyPair` 不受 IAM 权限缺口影响）。
 
-**执行顺序（依赖）**：这一步排在 VPC/EC2/RDS 之后——EC2 跳板机不存在，`ssm:resourceTag/Name` 条件就没有实际约束对象；且要先给 EC2 打好 `Name=stayright-prod-bastion` 的 tag，policy 才生效。**本次只落方案，不创建 IAM User**，进度见 `docs/NEW_ACCOUNT_CHECKLIST.md`。
+**实际创建的资源（2026-09-16）**：
 
-创建命令（待 EC2 建好、tag 打好后执行）：
+| 资源 | ID / 值 |
+|---|---|
+| VPC | `vpc-09792e6de29990157`（`10.20.0.0/16`） |
+| 公有子网 | `subnet-08279f57f204285c8`（`10.20.0.0/24`，`ap-southeast-2a`） |
+| 私有子网 ×2 | `subnet-0d189fd6f4ee58572`（`10.20.1.0/24`，2a）、`subnet-0dfbd2b4c28783ae2`（`10.20.2.0/24`，2b） |
+| IGW / 公有路由表 | `igw-049cd7152f64bda12` / `rtb-090a5de6bb3661bd6` |
+| EC2 安全组 | `sg-0d93f9ad6ed86fe26`（入站仅 22/0.0.0.0/0，其余全关，无 IAM instance role） |
+| RDS 安全组 | `sg-004462cdad7555352`（入站仅 5432 from EC2 SG） |
+| DB Subnet Group | `stayright-prod-db-subnet-group` |
+| RDS | `stayright-prod-db`，PostgreSQL 16.15，`db.t4g.micro`，20GB gp3，单 AZ，非公开访问；endpoint `stayright-prod-db.cpua0yc0ue7o.ap-southeast-2.rds.amazonaws.com`；master 用户 `app`，库名 `stayright`；已执行 `CREATE EXTENSION vector`（0.8.2）/ `postgis`（3.4.6） |
+| EC2 跳板机 | `i-06c845e0f6440716b`（`stayright-prod-bastion`，`t3.micro`，Amazon Linux 2023，20GB gp3），Elastic IP `3.105.155.148`（`eipalloc-037b0192606232c00`），key pair `stayright-prod-bastion-key`（私钥已发给 Zachary，不进 Git） |
+| DB 密码 | Secrets Manager `stayright/prod/db/password`；⚠️ 初始密码曾在联调时短暂出现在聊天/终端记录里，已要求 Zachary 自行走 `aws secretsmanager put-secret-value` + `aws rds modify-db-instance --master-user-password` 轮换 |
 
-```bash
-aws iam create-policy --policy-name stayright-prod-db-tunnel --policy-document file://policy.json --profile ictgs-team5
-for i in 1 2 3 4; do
-  aws iam create-user --user-name stayright-prod-dev$i --profile ictgs-team5
-  aws iam attach-user-policy --user-name stayright-prod-dev$i --policy-arn arn:aws:iam::025066268612:policy/stayright-prod-db-tunnel --profile ictgs-team5
-  aws iam create-access-key --user-name stayright-prod-dev$i --profile ictgs-team5
-done
-```
-
-Access key 生成后不进 Git、不进聊天记录，由 Zachary 私下渠道分发给对应的人。
+**待办（未完成）**：
+- EC2 未挂任何 IAM role——如果以后要跑 C# 后端读 Secrets Manager/SSM，需要另想办法（找 tutor 要 IAM 权限，或者继续用环境变量/手动注入连接串，绕开"从 Secrets Manager 读"的铁律，需再讨论）
+- `scripts/db-tunnel-prod.sh`（SSH 版隧道脚本，替代 dev 环境的 SSM 版）——未写
+- 项目连接串模板（`appsettings.*.json` / `.env.example` 的 prod 段）——未加
+- 私钥目前只有 Zachary 一份，团队其他成员怎么拿到——未定
+- 4 个团队成员是否本来就在这个账户的 IAM Identity Center 里有自己的 SSO 身份（如果有，团队直连的可行性需要重新评估）——未确认，本次因为 EC2 instance role 这个更底层的阻塞点提前否决了整个 SSM 方案，没有走到这一步
 
 ---
 
@@ -1607,7 +1580,7 @@ SSM `send-command` 被 Claude Code 安全分类器硬拦（在生产 EC2 上跑�
 
 | 日期 | 变更 |
 |---|---|
-| 2026-09-16 | 定案「开发团队 prod 数据库隧道权限」方案（§8.1）：4 个原生 IAM User + 1 条自定义 policy，仅 SSM 隧道连 RDS 读写，不给其他 AWS 权限；本轮只写方案未执行，排在 VPC/EC2/RDS 之后，等 EC2 建好打上 `Name=stayright-prod-bastion` tag 后再建 User |
+| 2026-09-16 | **新账户 prod 基建落地**：VPC/子网/安全组/RDS（PostgreSQL 16.15 + pgvector 0.8.2 + PostGIS 3.4.6）/EC2 跳板机（+EIP）全部建成，详见 §8.1「实际创建的资源」表。执行中发现 `ICTGSStudentPermissionSet` 无 IAM 写权限，原「4 个 IAM User + SSM 隧道」方案作废，改为「EC2 挂 SSH key、仅 Zachary 手动管理」；同时发现账户内存在大量与本项目无关的 IAM 角色，账户边界可能非 team5 专属，待找 tutor 确认 |
 | 2026-09-03 | 三轨全量部署完成：A 采集器 SAM 上线（含 flight 401/403 跳过修复、新采集器降频 rate(1 day)）+ C 前端上线 + B 后端上线（迁移 AddCaseWorkflowStateHistory 自动应用，transfer 路由已验证）；部署流程固化为 `scripts/deploy-backend.sh` / `scripts/deploy-frontend.sh` |
 | 2026-09-03（补） | 航班源定为 AeroDataBox；有效 RapidAPI key 写入 Secret `stayright/dev/oag/api-key`；flight 采集器实测跑通（`{"ingested": 0}`，无 skip）；记录检测管线排查简报（A 扰动去重 #31 / B 数据源与文档不一致） |
 | 2026-09-15 | 新增 ADR #19/#20（新账户 `ictgs-team5` + prod C# 维持 EC2、DB 拆到 RDS）；新账户 CLI 接入（SSO 自动续期）、账户内预置资源核查（新发现 Tenable/Azure Defender 基线）、Budgets 三档告警落地；实测发现账户基线花费会挤占预算 |

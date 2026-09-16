@@ -19,14 +19,14 @@
 ## 基建搭建（对应 `AWS_PROD_ENV_LAMBDA_MIGRATION.md` §5 六步迁移路径）
 
 - [ ] 在新账户里重新建齐 12 个 `/stayright/prod/{KEY}` SSM 参数（清单见 `docs/AWS_SDK_SPEC.md` §4.2），**不要**复用 dev 账户的具体值（bucket 名、队列名等新账户里都是全新的）
-- [ ] 重新建 Secrets Manager 条目：`stayright/prod/db/password`、`stayright/prod/token/hmac-key`、`stayright/prod/oag/api-key`（+ `ingest/shared-key`，见 `AWS_SDK_SPEC.md` §13.2）
-- [ ] 建 VPC（2 私有子网）+ RDS PostgreSQL `db.t4g.micro` + `CREATE EXTENSION vector; CREATE EXTENSION postgis;`（选型依据见 proposal §2，不要用 Aurora/更大规格，除非另有拍板）
-- [ ] EC2 Docker PG `pg_dump` → S3 中转 → RDS 导入（proposal §2.4/§5②；注意 psql 客户端版本对齐）
-- [ ] C# API 打 Lambda（容器镜像 + SnapStart）或维持 EC2 部署（视课程时间预算而定，非本清单强制项）
+- [x] 重新建 Secrets Manager 条目：`stayright/prod/db/password`（2026-09-16 已建并轮换过一次，见下方⚠️）。`stayright/prod/token/hmac-key`、`stayright/prod/oag/api-key`（+ `ingest/shared-key`）**未建**
+- [x] 建 VPC（2 私有子网 + 1 公有子网）+ RDS PostgreSQL `db.t4g.micro` + `CREATE EXTENSION vector; CREATE EXTENSION postgis;`（2026-09-16 完成，资源 ID 见 `docs/AWS_SDK_SPEC.md` §8.1）
+- [ ] EC2 Docker PG `pg_dump` → S3 中转 → RDS 导入（proposal §2.4/§5②；注意 psql 客户端版本对齐）——**未做**，新 RDS 目前是空库（仅装了 vector/postgis 扩展）
+- [x] EC2 跳板机已建（`i-06c845e0f6440716b` + EIP `3.105.155.148`，SSH key 认证，见 `AWS_SDK_SPEC.md` §8.1）。⚠️ **未挂 IAM role**——`ICTGSStudentPermissionSet` 无 IAM 写权限，建不了 instance profile；C# 部署到这台机器时怎么读 Secrets Manager/SSM 待另行解决
 - [ ] 4 个采集器 Lambda（weather/volcano/flight/road）用 `detect/template.yaml` 独立 `sam deploy` 到新账户——**不要**共享 dev 账户的部署
 - [ ] CloudFront + S3 前端复用现有部署模式（`scripts/deploy-frontend.sh`），但要传入新账户自己的 `SITE_BUCKET`/`CF_DIST_ID`
-- [ ] 给 EC2 跳板机打上 `Name=stayright-prod-bastion` tag（供下一项 IAM policy 的 `ssm:resourceTag` 条件收窄用）
-- [ ] 建开发团队 prod DB 隧道权限：4 个原生 IAM User + 1 条自定义 policy（仅 `ssm:StartSession` 走端口转发隧道连 RDS，不给其他 AWS 权限），policy 内容/创建命令见 `docs/AWS_SDK_SPEC.md` §8.1。**排在本节 VPC/RDS/EC2 之后执行**，且依赖上一条 tag 先打好
+- [x] ~~建开发团队 prod DB 隧道权限：4 个原生 IAM User~~ **已放弃**——`ICTGSStudentPermissionSet` 无 IAM 写权限，建不了 IAM User 也建不了 EC2 instance role，SSM 隧道方案整体作废。改为 Zachary 一人持有 EC2 SSH key 手动管理数据库，见 `AWS_SDK_SPEC.md` §8.1
+- [ ] （待定，非本清单强制）团队本地开发若要统一连 prod 库，需要另写 SSH 版隧道脚本 + 项目连接串模板，且需先确认私钥怎么安全分发给其他 3 位成员
 
 ## 脚本联调（改造后的脚本不再有 dev 账户默认值，必须显式传参）
 
