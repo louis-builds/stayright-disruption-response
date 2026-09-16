@@ -22,7 +22,7 @@
 - [x] 重新建 Secrets Manager 条目：`stayright/prod/db/password`（2026-09-16 已建并轮换过一次，见下方⚠️）。`stayright/prod/token/hmac-key`、`stayright/prod/oag/api-key`（+ `ingest/shared-key`）**未建**
 - [x] 建 VPC（2 私有子网 + 1 公有子网）+ RDS PostgreSQL `db.t4g.micro` + `CREATE EXTENSION vector; CREATE EXTENSION postgis;`（2026-09-16 完成，资源 ID 见 `docs/AWS_SDK_SPEC.md` §8.1）
 - [ ] EC2 Docker PG `pg_dump` → S3 中转 → RDS 导入（proposal §2.4/§5②；注意 psql 客户端版本对齐）——**未做**，新 RDS 目前是空库（仅装了 vector/postgis 扩展）
-- [x] EC2 跳板机已建（`i-06c845e0f6440716b` + EIP `3.105.155.148`，SSH key 认证，见 `AWS_SDK_SPEC.md` §8.1）。⚠️ **未挂 IAM role**——`ICTGSStudentPermissionSet` 无 IAM 写权限，建不了 instance profile；C# 部署到这台机器时怎么读 Secrets Manager/SSM 待另行解决
+- [x] EC2 跳板机已建（`i-06c845e0f6440716b` + EIP `3.105.155.148`，SSH key 认证，见 `AWS_SDK_SPEC.md` §8.1）。⚠️ **永久无法挂 IAM role**（`ICTGSStudentPermissionSet` 的 IAM 权限边界已向 Zachary 确认为课程侧定死、无法申请修改，非临时受限）；C# 部署到这台机器时怎么读 Secrets Manager/SSM 待 Zachary 拍板（候选方案见 `AWS_SDK_SPEC.md` §8.1"待办"）
 - [ ] 4 个采集器 Lambda（weather/volcano/flight/road）用 `detect/template.yaml` 独立 `sam deploy` 到新账户——**不要**共享 dev 账户的部署
 - [ ] CloudFront + S3 前端复用现有部署模式（`scripts/deploy-frontend.sh`），但要传入新账户自己的 `SITE_BUCKET`/`CF_DIST_ID`
 - [x] ~~建开发团队 prod DB 隧道权限：4 个原生 IAM User~~ **已放弃**——`ICTGSStudentPermissionSet` 无 IAM 写权限，建不了 IAM User 也建不了 EC2 instance role，SSM 隧道方案整体作废。改为 Zachary 一人持有 EC2 SSH key 手动管理数据库，见 `AWS_SDK_SPEC.md` §8.1

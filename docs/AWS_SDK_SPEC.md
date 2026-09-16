@@ -623,7 +623,9 @@ except ClientError as e:
 
 **原方案（已放弃）**：4 个原生 IAM User + 自定义 policy，仅允许 `ssm:StartSession` 走端口转发隧道连 RDS。**实际执行时发现登录用的权限集 `ICTGSStudentPermissionSet` 没有任何 IAM 写权限**（`iam:CreateRole`/`AttachRolePolicy`/`CreateInstanceProfile`/`CreateUser` 全部 `AccessDenied`）——这不是"Zachary 一个人管 IAM"的问题，是这个身份本身就不能创建任何 IAM 实体，包括给 EC2 挂 SSM 权限用的 instance role。SSM 隧道方案因此整体作废：没有 instance profile，EC2 上的 SSM agent 无法向 Systems Manager 注册，`ssm:StartSession` 对任何人都用不了，与连接者自己的权限无关。
 
-⚠️ **顺带发现**：`aws iam list-roles` 返回大量与本项目无关的角色（人名类 `Harris`/`Steven`/`Rumble`、`jenkins`、多个 `AWSAccelerator-*`，以及 `AWSReservedSSO_AWSAdministratorAccess_*` 等其他权限集）——暗示 `025066268612` 可能是全班/多团队共用的账户，只靠资源命名前缀（`stayright-*`）自行隔离，不是 team5 专属沙箱。这个边界问题此前文档未提及，建议找 tutor 确认，本次未深究。
+✅ **已找 Zachary 确认（2026-09-16）**：`aws iam list-roles` 曾返回大量与本项目无关的角色（人名类 `Harris`/`Steven`/`Rumble`、`jenkins`、多个 `AWSAccelerator-*` 等），一度怀疑 `025066268612` 是否为 team5 专属账户——**确认是 team5 专属账户**，这些角色应是账户预置的教学基线/工具（同「不要触碰 AWSAccelerator/ControlTower 等预置资源」的既有约束），不是其他团队共用同一账户的迹象。
+
+✅ **已确认（2026-09-16）**：`ICTGSStudentPermissionSet` 的 IAM 权限边界是学校/课程侧定死的，Zachary 无法自行申请或修改——即没有任何途径让这个身份获得 IAM 写权限，EC2 挂 IAM instance role、创建 IAM User 这两条路径**永久不可用**，不是临时受限。后续涉及"需要 EC2 从 Secrets Manager/SSM 读取配置"的设计，必须假设"EC2 没有 IAM role"是长期约束，而不是等 tutor 批权限。
 
 **实际方案（已落地）**：放弃团队直连 prod 库的诉求，改为「EC2 跳板机 + SSH key，仅 Zachary 本人管理数据库」；后续如需团队本地开发统一连库，走项目配置 + 共享隧道脚本（见下方"实际创建的资源"之后的待办）。EC2 安全组对 22 端口开放 `0.0.0.0/0`，仅靠 SSH key 认证防护（无 IAM 依赖，`ec2:CreateKeyPair` 不受 IAM 权限缺口影响）。
 
@@ -643,7 +645,7 @@ except ClientError as e:
 | DB 密码 | Secrets Manager `stayright/prod/db/password`；⚠️ 初始密码曾在联调时短暂出现在聊天/终端记录里，已要求 Zachary 自行走 `aws secretsmanager put-secret-value` + `aws rds modify-db-instance --master-user-password` 轮换 |
 
 **待办（未完成）**：
-- EC2 未挂任何 IAM role——如果以后要跑 C# 后端读 Secrets Manager/SSM，需要另想办法（找 tutor 要 IAM 权限，或者继续用环境变量/手动注入连接串，绕开"从 Secrets Manager 读"的铁律，需再讨论）
+- ✅ **已拍板（2026-09-16，Zachary）**：EC2 永久无法挂 IAM role（权限边界定死，非临时限制，见上方✅确认），C# 后端部署到这台机器后，DB 连接串等密钥由 **Zachary 手动从 Secrets Manager 取值、部署时人工写入 `appsettings.Production.json`/环境变量**，应用运行时不调用 Secrets Manager API。这是对「密钥一律从 Secrets Manager 读」铁律**仅限本账户 prod EC2 场景**的例外，已正式记录进 `CLAUDE.md`「新账户约束」小节，不是默默绕过。落地时（`scripts/deploy-backend.sh` 或首次手动部署）需要新增这一步人工注入的操作说明
 - `scripts/db-tunnel-prod.sh`（SSH 版隧道脚本，替代 dev 环境的 SSM 版）——未写
 - 项目连接串模板（`appsettings.*.json` / `.env.example` 的 prod 段）——未加
 - 私钥目前只有 Zachary 一份，团队其他成员怎么拿到——未定
@@ -1580,7 +1582,7 @@ SSM `send-command` 被 Claude Code 安全分类器硬拦（在生产 EC2 上跑�
 
 | 日期 | 变更 |
 |---|---|
-| 2026-09-16 | **新账户 prod 基建落地**：VPC/子网/安全组/RDS（PostgreSQL 16.15 + pgvector 0.8.2 + PostGIS 3.4.6）/EC2 跳板机（+EIP）全部建成，详见 §8.1「实际创建的资源」表。执行中发现 `ICTGSStudentPermissionSet` 无 IAM 写权限，原「4 个 IAM User + SSM 隧道」方案作废，改为「EC2 挂 SSH key、仅 Zachary 手动管理」；同时发现账户内存在大量与本项目无关的 IAM 角色，账户边界可能非 team5 专属，待找 tutor 确认 |
+| 2026-09-16 | **新账户 prod 基建落地**：VPC/子网/安全组/RDS（PostgreSQL 16.15 + pgvector 0.8.2 + PostGIS 3.4.6）/EC2 跳板机（+EIP）全部建成，详见 §8.1「实际创建的资源」表。执行中发现 `ICTGSStudentPermissionSet` 无 IAM 写权限，原「4 个 IAM User + SSM 隧道」方案作废，改为「EC2 挂 SSH key、仅 Zachary 手动管理」；已向 Zachary 确认：该权限边界是课程侧永久设定、无法修改，且 `025066268612` 确认为 team5 专属账户（账户内非项目相关角色是预置教学基线，不是多团队共用的迹象） |
 | 2026-09-03 | 三轨全量部署完成：A 采集器 SAM 上线（含 flight 401/403 跳过修复、新采集器降频 rate(1 day)）+ C 前端上线 + B 后端上线（迁移 AddCaseWorkflowStateHistory 自动应用，transfer 路由已验证）；部署流程固化为 `scripts/deploy-backend.sh` / `scripts/deploy-frontend.sh` |
 | 2026-09-03（补） | 航班源定为 AeroDataBox；有效 RapidAPI key 写入 Secret `stayright/dev/oag/api-key`；flight 采集器实测跑通（`{"ingested": 0}`，无 skip）；记录检测管线排查简报（A 扰动去重 #31 / B 数据源与文档不一致） |
 | 2026-09-15 | 新增 ADR #19/#20（新账户 `ictgs-team5` + prod C# 维持 EC2、DB 拆到 RDS）；新账户 CLI 接入（SSO 自动续期）、账户内预置资源核查（新发现 Tenable/Azure Defender 基线）、Budgets 三档告警落地；实测发现账户基线花费会挤占预算 |
