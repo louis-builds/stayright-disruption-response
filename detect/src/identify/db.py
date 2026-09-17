@@ -1,7 +1,9 @@
-"""Local Postgres connection helper.
+"""Postgres connection helper.
 
 Connects directly for now (no RDS Proxy) — per CLAUDE.md, the proxy is
-an AWS-deployment concern to add later, not something local dev needs.
+an AWS-deployment concern to add later. Local dev points PG* at the SSM
+tunnel to the shared stayright DB (127.0.0.1:15432); see the repo-root
+.env / docs/DATABASE_ACCESS.md.
 """
 
 from __future__ import annotations
@@ -18,9 +20,9 @@ load_dotenv()
 
 def get_connection() -> psycopg.Connection[Any]:
     return psycopg.connect(
-        host=os.environ.get("PGHOST", "localhost"),
-        port=os.environ.get("PGPORT", "5432"),
-        dbname=os.environ.get("PGDATABASE", "travel_disruption"),
+        host=os.environ.get("PGHOST", "127.0.0.1"),
+        port=os.environ.get("PGPORT", "15432"),
+        dbname=os.environ.get("PGDATABASE", "stayright"),
         user=os.environ.get("PGUSER", "app"),
         password=os.environ.get("PGPASSWORD", "app_password"),
         autocommit=True,

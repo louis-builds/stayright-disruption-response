@@ -13,7 +13,7 @@
 # 数据源与 backend/SeedData 一致（本地全新环境由 SeedRunner 自动带上）。
 set -euo pipefail
 
-BASE="${BASE:-https://d2y6g16anevc6h.cloudfront.net}"
+BASE="${BASE:?Set BASE (no cross-account default, e.g. https://<your-cloudfront-domain>)}"
 DATA="${DATA:-$(dirname "$0")/hotels-seed.json}"
 
 JAR="$(mktemp)"; trap 'rm -f "$JAR"' EXIT

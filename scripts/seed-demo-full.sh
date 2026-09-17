@@ -6,32 +6,40 @@
 # 与 seed-demo-case.sh（直注模式）的区别：
 #   直注模式：脚本 POST ingest，扮演 Lambda → 快、100% 成功，但 CloudWatch 无 Lambda 日志。
 #   完整模式：真实 `aws lambda invoke` 触发探测 → CloudWatch 出日志 → Open-Meteo 真实天气
-#             决定 ingest 哪座城市 → 候选匹配 → 建案 → 客人 → 酒店。
+#             → Auckland 命中风险窗口即建案，否则回退直注 Auckland 扰动兜底。
+#
+# 固定三个演示账号（密码统一 Password123!）：
+#   Guest        yangdongqing214@gmail.com   （昵称 Test Guest1）
+#   Hotel        donwhotel@gmail.com         （DHW Hotel Auckland 前台）
+#   Coordinator  coord1@example.com
+#
+# Guest 的预订全部在 DHW Hotel Auckland，整条链路只围绕 Auckland：
+# Lambda 真实触发时只关心 AKL 是否命中；未命中就回退直注 Auckland 扰动。
 #
 # 前置：
 #   1. 演示机 AWS 凭证可用（lambda invoke + ssm send-command + logs）
 #   2. scripts/.env.demo 里有 INGEST_KEY（回退用）
 #
 # 它做六件事：
-#   1. 经 EC2 SSM 给 Alice 预插两条宽日期预订（Queenstown / Test Auckland CBD，
-#      幂等：confirmation_no 冲突即跳过）——Lambda 只监测 QZN/AKL/WLG/CHC 四城，
-#      Alice 原有预订在 Rotorua，接不住 Lambda 的输出，这两条就是"桥"
+#   1. 经 EC2 SSM 给 Guest 预插 1 条 Auckland 宽日期桥接预订（confirmation_no
+#      冲突即更新日期）——日期跟随运行日（明天入住住 5 晚），保证落在扰动窗口内
 #   2. invoke Lambda，抓取 CloudWatch 最新日志行打印（演示的"探测"节拍）
 #   3. 对比 invoke 前后的扰动列表，找出本次新增的扰动
-#   4. 在新增扰动里找能匹配 Alice 宽日期预订的候选 → notify 建案
+#   4. 在新增扰动里找能匹配桥接预订的候选 → 命中则 notify 建案；未命中回退直注 Auckland 扰动
 #   5. regenerate + push 方案
 #   6. 三端核验打印
-#   ⚠️ 若真实天气没有触发 QZN/AKL（可能只有 Wellington，甚至零触发），自动回退
-#      直注模式建 Rotorua 演示案，保证不空场，并明确告知回退原因。
 set -euo pipefail
 
-BASE="${BASE:-https://d2y6g16anevc6h.cloudfront.net}"
+BASE="${BASE:?Set BASE (no cross-account default, e.g. https://<your-cloudfront-domain>)}"
 REGION_AWS="${AWS_REGION:-ap-southeast-2}"
-EC2_ID="${EC2_INSTANCE_ID:-i-0d71260ab44ceb0c3}"
-FN="${LAMBDA_FN:-stayright-dev-weather-col-WeatherCollectorFunction-WFv67fLEC7UL}"
+EC2_ID="${EC2_INSTANCE_ID:?Set EC2_INSTANCE_ID (no cross-account default)}"
+FN="${LAMBDA_FN:?Set LAMBDA_FN (no cross-account default)}"
 COORD_EMAIL="${COORD_EMAIL:-coord1@example.com}"
-COORD_PASS="${COORD_PASS:-Password123!}"
-GUEST_NICK="${GUEST_NAME:-Alice}"
+GUEST_EMAIL="${GUEST_EMAIL:-yangdongqing214@gmail.com}"
+GUEST_NICK="${GUEST_NAME:-Test Guest1}"
+HOTEL_EMAIL="${HOTEL_EMAIL:-donwhotel@gmail.com}"
+BRIDGE_HOTEL="${BRIDGE_HOTEL:-DHW Hotel Auckland}"
+DEMO_PASS="${DEMO_PASS:-Password123!}"
 CLOSE_REASON="人工决议结案"
 
 cd "$(dirname "$0")"
@@ -42,13 +50,14 @@ JAR="$(mktemp)"; trap 'rm -f "$JAR"' EXIT
 say() { printf '\n\033[1;36m▸ %s\033[0m\n' "$*"; }
 pyexec() { python3 -c "$@"; }
 api() { curl -s -b "$JAR" -c "$JAR" -X "$1" "${BASE}$2" ${3:+-H "Content-Type: application/json" -d "$3"}; }
+urlenc() { printf '%s' "$1" | pyexec "import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read()))"; }
 
 # ---------- 0. 协调员登录 + 扰动快照 ----------
 say "0. 登录协调员并记录扰动快照"
 LOGIN=$(curl -s -c "$JAR" -X POST "${BASE}/api/auth/login" -H "Content-Type: application/json" \
-  -d "{\"identifier\":\"${COORD_EMAIL}\",\"password\":\"${COORD_PASS}\"}")
+  -d "{\"identifier\":\"${COORD_EMAIL}\",\"password\":\"${DEMO_PASS}\"}")
 pyexec "import json,sys; d=json.loads('''${LOGIN}'''); sys.exit(0 if d.get('code')==0 else print(d) or 1)" || { echo "登录失败"; exit 1; }
-OPEN=$(api GET "/api/coordinator/search?q=${GUEST_NICK}")
+OPEN=$(api GET "/api/coordinator/search?q=$(urlenc "$GUEST_NICK")")
 printf '%s' "$OPEN" | pyexec "
 import json,sys
 for c in json.load(sys.stdin).get('data') or []:
@@ -62,29 +71,28 @@ BEFORE=$(api GET "/api/coordinator/disruptions" | pyexec "import json,sys; print
 echo "OK（当前扰动 $(printf '%s' "$BEFORE" | pyexec "import json,sys; print(len(json.load(sys.stdin)))") 条）"
 
 # ---------- 1. 预插桥接预订（日期跟随运行日：明天入住住 5 晚，幂等更新） ----------
-say "1. 给 Alice 预插 WLG/QZN/AKL 三条桥接预订（经 EC2 SSM）"
+say "1. 给 Guest 预插 1 条 Auckland 桥接预订（经 EC2 SSM）"
 dplus() { date -v+"$1"d +%F 2>/dev/null || date -d "+$1 days" +%F; }
 CI=$(dplus 1); CO=$(dplus 6)
 SQL=$(cat <<'EOSQL'
 INSERT INTO bookings (id, confirmation_no, guest_user_id, hotel_id, room_type_id,
                       check_in, check_out, guests_count, total_amount, currency, status, created_at, updated_at)
-SELECT gen_random_uuid(), c.conf, u.id, h.id,
+SELECT gen_random_uuid(), 'CONF-DEMO-AKL', u.id, h.id,
        (SELECT id FROM room_types WHERE hotel_id = h.id LIMIT 1),
        :'cin'::date, :'cout'::date, 2, 432.00, 'NZD', 'confirmed', now(), now()
-FROM (VALUES ('CONF-DEMO-WLG','Wellington Waterfront Hotel'),
-             ('CONF-DEMO-ZQN','Queenstown Lakeview Hotel'),
-             ('CONF-DEMO-AKL','Test Auckland CBD Hotel')) AS c(conf,hname)
-JOIN users u ON u.nickname = 'Alice'
-JOIN hotels h ON h.name = c.hname
+FROM users u
+JOIN hotels h ON h.name = :'hotel'
+WHERE u.email = :'guest'
 ON CONFLICT (confirmation_no) DO UPDATE
   SET check_in = EXCLUDED.check_in, check_out = EXCLUDED.check_out, updated_at = now();
-SELECT confirmation_no, check_in, check_out FROM bookings WHERE confirmation_no LIKE 'CONF-DEMO-%';
+SELECT confirmation_no, check_in, check_out FROM bookings WHERE confirmation_no = 'CONF-DEMO-AKL';
 EOSQL
 )
 B64=$(printf '%s' "$SQL" | base64 | tr -d '\n')
+REMOTE_CMD="echo ${B64} | base64 -d > /tmp/demo_seed.sql && sudo docker exec -i pg psql -U app -d stayright -v ON_ERROR_STOP=1 -v cin=${CI} -v cout=${CO} -v guest=${GUEST_EMAIL} -v hotel=\\\"${BRIDGE_HOTEL}\\\" < /tmp/demo_seed.sql && rm /tmp/demo_seed.sql"
 CMD_ID=$(aws ssm send-command --region "$REGION_AWS" --instance-ids "$EC2_ID" \
-  --document-name AWS-RunShellScript --comment "demo seed: bridge bookings" \
-  --parameters "commands=[\"echo ${B64} | base64 -d > /tmp/demo_seed.sql && sudo docker exec -i pg psql -U app -d stayright -v ON_ERROR_STOP=1 -v cin=${CI} -v cout=${CO} < /tmp/demo_seed.sql && rm /tmp/demo_seed.sql\"]" \
+  --document-name AWS-RunShellScript --comment "demo seed: bridge booking" \
+  --parameters "commands=[\"${REMOTE_CMD}\"]" \
   --output text --query 'Command.CommandId')
 for i in $(seq 1 20); do
   ST=$(aws ssm get-command-invocation --region "$REGION_AWS" --command-id "$CMD_ID" --instance-id "$EC2_ID" --query Status --output text 2>/dev/null) && [ "$ST" != "InProgress" ] && [ "$ST" != "Pending" ] && break
@@ -124,9 +132,9 @@ b=set(json.loads(lines[0])); a=set(json.loads(lines[1]))
 print('\n'.join(sorted(a-b)))")
 [ -z "$NEW_IDS" ] && echo "  （本次零新增）" || printf '  %s\n' "$NEW_IDS"
 
-# ---------- 4. 在新增扰动中找能匹配 Alice 的候选 ----------
-say "4. 候选匹配（Alice 的宽日期预订 × 新扰动）"
-DID=""; CONF=""
+# ---------- 4. 在新增扰动中找能匹配桥接预订的候选 ----------
+say "4. 候选匹配（Guest 的宽日期预订 × 新扰动）"
+DID=""; BID=""
 for nid in $NEW_IDS; do
   CAND=$(api GET "/api/coordinator/disruptions/${nid}/candidates")
   HIT=$(printf '%s' "$CAND" | pyexec "
@@ -146,20 +154,22 @@ done
 
 FALLBACK=0
 if [ -z "${DID:-}" ]; then
-  echo "  ⚠️ 真实天气没有触发 Queenstown/Auckland（Lambda 只探测到其他城市或零风险窗口）。"
+  echo "  ⚠️ 真实天气没有触发 Auckland（Lambda 只探测到其他城市或零风险窗口）。"
   if [ -z "$INGEST_KEY" ]; then echo "  ❌ 且无 INGEST_KEY，无法回退。"; exit 1; fi
   FALLBACK=1
-  say "4b. 回退：直注 Rotorua 演示扰动（与 Lambda 同一 ingest 入口）"
-  TITLE="Demo Storm - Rotorua $(date +%H:%M)"
+  say "4b. 回退：直注 Auckland 演示扰动（与 Lambda 同一 ingest 入口）"
+  TITLE="Demo Storm - Auckland $(date +%H:%M)"
+  DS=$(date -u +%FT00:00:00+00:00)
+  DE=$(dplus 7)T00:00:00+00:00
   ING=$(curl -s -X POST "${BASE}/api/ingest/disruptions" -H "Content-Type: application/json" -H "X-Ingest-Key: ${INGEST_KEY}" \
-    -d "{\"Type\":\"weather\",\"Title\":\"${TITLE}\",\"Region\":\"Rotorua\",\"StartAt\":\"2026-09-05T00:00:00+00:00\",\"EndAtOrWindow\":\"2026-09-09T00:00:00+00:00\",\"RawSignalText\":\"Seeded by demo script (fallback)\"}")
+    -d "{\"Type\":\"weather\",\"Title\":\"${TITLE}\",\"Region\":\"Auckland\",\"StartAt\":\"${DS}\",\"EndAtOrWindow\":\"${DE}\",\"RawSignalText\":\"Seeded by demo script (fallback)\"}")
   DID=$(printf '%s' "$ING" | pyexec "import json,sys; print((json.load(sys.stdin).get('data') or {}).get('id',''))")
   [ -z "$DID" ] && { echo "❌ 回退 ingest 失败"; exit 1; }
   CAND=$(api GET "/api/coordinator/disruptions/${DID}/candidates")
   BID=$(printf '%s' "$CAND" | pyexec "
 import json,sys
 for i in json.load(sys.stdin).get('data') or []:
-    if '${GUEST_NICK}' in json.dumps(i): print(i.get('id') or i.get('bookingId','')); break")
+    if 'CONF-DEMO-' in json.dumps(i) or '${GUEST_NICK}' in json.dumps(i): print(i.get('id') or i.get('bookingId','')); break")
   [ -z "$BID" ] && { echo "❌ 回退候选也未命中"; exit 1; }
 fi
 
@@ -185,24 +195,17 @@ printf '%s' "$PUSH" | pyexec "import json,sys; d=json.load(sys.stdin); print('  
 
 # ---------- 6. 三端核验 ----------
 say "6. 三端核验"
-HOTEL_LOGIN=$([ "$FALLBACK" = "1" ] && echo "Rotorua Thermal Front Desk" || {
-  printf '%s' "$CAND" | pyexec "
-import json,sys
-m={'CONF-DEMO-WLG':'yangdongqing214@gmail.com',
-   'CONF-DEMO-ZQN':'Queenstown Lakeview Front Desk',
-   'CONF-DEMO-AKL':'Test Hotel Auckland'}
-for i in json.load(sys.stdin)['data']:
-    if (i.get('confirmationNo') or '') in m: print(m[i['confirmationNo']]); break"; })
+HOTEL_LOGIN="$HOTEL_EMAIL"
 JAR_G="$(mktemp)"; JAR_H="$(mktemp)"
 login_as() { curl -s -c "$1" -X POST "${BASE}/api/auth/login" -H "Content-Type: application/json" -d "{\"identifier\":\"$2\",\"password\":\"$3\"}" >/dev/null; }
-login_as "$JAR_G" "$GUEST_NICK" "$COORD_PASS"
+login_as "$JAR_G" "$GUEST_EMAIL" "$DEMO_PASS"
 ALERT=$(curl -s -b "$JAR_G" "${BASE}/api/notifications?page=1&pageSize=10" | pyexec "
 import json,sys
 d=json.load(sys.stdin); data=d.get('data') or {}
 items=data.get('list') or data.get('items') or []
 rel=[n for n in items if n.get('caseId')]
 print(f'{len(rel)} 条相关通知(最新: {rel[0][\"title\"] if rel else \"-\"})')")
-login_as "$JAR_H" "$HOTEL_LOGIN" "$COORD_PASS"
+login_as "$JAR_H" "$HOTEL_LOGIN" "$DEMO_PASS"
 # 清掉陈旧询单（属于已关闭旧案件的 pending），让酒店端只留当前案件这一条
 curl -s -b "$JAR_H" "${BASE}/api/hotel/inquiries?status=pending" | pyexec "
 import json,sys
@@ -219,19 +222,19 @@ HOPT=$(curl -s -b "$JAR_H" "${BASE}/api/hotel/selected-options" | pyexec "import
 rm -f "$JAR_G" "$JAR_H"
 QCOUNT=$(printf '%s' "$CASE" | pyexec "import json,sys; print(len(json.load(sys.stdin)['data']))")
 
-MODE=$([ "$FALLBACK" = "1" ] && echo "⚠️ 回退直注模式（真实天气未触发 QZN/AKL）" || echo "✅ Lambda 真实触发全链路")
+MODE=$([ "$FALLBACK" = "1" ] && echo "⚠️ 回退直注模式（真实天气未触发 Auckland）" || echo "✅ Lambda 真实触发全链路")
 cat <<EOF
 
 ========================================
 🎉 演示环境就绪（${MODE}）
 ----------------------------------------
 ① Coordinator (${COORD_EMAIL})：队列 ${QCOUNT} 条
-② Guest (登录名: ${GUEST_NICK})：${ALERT}
-③ Hotel (登录名: ${HOTEL_LOGIN})：询单 ${HINQ} 条 / 换房确认 ${HOPT} 条
+② Guest (${GUEST_EMAIL} / ${GUEST_NICK})：${ALERT}
+③ Hotel (${HOTEL_EMAIL})：询单 ${HINQ} 条 / 换房确认 ${HOPT} 条
 ----------------------------------------
 站点: ${BASE}
 案件直达: ${BASE}/cases/${CID}
 Lambda 日志行: ${LOGLINE}
-密  码统一: Password123!
+密码统一: ${DEMO_PASS}
 ========================================
 EOF

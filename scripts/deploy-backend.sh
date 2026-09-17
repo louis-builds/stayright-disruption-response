@@ -20,8 +20,8 @@
 set -euo pipefail
 
 REGION="${AWS_REGION:-ap-southeast-2}"
-EC2_ID="${EC2_INSTANCE_ID:-i-0d71260ab44ceb0c3}"
-RAW_BUCKET="${RAW_BUCKET:-stayright-dev-raw-990393187001}"
+EC2_ID="${EC2_INSTANCE_ID:?Set EC2_INSTANCE_ID (no cross-account default)}"
+RAW_BUCKET="${RAW_BUCKET:?Set RAW_BUCKET (no cross-account default)}"
 API_PORT="${API_PORT:-5080}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CSPROJ="$REPO_ROOT/backend/TravelDisruptionAgent.Api.csproj"

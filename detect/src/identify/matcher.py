@@ -3,7 +3,7 @@ bookings whose stay overlaps the event's time window and whose hotel
 falls inside the event's geo radius.
 
 Queries the real C# backend's schema directly (`hotels`/`bookings` in the
-shared `travel_disruption` database) rather than a separate toy dataset,
+shared `stayright` database) rather than a separate toy dataset,
 so guest_id/booking_id in the output are real ids the rest of the system
 (case lookup, cancellation policy, etc.) already understands.
 

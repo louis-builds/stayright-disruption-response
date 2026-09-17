@@ -148,13 +148,23 @@ builder.Services.AddHostedService<HandoffIngestJob>();
 
 var app = builder.Build();
 
-using (var scope = app.Services.CreateScope())
+// 本地开发统一连线上共享 stayright 库（见 docs/DATABASE_ACCESS.md）。共享库上
+// 每个人 dotnet run 都自动迁移会互相踩，所以默认不动 schema：
+// 迁移/seed/backfill 只在 Production（EC2 部署）或显式 RUN_DB_MIGRATE=1 时执行。
+var runDbMigrate = app.Environment.IsProduction()
+    || Environment.GetEnvironmentVariable("RUN_DB_MIGRATE") is "1" or "true";
+if (runDbMigrate)
 {
+    using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     await db.Database.MigrateAsync();
     await SeedRunner.RunAsync(db, scope.ServiceProvider.GetRequiredService<IRagDocumentSource>(), app.Logger);
     await RagChunkBackfill.RunAsync(db, scope.ServiceProvider.GetRequiredService<TravelDisruptionAgent.Api.Features.Chat.GeminiClient>(), app.Logger);
     await RagChunkBackfill.RunHotelPolicyBackfillAsync(db, scope.ServiceProvider.GetRequiredService<TravelDisruptionAgent.Api.Features.Chat.IRagRepository>(), app.Logger);
+}
+else
+{
+    app.Logger.LogInformation("Skipping DB migrate/seed (not Production and RUN_DB_MIGRATE unset). Shared stayright DB is managed by the deploy pipeline.");
 }
 
 if (app.Environment.IsDevelopment())
@@ -191,9 +201,12 @@ static string BuildConnectionString(IConfiguration config)
         ?? fallback;
 
     // Support both the project's POSTGRES_* names and libpq's standard PG* names.
+    // Local dev supplies these via the repo-root .env (SSM tunnel to the shared
+    // stayright DB on 127.0.0.1:15432); EC2 supplies them via the systemd unit.
+    // The fallbacks match the on-EC2 layout (db container on localhost:5432).
     var host = Env("POSTGRES_HOST", "PGHOST", "localhost");
     var port = Env("POSTGRES_PORT", "PGPORT", "5432");
-    var db = Env("POSTGRES_DB", "PGDATABASE", "travel_disruption");
+    var db = Env("POSTGRES_DB", "PGDATABASE", "stayright");
     var user = Env("POSTGRES_USER", "PGUSER", "app");
     var password = Env("POSTGRES_PASSWORD", "PGPASSWORD", "app_password");
 
