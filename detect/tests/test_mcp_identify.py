@@ -1,7 +1,8 @@
-"""identify_bookings 节点：走 MCP 调 kakapo-identify server，脱库测。
+"""identify_bookings node: goes through MCP to call the kakapo-identify server, tested without a real database.
 
-用进程内的 MCPServer 实例当连接目标（免去起子进程），并把 server 模块里的
-get_connection 换成 mock —— CI 没有 postgres，真库验证走 agent/mcp_smoke.py。
+Uses an in-process MCPServer instance as the connection target (skipping the subprocess),
+and mocks out get_connection in the server module — CI has no postgres, real-database
+verification goes through agent/mcp_smoke.py.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ from agent.langgraph_framework import identify_bookings
 from src.detect.models import DisruptionEvent
 from src.mcp_server import identify_server
 
-# Queenstown Lakeview Hotel 附近；storm 事件半径 30km
+# Near Queenstown Lakeview Hotel; storm event radius 30km
 _EVENT = DisruptionEvent(
     source="weather",
     event_type="storm",
@@ -68,7 +69,7 @@ def _mock_conn(rows: list[dict]):
 
 @pytest.fixture
 def rows(request, monkeypatch):
-    """让 server 端的 get_connection 返回喂了指定行的 mock 连接。"""
+    """Make the server-side get_connection return a mock connection fed with the given rows."""
     conn = _mock_conn(request.param)
     monkeypatch.setattr(identify_server, "get_connection", lambda: conn)
     return conn

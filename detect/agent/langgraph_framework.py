@@ -1,16 +1,17 @@
 # =========================================================
-# StayRight NZ 中断处理 & 改签 Agent —— LangGraph 骨架
-# 工具走 MCP：identify_server.py 暴露的 tool 由 agent/mcp_tools.py 转成
-# LangChain 工具后接进图里。非 LLM 的编排节点仍是占位 stub。
+# StayRight NZ Disruption Handling & Rebooking Agent — LangGraph skeleton
+# Tools go through MCP: identify_server.py exposes tools that get turned
+# into LangChain tools and wired into the graph. Non-LLM orchestration
+# nodes are still placeholder stubs.
 # =========================================================
 
-# agent/ 不在 src/ 下：把 detect/ 挂到 import 路径上，才能复用 src.* 和 agent.mcp_tools
+# agent/ isn't under src/: hang detect/ on the import path so we can reuse src.* and agent.mcp_tools
 import pathlib
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-# ---------- Step 1: 模型 ----------
+# ---------- Step 1: Model ----------
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -20,27 +21,31 @@ from functools import lru_cache
 from langchain.chat_models import init_chat_model
 
 
-# 延迟初始化：init_chat_model 在构造时就要 GEMINI_API_KEY，放模块级会让「只想 import
-# 这个模块跑 identify / 路由测试」的场景也被逼着配 key。真正用到 LLM 的节点再取。
+# Lazy init: init_chat_model needs GEMINI_API_KEY at construction time, so building it at
+# module level would force a key even for callers who just want to import this module to
+# run identify/routing tests. Only fetch it from the node that actually needs the LLM.
 @lru_cache(maxsize=1)
 def get_model():
     return init_chat_model("gemini-2.5-flash", model_provider="google_genai", temperature=0)
 
 
-# ---------- MCP 工具接入 ----------
-# langchain-mcp-adapters 只支持 mcp 1.x，本项目用的是 mcp 2.x，所以这几十行胶水自己维护：
-# 连上 identify_server.py（stdio 子进程），把它 @mcp.tool() 暴露的函数转成 LangChain 工具。
+# ---------- MCP tool wiring ----------
+# langchain-mcp-adapters only supports mcp 1.x, and this project is on mcp 2.x, so this
+# glue is hand-rolled: connect to identify_server.py (a stdio subprocess) and turn the
+# functions it exposes via @mcp.tool() into LangChain tools.
 from langchain_core.tools import StructuredTool
 from mcp import Client, StdioServerParameters
 
 _IDENTIFY_SERVER = pathlib.Path(__file__).resolve().parents[1] / "src" / "mcp_server" / "identify_server.py"
-# 用 sys.executable 而不是 "python"，否则子进程用系统 Python，装在 .venv 里的 psycopg / pydantic import 不到
+# sys.executable rather than "python" — otherwise the subprocess uses the system Python and
+# can't import psycopg / pydantic, which only live in .venv
 IDENTIFY_STDIO = StdioServerParameters(command=sys.executable, args=[str(_IDENTIFY_SERVER)])
 
 
 def _unwrap(result):
-    """取出工具返回值。MCPServer 给非 object 的返回类型（如 list[dict]）会套一层
-    {"result": ...} 以满足「structured content 必须是 object」，这里剥掉。"""
+    """Pull out a tool's return value. MCPServer wraps a non-object return type (e.g.
+    list[dict]) in {"result": ...} to satisfy the "structured content must be an object"
+    requirement; strip that wrapper back off here."""
     if result.is_error:
         raise RuntimeError(f"MCP tool call failed: {result.content}")
     structured = result.structured_content
@@ -65,10 +70,11 @@ def _as_langchain_tool(target, mcp_tool) -> StructuredTool:
 
 
 async def load_mcp_tools(target=IDENTIFY_STDIO) -> list[StructuredTool]:
-    """连上 MCP server，把它暴露的工具全部转成 LangChain 工具。
+    """Connect to an MCP server and turn every tool it exposes into a LangChain tool.
 
-    target 默认是「起 identify_server.py 子进程」；也可以直接传一个进程内的 MCPServer
-    实例（测试用，免子进程开销）。每次调用工具会重新建一次连接 —— 当前量级够用。
+    target defaults to "spawn identify_server.py as a subprocess"; you can also pass an
+    in-process MCPServer instance directly (used by tests, to skip the subprocess cost).
+    Each tool call opens a fresh connection — fine at the current scale.
     """
     async with Client(target) as client:
         listed = await client.list_tools()
@@ -95,7 +101,7 @@ class DisruptionState(TypedDict):
     llm_calls: int
 
 
-# ---------- Step 3: 节点 ----------
+# ---------- Step 3: Nodes ----------
 import logging
 
 from langchain.messages import HumanMessage, SystemMessage, ToolMessage
@@ -107,39 +113,42 @@ log = logging.getLogger("kakapo.agent")
 
 
 async def identify_bookings(state: DisruptionState, config: RunnableConfig | None = None) -> dict:
-    """走 MCP 调 identify_server 的 matched_bookings 工具查受影响订单（不走 LLM）。
+    """Look up affected bookings via MCP's matched_bookings tool on identify_server (no LLM).
 
-    连接目标默认是「起 identify_server.py 子进程」（IDENTIFY_STDIO）；测试里可通过
-    config["configurable"]["identify_server"] 传一个进程内的 MCPServer 实例脱库跑。
-    MCP 边界已经把 UUID / date 序列化成字符串，这里拿到就是 JSON-safe 的 dict。
+    The connection target defaults to "spawn identify_server.py as a subprocess"
+    (IDENTIFY_STDIO); tests can pass config["configurable"]["identify_server"] with an
+    in-process MCPServer instance to run without a real database. The MCP boundary has
+    already serialised UUID/date fields to strings, so what comes back here is a
+    JSON-safe dict.
     """
     server = ((config or {}).get("configurable") or {}).get("identify_server", IDENTIFY_STDIO)
-    log.info("identify_bookings: 经 MCP 调 matched_bookings（server=%s）", getattr(server, "args", server))
+    log.info("LangGraph -> MCP: requesting matched_bookings from identify_server")
     tools = await load_mcp_tools(server)
     matched = next(tool for tool in tools if tool.name == "matched_bookings")
     rows = await matched.ainvoke({"disruption_event": state["disruption_event"]})
-    log.info("identify_bookings: MCP 返回 %d 条受影响订单", len(rows))
+    log.info("MCP -> LangGraph: %d affected booking(s) returned", len(rows))
     return {"affected_bookings": list(rows)}
 
 
 def check_case_type(state: DisruptionState) -> dict:
-    """判断是否群体订单 / VIP / 纠纷，需要提前转人工（规则判断，不走 LLM）"""
-    # TODO: 换成真实的规则判断逻辑
+    """Decide whether this needs to escalate up front — group bookings, VIP, disputes (rule-based, no LLM)."""
+    # TODO: replace with the real rule logic
     return {"needs_escalation": False, "escalation_reason": None}
 
 
 def notify_affected_guest(state: DisruptionState) -> dict:
-    """发邮件通知受影响的客户，告诉他们行程可能受影响（不发具体方案）"""
-    # TODO: 邮件
+    """Email the affected guest to let them know their stay may be impacted (no concrete plan yet)."""
+    # TODO: email
     return {}
 
 
 def generate_message(state: DisruptionState) -> dict:
-    """LLM 节点：生成发给客人的最终通知文案（不需要工具，直接总结）。
+    """LLM node: write the final message to the guest summarising the outcome (no tools needed, just a summary).
 
-    gemini-2.5-flash 在这个节点上实测有相当高概率返回 finish_reason=STOP 但
-    output_tokens=0 的空结果，原因不明。重试几次基本能拿到非空结果；真的一直空，
-    退到一句兜底文案，不能让客人收到空消息。
+    gemini-2.5-flash has a fairly high observed rate of returning finish_reason=STOP with
+    output_tokens=0 on this node — cause unknown; setting thinking_budget=0 didn't change the
+    reproduction rate either. A few retries usually get a non-empty result; if it stays empty,
+    fall back to a canned message rather than let the guest get nothing.
     """
     prompt = [
         SystemMessage(content="Write a warm, clear message to the guest summarising the rebooking outcome.")
@@ -154,17 +163,17 @@ def generate_message(state: DisruptionState) -> dict:
 
 
 def coordinate_booking(state: DisruptionState) -> dict:
-    """执行取消原订单 + 预定新房源（多步骤协调，代码执行）"""
-    # TODO: 换成真实的取消 + 预定 API 调用，并处理失败重试
+    """Cancel the original booking and book the new property (multi-step coordination, code execution)."""
+    # TODO: replace with real cancel + book API calls, with failure retry
     return {"booking_success": True}
 
 
 def escalate_to_human(state: DisruptionState) -> dict:
-    """转人工，带上完整上下文"""
+    """Escalate to a human, with the full context attached."""
     return {"final_message": "Escalated to human support with full context."}
 
 
-# ---------- Step 4: 条件边 ----------
+# ---------- Step 4: Conditional edges ----------
 from typing import Literal
 
 from langgraph.graph import END, START, StateGraph
@@ -178,31 +187,34 @@ def route_after_case_check(state: DisruptionState) -> Literal["notify_affected_g
 
 def route_after_rank(state: DisruptionState) -> Literal["rank_tool_node", "generate_message", "escalate_to_human"]:
     last_message = state["messages"][-1]
-    # LLM 还想调用工具（搜房源/查政策），回到 tool node
+    # The LLM still wants to call a tool (search properties / check policy) — back to the tool node
     if getattr(last_message, "tool_calls", None):
         return "rank_tool_node"
-    # LLM 已经给出最终推荐，且置信度不够，转人工
+    # The LLM has given its final recommendation but confidence is too low — escalate
     if (state.get("ranking_confidence") or 1.0) < 0.6:
         return "escalate_to_human"
     return "generate_message"
 
 
-# ---------- Step 5: 构建图 ----------
+# ---------- Step 5: Build the graph ----------
 _agent = None
 
 
 async def build_agent_graph() -> "StateGraph":
-    """装配（未编译的）图并返回 builder。MCP 工具要 await 才能拿到，所以是 async。
+    """Assemble the (uncompiled) graph and return the builder. MCP tools need an await to
+    fetch, so this is async.
 
-    调用方自己 .compile()，可按需传 checkpointer / interrupt_after —— scripts/
-    run_agent_pipeline.py 就靠 interrupt_after 让图跑到 identify_bookings 就停。
+    Callers compile it themselves and can pass a checkpointer / interrupt_after as needed —
+    scripts/run_agent_pipeline.py relies on interrupt_after to stop the graph right after
+    identify_bookings.
     """
     tools = await load_mcp_tools(IDENTIFY_STDIO)
     tools_by_name = {tool.name: tool for tool in tools}
     model_with_tools = get_model().bind_tools(tools)
 
     async def rank_and_explain(state: DisruptionState) -> dict:
-        """LLM 节点：调 MCP 工具搜替代房源 + 查真实政策，生成排序后的推荐和解释文案。"""
+        """LLM node: call MCP tools to search alternative properties + check the real
+        policy, then produce a ranked recommendation with an explanation."""
         bookings = state.get("affected_bookings") or []
         bookings_summary = "\n".join(
             f"- Booking {b['booking_id']}: {b['hotel_name']}, {b['check_in']} to {b['check_out']}"
@@ -233,14 +245,15 @@ async def build_agent_graph() -> "StateGraph":
             "llm_calls": state.get("llm_calls", 0) + 1,
         }
         if not response.tool_calls:
-            # 一次工具都没调过 = LLM 凭空回答，没有真实房源/政策数据兜底，压低置信度让
-            # route_after_rank 转人工。
+            # No tool called this whole turn = the LLM answered from nothing, with no real
+            # property/policy data backing it up — lower the confidence so route_after_rank
+            # escalates to a human.
             used_real_data = any(isinstance(m, ToolMessage) for m in state["messages"])
             result["ranking_confidence"] = 0.9 if used_real_data else 0.3
         return result
 
     async def rank_tool_node(state: DisruptionState) -> dict:
-        """执行 rank_and_explain 决定要调用的 MCP 工具。MCP 工具是 async，用 ainvoke。"""
+        """Execute the MCP tool(s) rank_and_explain decided to call. MCP tools are async, so use ainvoke."""
         result = []
         for tool_call in state["messages"][-1].tool_calls:
             tool = tools_by_name[tool_call["name"]]
@@ -268,8 +281,8 @@ async def build_agent_graph() -> "StateGraph":
     )
     builder.add_edge("notify_affected_guest", "rank_and_explain")
 
-    # rank_and_explain 内部是一个小型 ReAct 循环：
-    # LLM 决定要不要调用工具 -> 工具执行 -> 回到 LLM -> 直到不再调用工具
+    # rank_and_explain is internally a small ReAct loop:
+    # LLM decides whether to call a tool -> tool runs -> back to the LLM -> until no more tool calls
     builder.add_conditional_edges(
         "rank_and_explain",
         route_after_rank,
@@ -285,19 +298,20 @@ async def build_agent_graph() -> "StateGraph":
 
 
 async def get_agent():
-    """默认编译（无 checkpointer / interrupt）并缓存，供直接 invoke 整张图。"""
+    """Compile with defaults (no checkpointer / interrupt) and cache it, for callers who
+    just want to invoke the whole graph directly."""
     global _agent
     if _agent is None:
         _agent = (await build_agent_graph()).compile()
     return _agent
 
 
-# ---------- 供采集管线调用的入口 ----------
+# ---------- Entry point for the detection pipeline ----------
 from datetime import datetime, timedelta, timezone
 
 
 def build_initial_state(event: DisruptionEvent) -> DisruptionState:
-    """把一个 DisruptionEvent（探测器产出）转成图的初始 state。"""
+    """Turn a DisruptionEvent (produced by a detector) into the graph's initial state."""
     window = event.affects_window
     return {
         "disruption_event": event.model_dump(mode="json"),
@@ -316,7 +330,7 @@ def build_initial_state(event: DisruptionEvent) -> DisruptionState:
     }
 
 
-# 直接跑本模块时用的样例事件：Queenstown Lakeview Hotel 坐标，窗口 now..+30d
+# Sample event for running this module directly: Queenstown Lakeview Hotel's coordinates, window now..+30d
 _NOW = datetime.now(timezone.utc)
 sample_event = DisruptionEvent(
     source="weather",

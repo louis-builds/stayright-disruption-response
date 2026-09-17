@@ -7,7 +7,7 @@ from src.identify.matcher import find_affected_bookings
 from src.identify.db import get_connection
 from src.detect.models import DisruptionEvent
 
-# stdout 归 MCP 的 JSON-RPC 用，日志只能走 stderr（logging 默认就是 stderr）
+# stdout belongs to MCP's JSON-RPC channel; logs can only go to stderr (logging's default anyway)
 logging.basicConfig(level=logging.INFO, stream=sys.stderr, format="%(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("kakapo.identify_server")
 
@@ -15,9 +15,10 @@ mcp = MCPServer("kakapo")
 
 
 def _serialise_booking(row: dict) -> dict:
-    """matcher 返回的行里 booking_id/guest_id/hotel_id 是 UUID、check_in/check_out
-    是 date —— 都过不了 MCP 的 JSON 序列化，统一转成字符串。放 server 端做，任何
-    MCP client（LangGraph / Claude Desktop / C#）拿到的都是 JSON-safe 的 dict。"""
+    """The rows matcher returns have booking_id/guest_id/hotel_id as UUID and check_in/
+    check_out as date — none of which survive MCP's JSON serialisation, so convert them all
+    to strings. Doing this on the server side means every MCP client (LangGraph / Claude
+    Desktop / C#) gets back a JSON-safe dict."""
     return {
         "booking_id": str(row["booking_id"]),
         "guest_id": str(row["guest_id"]),
@@ -32,12 +33,12 @@ def _serialise_booking(row: dict) -> dict:
 
 @mcp.tool()
 def matched_bookings(disruption_event: dict) -> list[dict]:
-    """根据 DisruptionEvent 的地理和时间范围，返回受影响的订单列表。"""
-    log.info("matched_bookings called: %s", disruption_event)
+    """Return the bookings affected by a DisruptionEvent's geo and time range."""
+    log.info("MCP tool invoked: matched_bookings")
     event = DisruptionEvent.model_validate(disruption_event)
     with get_connection() as conn:
         rows = find_affected_bookings(event, conn)
-    log.info("matched_bookings -> %d row(s)", len(rows))
+    log.info("MCP tool matched_bookings -> %d booking(s) matched", len(rows))
     return [_serialise_booking(row) for row in rows]
 
 @mcp.tool()
@@ -48,16 +49,16 @@ def search_alternative_properties(
     budget_max: float,
     property_type: str = "any",
 ) -> list[dict]:
-    """搜索满足条件的替代房源（占位实现，先返回假数据）。
+    """Search for alternative properties matching the given criteria (placeholder — returns canned data).
 
     Args:
-        city: 目标城市，例如 "Queenstown"
-        check_in: 入住日期，格式 YYYY-MM-DD
-        check_out: 离店日期，格式 YYYY-MM-DD
-        budget_max: 每晚预算上限（NZD）
-        property_type: 房型偏好，例如 "hotel"、"holiday_park"、"any"
+        city: target city, e.g. "Queenstown"
+        check_in: check-in date, format YYYY-MM-DD
+        check_out: check-out date, format YYYY-MM-DD
+        budget_max: max nightly budget (NZD)
+        property_type: property type preference, e.g. "hotel", "holiday_park", "any"
     """
-    # TODO: 换成真实的房源搜索 API / 数据库查询
+    # TODO: replace with a real property search API / database query
     return [
         {"property_id": "P001", "name": "Lakeview Motel", "price_per_night": 189},
         {"property_id": "P002", "name": "Queenstown Holiday Park", "price_per_night": 129},
@@ -66,13 +67,13 @@ def search_alternative_properties(
 
 @mcp.tool()
 def get_cancellation_policy(property_id: str) -> str:
-    """查询某个房源真实的取消/改签政策原文（占位实现）。
+    """Look up a property's real cancellation/rebooking policy text (placeholder implementation).
 
     Args:
-        property_id: 房源 ID
+        property_id: property ID
     """
-    # TODO: 换成真实的政策数据库/知识库检索（RAG），
-    # 绝不能让 LLM 凭记忆编造政策条款
+    # TODO: replace with real policy database/knowledge-base retrieval (RAG) —
+    # never let the LLM invent policy terms from memory
     return "Free cancellation up to 24 hours before check-in. After that, one night's charge applies."
 
 

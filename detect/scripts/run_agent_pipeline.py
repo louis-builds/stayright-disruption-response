@@ -1,25 +1,29 @@
-"""轮询四个信号源，探测到区域级扰动（DisruptionEvent）就把它喂进
-agent/langgraph_framework.py 的 LangGraph 流程。
+"""Poll the four signal sources and, whenever a regional-scale disruption
+(DisruptionEvent) is detected, feed it into the LangGraph flow in
+agent/langgraph_framework.py.
 
-  采集器(detect_*_events) -> list[DisruptionEvent] -> 去重 -> build_initial_state
-  -> graph.stream(...)  逐节点跑图
+  collectors (detect_*_events) -> list[DisruptionEvent] -> dedup -> build_initial_state
+  -> graph.stream(...)  runs the graph node by node
 
-跟 scripts/run_demo.py 一样的演示套路：前几轮打真实 API，到第 --mock-at 轮（默认第 3 轮）
-只把**航班**换成假数据（AKL 大面积取消），其余源照常打真实 API。真实天气/火山/道路很少
-真的触发，靠这轮航班假数据把整条链路演示出来。--mock-at 0 关闭注入，--simulate 则四个源
-全用假数据。
+Same demo trick as scripts/run_demo.py: poll the real APIs for the first few rounds, then
+at round --mock-at (default 3) swap only **flight** for fake data (AKL mass cancellation),
+while the other sources keep polling real APIs. Real weather/volcano/road rarely actually
+trigger, so this mock flight round is what demonstrates the whole chain end to end.
+--mock-at 0 disables the injection; --simulate fakes all four sources instead.
 
-默认**跑到 identify_bookings 就停**（interrupt_after + InMemorySaver）——check_case_type
-往后是队友在做的节点，暂时不跑。加 --full 才把整张图跑完（要 GEMINI_API_KEY 且没超配额）。
+By default the graph **stops right after identify_bookings** (interrupt_after +
+InMemorySaver) — check_case_type and everything downstream is a teammate's work in
+progress and isn't run yet. Pass --full to run the whole graph (needs GEMINI_API_KEY and
+some quota left).
 
-用法：
-    python -m scripts.run_agent_pipeline --interval 10 --iterations 3   # 真实轮询 2 轮，第 3 轮注入航班假数据后停
-    python -m scripts.run_agent_pipeline                                # 一直轮询，每轮真实 API，第 3 轮注入航班假数据
-    python -m scripts.run_agent_pipeline --mock-at 0                    # 纯真实轮询，不注入
-    python -m scripts.run_agent_pipeline --simulate --once             # 四源全假，跑一遍
+Usage:
+    python -m scripts.run_agent_pipeline --interval 10 --iterations 3   # 2 real rounds, mock flight injected on round 3, then stop
+    python -m scripts.run_agent_pipeline                                # poll forever, real APIs each round, mock flight on round 3
+    python -m scripts.run_agent_pipeline --mock-at 0                    # pure real polling, no injection
+    python -m scripts.run_agent_pipeline --simulate --once             # all four sources fake, run once
 
-前置：docker compose 里的 Postgres 起着、且 C# 后端至少灌过一次种子数据
-（identify_bookings 要查真实 hotels/bookings 表）。
+Prerequisite: the Postgres from docker compose is up, and the C# backend has been run at
+least once to seed data (identify_bookings queries the real hotels/bookings tables).
 """
 
 from __future__ import annotations
@@ -50,14 +54,16 @@ from src.detect.nzta_road import detect_road_events
 from src.detect.open_meteo import detect_events as detect_weather_events
 
 SOURCE_CHOICES = ["weather", "volcano", "flight", "road", "all"]
-STOP_AFTER_NODE = "identify_bookings"  # 非 --full 时，图跑到这个节点就中断
+STOP_AFTER_NODE = "identify_bookings"  # when not --full, the graph interrupts right after this node
 
 
 async def compile_graph(*, full: bool):
-    """编译 langgraph_framework 的图。非 full 模式用 interrupt_after 让它跑完 identify_bookings 就停，
-    下游（check_case_type / notify / rank_and_explain …）一律不执行。
+    """Compile langgraph_framework's graph. In non-full mode, interrupt_after stops it right
+    after identify_bookings — everything downstream (check_case_type / notify /
+    rank_and_explain, …) never runs.
 
-    build_agent_graph 要 await（MCP 工具在装配期就要连一次 server 拿 schema）。"""
+    build_agent_graph needs an await (MCP tools connect to the server once during assembly to fetch schema).
+    """
     kwargs: dict = {"checkpointer": InMemorySaver()}
     if not full:
         kwargs["interrupt_after"] = [STOP_AFTER_NODE]
@@ -65,18 +71,25 @@ async def compile_graph(*, full: bool):
 
 
 def poll_sources(sources: list[str], *, simulate: bool, mock_flight: bool = False) -> list[DisruptionEvent]:
-    """轮询选中的源，返回所有清过"区域级"门槛的 DisruptionEvent。
+    """Poll the selected sources and return every DisruptionEvent that cleared the
+    "regional scale" threshold.
 
-    simulate=True：四个源全用假数据。
-    mock_flight=True：仅航班用假数据（AKL 大面积取消），其余源照常打真实 API。
+    simulate=True: all four sources use fake data.
+    mock_flight=True: only flight uses fake data (AKL mass cancellation); the rest keep polling real APIs.
     """
     events: list[DisruptionEvent] = []
 
     if "weather" in sources:
-        events += detect_weather_events(fetch=_sim_forecast) if simulate else detect_weather_events()
+        try:
+            events += detect_weather_events(fetch=_sim_forecast) if simulate else detect_weather_events()
+        except Exception as exc:  # noqa: BLE001 - manual tool, print and keep going
+            print(f"  weather source poll failed: {exc!r}")
 
     if "volcano" in sources:
-        events += detect_volcano_events(fetch=_sim_volcano_alerts) if simulate else detect_volcano_events()
+        try:
+            events += detect_volcano_events(fetch=_sim_volcano_alerts) if simulate else detect_volcano_events()
+        except Exception as exc:  # noqa: BLE001
+            print(f"  volcano source poll failed: {exc!r}")
 
     if "flight" in sources:
         if simulate or mock_flight:
@@ -84,22 +97,22 @@ def poll_sources(sources: list[str], *, simulate: bool, mock_flight: bool = Fals
         elif os.environ.get("RAPIDAPI_KEY"):
             try:
                 events += detect_flight_events(api_key=os.environ["RAPIDAPI_KEY"])
-            except Exception as exc:  # noqa: BLE001 - 手动工具，打出来接着跑
-                print(f"  flight 源轮询失败：{exc!r}")
+            except Exception as exc:  # noqa: BLE001 - manual tool, print and keep going
+                print(f"  flight source poll failed: {exc!r}")
         else:
-            print("  flight 源跳过：没设 RAPIDAPI_KEY（本轮无航班假数据注入）")
+            print("  flight source skipped: RAPIDAPI_KEY not set (no mock flight data this round)")
 
     if "road" in sources:
         try:
             events += detect_road_events(fetch=_sim_road_events) if simulate else detect_road_events()
         except Exception as exc:  # noqa: BLE001
-            print(f"  road 源轮询失败：{exc!r}")
+            print(f"  road source poll failed: {exc!r}")
 
     return events
 
 
 def _dedup_key(event: DisruptionEvent) -> str:
-    """给去重用的"位置名"：优先用 raw_payload 里的可读标签，否则退回坐标。"""
+    """A "location name" for dedup purposes: prefer a readable label from raw_payload, else fall back to coordinates."""
     payload = event.raw_payload or {}
     for key in ("location", "airport_iata", "volcano_title", "sole_access_route", "road_number"):
         if payload.get(key):
@@ -108,7 +121,7 @@ def _dedup_key(event: DisruptionEvent) -> str:
 
 
 def describe_event(event: DisruptionEvent) -> str:
-    """一行说明：这个事件是什么、凭什么判定为扰动（供人工核实，不打全量）。"""
+    """A one-line summary of what this event is and why it was judged a disruption (for human review, not the full payload)."""
     p = event.raw_payload or {}
     w = event.affects_window
     window = f"{w.start:%Y-%m-%d %H:%M}→{w.end:%Y-%m-%d %H:%M}Z"
@@ -135,22 +148,23 @@ def describe_event(event: DisruptionEvent) -> str:
 
 
 async def run_event_through_graph(event: DisruptionEvent, graph, *, full: bool) -> None:
-    """把一个 DisruptionEvent 灌进图，逐节点打印产出。
+    """Feed one DisruptionEvent into the graph, printing each node's output as it runs.
 
-    非 full 模式下图在 identify_bookings 后 interrupt，check_case_type 及之后一律不跑。
-    identify_bookings / rank_* 节点走 MCP（async），所以用 astream。
+    In non-full mode, the graph interrupts right after identify_bookings — check_case_type
+    and everything after it never runs. identify_bookings / rank_* nodes go through MCP
+    (async), so this uses astream.
     """
     state = build_initial_state(event)
     config = {"configurable": {"thread_id": event.event_id}}
-    print(f"  event {event.event_id} [{event.source.value}/{event.event_type}] -> 进入图")
+    print(f"  event {event.event_id} [{event.source.value}/{event.event_type}] -> entering graph")
 
     async for step in graph.astream(state, config, stream_mode="updates"):
         for node, update in step.items():
             if node == "__interrupt__":
-                continue  # langgraph 的中断信号，不是真节点
+                continue  # langgraph's interrupt signal, not a real node
             if node == "identify_bookings":
                 bookings = update.get("affected_bookings") or []
-                print(f"    identify_bookings -> {len(bookings)} 条受影响订单")
+                print(f"    identify_bookings -> {len(bookings)} affected booking(s)")
                 for b in bookings:
                     print(f"      - {b['booking_id']} / guest {b['guest_id']} / {b['hotel_name']} "
                           f"({b['check_in']} -> {b['check_out']})")
@@ -161,27 +175,27 @@ async def run_event_through_graph(event: DisruptionEvent, graph, *, full: bool) 
                 print(f"    {node} -> {update}")
 
     if not full:
-        print(f"    （图在 {STOP_AFTER_NODE} 后中断；下游节点是队友的工作，--full 才跑）")
+        print(f"    (graph interrupted after {STOP_AFTER_NODE}; downstream nodes are a teammate's work in progress, pass --full to run them)")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--source", choices=SOURCE_CHOICES, default="all", help="轮询哪个源（默认 all）")
-    parser.add_argument("--simulate", action="store_true", help="四个源全用假数据，不打真实 API")
+    parser.add_argument("--source", choices=SOURCE_CHOICES, default="all", help="which source(s) to poll (default: all)")
+    parser.add_argument("--simulate", action="store_true", help="fake data for all four sources, no real API calls")
     parser.add_argument("--mock-at", type=int, default=3,
-                        help="第几轮注入航班假数据（1-indexed，默认 3）；0 = 不注入，纯真实轮询")
-    parser.add_argument("--interval", type=float, default=60.0, help="两次轮询间隔秒数（默认 60）")
-    parser.add_argument("--iterations", type=int, default=0, help="跑 N 轮后停（默认 0 = 一直跑）")
-    parser.add_argument("--once", action="store_true", help="只轮询一轮就退出（等价 --iterations 1）")
-    parser.add_argument("--full", action="store_true", help="跑完整个图（含 rank_and_explain 等 LLM 节点，要 GEMINI_API_KEY）")
+                        help="which round injects fake flight data (1-indexed, default 3); 0 = no injection, pure real polling")
+    parser.add_argument("--interval", type=float, default=60.0, help="seconds between polls (default 60)")
+    parser.add_argument("--iterations", type=int, default=0, help="stop after N rounds (default 0 = run forever)")
+    parser.add_argument("--once", action="store_true", help="poll once and exit (equivalent to --iterations 1)")
+    parser.add_argument("--full", action="store_true", help="run the whole graph (including LLM nodes like rank_and_explain; needs GEMINI_API_KEY)")
     parser.add_argument("--dedup-cooldown-minutes", type=float, default=60.0,
-                        help="同一位置+事件类型在这个窗口内不重复喂图，除非严重度升级（默认 60；0 关闭）")
+                        help="don't re-feed the same location+event type into the graph within this window unless severity increases (default 60; 0 disables)")
     parser.add_argument("--dedup-state", type=Path, default=Path("output/.agent_pipeline_dedup.json"),
-                        help="去重状态文件路径")
+                        help="path to the dedup state file")
     args = parser.parse_args()
 
     load_dotenv()
-    # 让 identify_bookings 的「经 MCP 调 …」和子进程 matched_bookings 的日志都打到控制台
+    # get both identify_bookings' "calling ... via MCP" log and the subprocess's matched_bookings log onto the console
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     sources = list(SOURCE_CHOICES[:-1]) if args.source == "all" else [args.source]
     max_iterations = 1 if args.once else args.iterations
@@ -197,11 +211,10 @@ def main() -> None:
             iteration += 1
             now = datetime.now(timezone.utc)
             mock_flight = bool(args.mock_at) and iteration == args.mock_at and not args.simulate
-            marker = "（本轮注入航班假数据）" if mock_flight else ""
-            print(f"\n[{now.isoformat(timespec='seconds')}] #{iteration} 轮询中…{marker}")
+            print(f"\n[{now.isoformat(timespec='seconds')}] #{iteration} polling…")
 
             events = poll_sources(sources, simulate=args.simulate, mock_flight=mock_flight)
-            print(f"  探测到 {len(events)} 个事件：")
+            print(f"  detected {len(events)} event(s):")
             for event in events:
                 print(f"    · {event.event_id}  {describe_event(event)}")
 
@@ -211,16 +224,16 @@ def main() -> None:
                     event.severity.value, args.dedup_cooldown_minutes, now,
                 ):
                     print(f"  event {event.event_id} [{_dedup_key(event)}/{event.event_type}] "
-                          f"跳过（{args.dedup_cooldown_minutes:g} 分钟内已喂过、严重度没升级）")
+                          f"skipped (already fed within {args.dedup_cooldown_minutes:g} min, severity unchanged)")
                     continue
                 asyncio.run(run_event_through_graph(event, graph, full=args.full))
 
             if max_iterations and iteration >= max_iterations:
-                print("\n达到轮次上限，停止。")
+                print("\nReached iteration limit, stopping.")
                 break
             time.sleep(args.interval)
     except KeyboardInterrupt:
-        print("\n已停止。")
+        print("\nStopped.")
 
 
 if __name__ == "__main__":
