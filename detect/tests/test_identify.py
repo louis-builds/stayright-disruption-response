@@ -207,9 +207,9 @@ class TestFindAffectedBookings:
 
 @pytest.fixture
 def live_pg_conn():
-    """Optional integration fixture: only runs if the shared Postgres
-    (`travel_disruption`, the same database the C# backend uses) is
-    reachable and already seeded. Skips otherwise so the default test run
+    """Optional integration fixture: only runs if the shared stayright
+    database (the same one the C# backend uses) is reachable through the
+    SSM tunnel and already seeded. Skips otherwise so the default test run
     never depends on real infrastructure.
     """
     from src.identify.db import get_connection
@@ -217,13 +217,13 @@ def live_pg_conn():
     try:
         conn = get_connection()
     except Exception as exc:
-        pytest.skip(f"no local Postgres available: {exc}")
+        pytest.skip(f"shared stayright DB not reachable (SSM tunnel open?): {exc}")
         return
 
     with conn.cursor() as cur:
         cur.execute("SELECT count(*) FROM hotels")
         if cur.fetchone()[0] == 0:
-            pytest.skip("travel_disruption has no hotels yet -- run the C# backend once (dotnet run) to seed it")
+            pytest.skip("stayright has no hotels -- see docs/DATABASE_ACCESS.md §5 to seed it")
 
     yield conn
     conn.close()

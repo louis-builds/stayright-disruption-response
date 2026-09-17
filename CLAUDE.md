@@ -14,13 +14,13 @@
 
 **目录结构与实际代码的对应关系**（2026-08-31 核对代码后补充，2026-09-08 补记新增模块）：
 
-| 目录 | 内容 | 对应 CI job |
+| 目录 | 内容 | 对应 gate 检查（`.codebuild/buildspec-gate.yml`） |
 |---|---|---|
-| `detect/` | Python 3.12 采集器/检测逻辑（`src/`、`tests/`、`requirements.txt`、`pyproject.toml`） | `gate.yml` 的 `python` job |
-| `detect/agent/` | ⚠️ 新增、未在本文件其他章节说明：`langgraph_framework.py`，基于 LangGraph 的"扰动处理 & 改签"agent 骨架（工具函数为占位桩）。不在 `src/` 下，靠 `sys.path.insert` 挂路径，游离于下文三层分层约束之外——架构定位待 Zachary 确认 | 未纳入 `gate.yml`（不在 `src/`，`pytest` 覆盖不到） |
-| `detect/src/mcp_server/` | ⚠️ 新增、未在本文件其他章节说明：`identify_server.py`，MCP server，用途/调用方待补文档 | 随 `python` job 一并跑 pytest（若有对应测试） |
-| `backend/` | .NET 服务（`backend.sln`、`Program.cs`、`Controllers/`、`Features/` 等） | `gate.yml` 的 `backend` job |
-| `frontend/` | React + TypeScript + Vite 运营台（`package.json` 含 `lint`/`build`） | `gate.yml` 的 `frontend` job |
+| `detect/` | Python 3.12 采集器/检测逻辑（`src/`、`tests/`、`requirements.txt`、`pyproject.toml`） | `cd detect && pytest` |
+| `detect/agent/` | ⚠️ 新增、未在本文件其他章节说明：`langgraph_framework.py`，基于 LangGraph 的"扰动处理 & 改签"agent 骨架（工具函数为占位桩）。不在 `src/` 下，靠 `sys.path.insert` 挂路径，游离于下文三层分层约束之外——架构定位待 Zachary 确认 | 无专门测试；`pytest` 收集不到 |
+| `detect/src/mcp_server/` | ⚠️ 新增、未在本文件其他章节说明：`identify_server.py`，MCP server，用途/调用方待补文档 | 随 `pytest` 一并跑（若有对应测试） |
+| `backend/` | .NET 服务（`backend.sln`、`Program.cs`、`Controllers/`、`Features/` 等） | `dotnet build backend.sln -c Release` |
+| `frontend/` | React + TypeScript + Vite 运营台（`package.json` 含 `lint`/`build`） | `npm ci && npm run lint && npm run build` |
 
 ⚠️ **与下方「技术栈」表存在落差，待 Zachary 确认**：技术栈表只列了 Python 后端，未提及 `backend/` 下的 .NET 服务；这是架构表述滞后于代码演进，还是 `backend/` 属于非核心/待淘汰模块，需要 Zachary 明确后回填本文件，不要自行假设。
 
@@ -35,10 +35,10 @@
 | 大模型 | 主用 **Gemini**（`backend/Features/Chat/GeminiClient.cs`）；**AWS Bedrock**（Claude Haiku）作为 fallback |
 | AWS SDK | Python 侧 **boto3**（唯一）；C# 侧 AWS SDK for .NET（目前仅 Bedrock fallback 用到） |
 | 云区域 | **`ap-southeast-2`（悉尼）** |
-| CI | GitHub Actions（`.github/workflows/gate.yml`，触发分支 `Test`）：`pytest` + `dotnet build` + 前端 `lint`/`build` |
+| CI/CD | AWS CodePipeline + CodeBuild（`infra/bootstrap-cicd.sh` + `.codebuild/`）。PR 进 `Test`/`main` 经 GitHub webhook 跑 gate；提交进 `main` 自动跑 Gate→人工审批→部署。GitHub Actions 被组织策略 `local_only` 卡死，`gate.yml` 已删。详见 `docs/AWS_SDK_SPEC.md` §12 |
 | 运行环境（规划） | EC2 模块化单体 + 5 个 Lambda（4 采集器 + 1 回调）。4 个采集器（weather/volcano/flight/road）已于 2026-09-03 随 SAM 栈 `stayright-dev-weather-collector` 部署上线并实测；回调 Lambda（第 5 个）代码未写、未部署。详见 `docs/AWS_SDK_SPEC.md` §13.2 部署时间线 |
 | IaC（规划） | 非代码资源用脚本创建、Lambda 走 AWS SAM（`detect/template.yaml`）。`infra/` 目前是空占位 |
-| CD（规划） | 合并即部署的流水线尚未建；`gate.yml` 只做检查、不做部署 |
+| CD | CodePipeline `stayright-dev-pipeline`（盯 `main`，`DetectChanges: true`）：Gate → 人工审批 → Deploy（backend 走 SSM RunCommand 到 EC2；frontend 走 S3 sync + CloudFront 失效）。tag `v*` 部署 demo 仍属规划 |
 
 ---
 
@@ -51,13 +51,19 @@
 >   SES / CloudWatch / Lambda Function URL 的代码，先读对应小节。
 > - `docs/DATABASE_ACCESS.md` —— 数据库连接（macOS / Windows 分别写）+ **设计与变更约定**。
 
-## 本地开发不需要 AWS 账号
+## 本地开发：测试不需要 AWS，跑起整套服务需要数据库隧道
 
 `detect/` 的测试不碰网络、不碰数据库——采集器的 `fetch_*` 在测试里被注入替换，matcher 用 mock 连接：
 
 ```bash
 cd detect && .venv/Scripts/python -m pytest
 ```
+
+但**真要把后端/前端跑起来联调，就得连数据库**。已不再本地跑 Docker Postgres——
+本地开发统一连线上 EC2 的共享 `stayright` 库，走 SSM 端口转发隧道（`localhost:15432`）。
+**隧道跟着项目启停**（`scripts/dev.sh`，2026-09-11 起默认方案），不跑项目时不连 EC2；
+不再用开机常驻的 launchd 服务默认开启（`db-tunnel-install.sh` 仍保留作为可选的常驻方案）。
+连法、隧道命令、实例 ID / 口令来源见 `docs/DATABASE_ACCESS.md`。需要 IAM `ssm:StartSession` 权限，找 Zachary。
 
 **规划**：加一层 `STAYRIGHT_LOCAL=1` 开关，把 AWS 调用切到 `adapters/fakes.py` 的内存实现，让打真实 AWS 的运行时也能本地跑。目前 `fakes.py`、这个开关、`src/runtimes/worker` 都还没落地——`detect/src/adapters/` 里只有 `aws.py` / `config.py` / `secrets.py`，直接调 boto3。
 
@@ -116,6 +122,18 @@ src/runtimes/   进程外壳（EC2 worker / ttl_scanner / Lambda handlers）
 > 这两条你都不需要在代码里判断——模型 ID 从 `cfg("BEDROCK_MODEL_ID")` 读，正确的值已经在 SSM 里。
 > 换模型是改一个 SSM 参数的事，**代码一行不用动**。
 
+## 新账户（课程 demo 账户）约束
+
+> 2026-09-15 新增。这是 `docs/proposals/AWS_PROD_ENV_LAMBDA_MIGRATION.md` §7 决策点 4 里"prod 建在独立新账户"的落地——课程分配的账户（`ictgs-team1`）已到位，定位为**课程 demo/评分用途**，不是长期商业化 prod。账户具体 ID / 控制台入口等敏感信息不进本文件，见本地 gitignore 的 `infra/连接信息.md`（沿用 `docs/AWS_SDK_SPEC.md` 已有的惯例）。开新账户上线前，对照 `docs/NEW_ACCOUNT_CHECKLIST.md` 逐项执行。
+
+- **单一 cloud owner**：Zachary 是本账户唯一持有 IAM 访问权限的人。其他人需要资源变更，走他代为操作或 PR review，不直接分发 console/CLI 权限
+- **预算硬约束**：$200 额度。创建任何新资源前先用 [AWS Price Calculator](https://calculator.aws) 估算；账户里要设置 AWS Budgets 告警（如 $50/$100/$150 三档邮件告警）
+- **实例规格一律选最小可用、优先 serverless**：默认选型沿用 `docs/proposals/AWS_PROD_ENV_LAMBDA_MIGRATION.md` 的推荐（RDS `db.t4g.micro`、Lambda 而非常驻 EC2、不上 NAT Gateway / RDS Proxy），不必重新讨论
+- **🚫 禁止触碰账户内预置资源**：任何 Lambda / CloudFormation 栈名包含 `AWSAccelerator`、`ControlTower`、`CloudHealth` 的，禁止修改、删除，也禁止被自动化脚本（`infra/bootstrap-cicd.sh`、清理脚本等）扫描或波及。写自动化/清理脚本必须显式按 `stayright-*` 前缀过滤资源，不能用"操作账户里所有 XX 类资源"这种宽泛逻辑
+- **区域**：沿用 `ap-southeast-2`（无变化，仅确认）
+- **凭证**：沿用现有"不落地长期密钥、走 SSM/Secrets Manager"的铁律；在新账户里要重新建一遍这 12 个 SSM key + 3～4 个 Secrets（见下方两条铁律），不是复用 dev 账户的值
+- **移动端依赖提醒**：移动端 App（开发中，复用现有 C#/.NET 后端 API，不需要新增 AWS 服务）会把新账户的 API 入口地址（API Gateway 或 Lambda Function URL）直接写入 App 配置，变更成本高于网页端。地址一旦确定并给到移动端团队，尽量不再变更；若必须变更需提前同步
+
 ## 🚫 禁止事项
 
 | 禁止 | 原因 |
@@ -142,13 +160,13 @@ src/runtimes/   进程外壳（EC2 worker / ttl_scanner / Lambda handlers）
 
 那份文档的 §7「数据库设计与变更约定」是硬约束，要点：
 
-- **本地开发用自己电脑上的 Docker 库**，不要连线上库
+- **本地开发统一连线上 EC2 的共享 `stayright` 库**（2026-09-10 Zachary 拍板），走 SSM 端口转发隧道（`localhost:15432`，保活脚本 `scripts/db-tunnel.sh` / `db-tunnel-install.sh`，断线自动重连）。不再本地跑 Docker Postgres，`docker-compose.yml` 已删
 - 不用 ORM · 命名参数 `%(name)s` · 不写 `SELECT *` · 空间计算交给数据库
 - **SRID 统一 `4326`**；几何列名 `geom`，向量列名 `embedding`
 - 时间列一律 `timestamptz`
 - 空间列必须建 **GiST** 索引，向量列必须建 **HNSW** 索引
-- schema 变更：**现状**由 C# 后端的 EF Core 迁移（`backend/Migrations/*.cs`）负责，`dotnet run` 启动时自动 migrate + seed。`docs/DATABASE_ACCESS.md` §7.4 里 `db/migrations/NNN_xxx.sql` 那套原始 SQL 迁移目前**没有在用**（`db/` 目录不存在）——两套迁移路线怎么统一，待团队定
-- ⚠️ 线上库是共享的：不要手动改表、不要 `DROP`/`TRUNCATE`
+- schema 变更：由 C# 后端的 EF Core 迁移（`backend/Migrations/*.cs`）负责。⚠️ **因为全员共用一个库，`dotnet run` 默认不再自动迁移/seed**——只有 Production（EC2 部署）或显式 `RUN_DB_MIGRATE=1` 才执行（见 `backend/Program.cs`）。要动 schema：本地 `RUN_DB_MIGRATE=1 dotnet run` 或等部署流水线跑。`docs/DATABASE_ACCESS.md` §7.4 里 `db/migrations/NNN_xxx.sql` 那套原始 SQL 迁移**没有在用**（`db/` 目录不存在）
+- ⚠️ 线上库是共享的：不要手动改表、不要 `DROP`/`TRUNCATE`，迁移未合并进 `main` 前别在本地 `RUN_DB_MIGRATE=1` 打上去
 
 被问到"数据库怎么连"时，直接指向 `docs/DATABASE_ACCESS.md`，按对方的操作系统给对应章节，不要凭记忆重述命令。
 
@@ -171,20 +189,24 @@ Lambda ×5：4 个采集器（weather/volcano/flight/road）已于 2026-09-03 �
 
 ## CI / 部署
 
-目前只有 `.github/workflows/gate.yml`（触发分支 `Test`，PR + push）：
+CI/CD 全部走 AWS CodePipeline + CodeBuild —— GitHub Actions 被组织策略限制成
+`allowed_actions: local_only`（`actions/checkout` 等一律不放行），`gate.yml` 每次
+`startup_failure`，已于 2026-09-09 删除。完整说明见 `docs/AWS_SDK_SPEC.md` §12。
+
+分支模型：`开发分支 --PR--> Test（集成）--PR--> main（发布）`。
 
 ```
-gate: pytest（detect/）+ dotnet build（backend/）+ 前端 lint & build
+PR 进 Test / main   → CodeBuild stayright-gate-pr（GitHub webhook）
+                       跑 gate，结果回写 PR commit status
+提交进 main（合并后）→ CodePipeline（盯 main，自动）：
+                       Gate → 人工审批 → Deploy(backend+frontend 并行)
+gate = pytest（detect/）+ dotnet build（backend/）+ 前端 lint & build
 ```
 
-**部署流水线尚未建。** 下面是既定方向、未落地：
-
-```
-deploy: 打包 → S3 → SSM Run Command → EC2 重启服务
-        sam build && sam deploy（5 个 Lambda）
-```
-
-规划里「不要手动登录 EC2 改代码——下次部署会覆盖掉」仍然成立。
+- 部署只从 `main` 出；`Test` 不触发部署。
+- Lambda 采集器不在 pipeline 里，仍手动 `sam deploy`（`--manifest requirements-lambda.txt`）。
+- 搭建脚本 `infra/bootstrap-cicd.sh`（幂等）；buildspec 在 `.codebuild/`，部署逻辑复用 `scripts/deploy-*.sh`。
+- 「不要手动登录 EC2 改代码——下次部署会覆盖掉」仍然成立。
 
 ## 提交前自检
 
@@ -273,9 +295,10 @@ deploy: 打包 → S3 → SSM Run Command → EC2 重启服务
 
 例如：`feat/user-login`、`fix/order-timeout`、`refactor/api-client`
 
-- **集成分支：`Test`**（受保护，走 PR；`gate.yml` 在此触发）。`main` 目前基本不用，落后 `Test` 数十个 commit
-- 功能/修复分支从 `Test` 切出，完成后通过 PR 合并回 `Test`
-- 规划：合并到 `main` 自动部署 dev、tag `v*` 部署 demo —— 部署流水线尚未建，暂不适用
+- **集成分支：`Test`**（受保护，走 PR）。功能/修复分支从 `Test` 切出，完成后 PR 合并回 `Test`
+- **发布分支：`main`**。`Test` 稳定后 PR 合并到 `main`；进 `main` 即触发 CodePipeline 部署 dev（Gate → 人工审批 → 部署）
+- PR 进 `Test` / `main` 都会经 GitHub webhook 跑 gate（`stayright-gate-pr`），结果回写 PR
+- 规划：tag `v*` 部署 demo —— 尚未落地
 
 ### PR 规范
 
@@ -349,3 +372,7 @@ deploy: 打包 → S3 → SSM Run Command → EC2 重启服务
 | 2026-08-21 | 新增数据库章节 | 指向 `docs/DATABASE_ACCESS.md`（macOS / Windows 连接步骤 + 设计与变更约定） |
 | 2026-08-21 | 回填技术栈 + 新增「AWS 与架构约束」 | 技术栈已定；新增三层分层、AWS 五条铁律、Bedrock 两条硬规则、禁止事项、必须遵循的模式、提交前自检；完整写法见 `docs/AWS_SDK_SPEC.md`。**风格 / 测试 / Git 等章节仍待团队确认** |
 | 2026-09-03 | 对齐现状 | 技术栈表改为反映实际（C# .NET 后端 + Python `detect/` + React 前端 + Gemini 主 / Bedrock 备）；把未落地的部分（`adapters/fakes.py`、`STAYRIGHT_LOCAL`、`src/core/`、`src/runtimes/worker`、Makefile、CI 守卫、部署流水线）标为「规划」；Git 章节集成分支由 `main` 改为 `Test`；注明忽略父目录 `../CLAUDE.md`。**架构方向本身未改，仅对齐描述——「AWS 与架构约束」的实质改动仍需 Zachary 确认** |
+| 2026-09-09 | CI/CD 定案（Zachary 拍板） | 弃用 GitHub Actions（组织策略 `local_only` 卡死），删除 `.github/workflows/gate.yml`；CI/CD 全走 AWS CodePipeline + CodeBuild。分支模型：`开发分支 → Test（集成）→ main（发布）`，部署只从 `main` 出（`DetectChanges: true`）；PR 进 `Test`/`main` 经 GitHub webhook 跑 gate（`stayright-gate-pr`）。详见 `docs/AWS_SDK_SPEC.md` §12、`infra/bootstrap-cicd.sh` |
+| 2026-09-10 | 本地开发统一连线上库（Zachary 拍板） | 废弃本地 Docker Postgres，删除根目录 `docker-compose.yml` / `Dockerfile.postgres`；本地开发一律经 SSM 隧道连线上 EC2 共享 `stayright` 库（`localhost:15432`）。因全员共库，`backend/Program.cs` 的启动自动迁移/seed 改为默认关闭，仅 Production 或 `RUN_DB_MIGRATE=1` 执行。`docs/DATABASE_ACCESS.md`、`.env.example`、`detect/README.md` 同步更新 |
+| 2026-09-11 | 数据库隧道改为跟随项目启停（Zachary 拍板） | 新增 `scripts/dev.sh`（隧道 + 后端 + 前端一起起、Ctrl+C 一起停），设为默认方案；卸载此前用 `db-tunnel-install.sh` 装的开机常驻 launchd 服务——不跑项目时不再自动连 EC2。`db-tunnel-install.sh` 保留作为可选的常驻方案。`docs/DATABASE_ACCESS.md` §3.2 同步更新 |
+| 2026-09-15 | 新增「新账户（课程 demo 账户）约束」 | 课程分配的新 AWS 账户（`ictgs-team1`，$200 额度）到位，落地 `docs/proposals/AWS_PROD_ENV_LAMBDA_MIGRATION.md` §7 决策点 4 的"独立新账户"方案；新增单一 cloud owner、预算告警、最小规格/serverless 优先、禁止触碰账户内预置的 `AWSAccelerator`/`ControlTower`/`CloudHealth` 资源、移动端 API 地址稳定性等约束。新增 `docs/NEW_ACCOUNT_CHECKLIST.md` 配套执行清单；同步更新该 proposal 文档与 `scripts/`/`infra/bootstrap-cicd.sh` 的账户可移植性 |

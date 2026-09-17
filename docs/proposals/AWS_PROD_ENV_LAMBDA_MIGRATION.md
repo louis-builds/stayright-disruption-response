@@ -139,6 +139,10 @@ Lambda 是无状态函数；全 Lambda 化意味着 EC2 退役，自建（Docker
    - §3 目标架构图、§6 成本估算目前都是单账户视角（CloudFront/EC2/RDS 算在一套账单里），需要在新账户建立后重新核算 prod 侧独立成本；dev 账户现有资源保留还是退役，待定（大概率保留作为开发环境）。
    - 待补充信息：新账户何时到位、由谁开通、detect/ 的 4 个采集器 Lambda 是否也要在新账户里独立部署一份（目前是单一部署面向单一环境）。
 
+   > ⚠️ **2026-09-15 更新（回填上面的待补充信息）**：新账户已到位——课程分配的账户（`ictgs-team1`，$200 额度），Zachary 是唯一 cloud owner。明确本账户定位为**课程 demo/评分用途**，不是长期商业化 prod——这解释了为什么本文档"课程演示级流量"的判断（推荐 RDS `db.t4g.micro` 而非 Aurora）依然成立，不需要因为"新账户=更正式的 prod"而重新评估架构选型。4 个采集器 Lambda 需要在新账户里独立重新部署一份（`sam deploy` 到新账户，而不是共享 dev 账户的部署）。
+   >
+   > 另外新账户带来一条本文档未覆盖的约束：账户内有教学团队预置的 `AWSAccelerator`/`ControlTower`/`CloudHealth` 相关 Lambda/CloudFormation 栈，**绝对不能碰**。执行 §5 迁移步骤①（建 VPC/RDS）及任何 IaC/清理脚本前，先 `aws cloudformation list-stacks` + 控制台核查一遍账户内现有栈，确认不会被自动化操作波及。详见 `CLAUDE.md`「新账户（课程 demo 账户）约束」一节和 `docs/NEW_ACCOUNT_CHECKLIST.md`。
+
 ---
 
 ## 8. 参考

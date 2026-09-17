@@ -14,7 +14,7 @@
 # 与演示脚本的关系：先跑本脚本清场，再跑 seed-demo-case.sh / seed-demo-full.sh 注水开演。
 set -euo pipefail
 
-BASE="${BASE:-https://d2y6g16anevc6h.cloudfront.net}"
+BASE="${BASE:?Set BASE (no cross-account default, e.g. https://<your-cloudfront-domain>)}"
 COORD_EMAIL="${COORD_EMAIL:-coord1@example.com}"
 COORD_PASS="${COORD_PASS:-Password123!}"
 CLOSE_REASON="人工决议结案"

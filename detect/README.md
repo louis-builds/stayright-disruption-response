@@ -11,18 +11,18 @@ README is just "how do I run it."
 This is the Python sub-project, a sibling of [../backend/](../backend/)
 (C#) and [../frontend/](../frontend/) (React). Everything below assumes
 your shell is `cd`'d into this `detect/` directory unless noted otherwise.
-`docker-compose.yml` and `.env`/`.env.example` are shared infra and live
-one level up, at the repo root.
+`.env`/`.env.example` are shared infra and live one level up, at the repo
+root.
 
 **Identify queries the real C# backend's database directly** (`hotels`/
-`bookings` in the shared `travel_disruption` database, the same Postgres
-the backend uses) — not a separate toy dataset. `guest_id`/`booking_id` in
+`bookings` in the shared remote `stayright` database on EC2, the same
+Postgres the backend uses) — not a separate toy dataset. `guest_id`/`booking_id` in
 the output are real ids the rest of the system (case lookup, cancellation
-policy, etc.) already understands. This means the `hotels`/`bookings`
-tables need to actually have data in them, which only happens once the C#
-backend has been run at least once (`dotnet run` under `backend/`
-auto-migrates and seeds on startup) — see "Running against a real local
-Postgres" below.
+policy, etc.) already understands. The shared `stayright` DB is already
+migrated and seeded (the deploy pipeline / `RUN_DB_MIGRATE=1` does that —
+see [../docs/DATABASE_ACCESS.md](../docs/DATABASE_ACCESS.md) §5), so
+`hotels`/`bookings` already have data — see "Running against the shared
+database" below.
 
 ## What's here
 
@@ -44,7 +44,7 @@ tests/
   test_identify.py  # geo + matcher unit tests (mocked DB); optional live-Postgres integration test
 scripts/
   run_detect.py     # detect only, no DB: print each source's raw API response + the DisruptionEvent(s) it produces
-  run_local_e2e.py  # manual detect -> identify run against real Open-Meteo + local Postgres
+  run_local_e2e.py  # manual detect -> identify run against real Open-Meteo + the shared stayright DB
   run_demo.py       # continuous demo: polls real weather every N seconds, injects one mock storm reading, writes handoff JSON
 output/             # scripts/run_demo.py's .jsonl handoff file lands here (gitignored)
 ```
@@ -119,24 +119,19 @@ call. The flight/road field mappings are best-effort against the live
 docs — verify against a real response and tighten if a provider shifts
 its schema.
 
-## Running against a real local Postgres
+## Running against the shared database
 
-From the repo root (one level up):
-```powershell
-docker compose up -d
-copy .env.example .env
-```
+There is no local Postgres any more. `identify` connects to the shared
+remote `stayright` DB on EC2 through an SSM port-forward tunnel — see
+[../docs/DATABASE_ACCESS.md](../docs/DATABASE_ACCESS.md) for the tunnel
+command and how to get IAM access / the DB password.
 
-The `hotels`/`bookings` tables identify queries only exist once the C#
-backend has seeded them — run it at least once first:
-```powershell
-cd ..\backend
-dotnet run
-```
-(Ctrl+C once it's up and logging — you just need it to have migrated +
-seeded; it doesn't need to keep running for the Python side.)
+1. Open the tunnel in a terminal you leave running (maps `localhost:15432`).
+2. From the repo root: `copy .env.example .env` (the DB vars already point
+   at `127.0.0.1:15432` / `stayright`).
 
-Then from `detect/`:
+The `hotels`/`bookings` tables are already migrated and seeded on the
+shared DB, so nothing else is needed. Then from `detect/`:
 ```powershell
 .venv\Scripts\python -m scripts.run_local_e2e --simulate
 ```
