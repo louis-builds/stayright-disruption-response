@@ -33,11 +33,12 @@
 | 前端 | **React + TypeScript**（`frontend/`） |
 | 数据存储 | **PostgreSQL + PostGIS + pgvector**。C# 侧走 EF Core + Npgsql（EF 迁移）；Python 侧用 `psycopg` v3、**不走 ORM** |
 | 大模型 | 主用 **Gemini**（`backend/Features/Chat/GeminiClient.cs`）；**AWS Bedrock**（Claude Haiku）作为 fallback |
-| AWS SDK | Python 侧 **boto3**（唯一）；C# 侧 AWS SDK for .NET（目前仅 Bedrock fallback 用到） |
+| 邮件通知 | **通用 SMTP（MailKit）**，`backend/Infrastructure/Email/SmtpEmailService.cs`，配置走 `SMTP_HOST`/`SMTP_USER`/`SMTP_PASS` 等环境变量。⚠️ **2026-09-18 开发团队拍板：邮件通知方案定为 SMTP，不走 AWS SES**——`docs/AWS_SDK_SPEC.md` §5.6 描述的 SES 是曾经踩过坑、后又放弃的历史方案，代码里从未接入 SES SDK（无 `AWSSDK.SimpleEmail*` 依赖），prod 部署**不需要**做 SES 发件人验证 |
+| AWS SDK | Python 侧 **boto3**（唯一）；C# 侧 AWS SDK for .NET（目前仅 Bedrock fallback 用到，**不含邮件**） |
 | 云区域 | **`ap-southeast-2`（悉尼）** |
 | CI/CD | AWS CodePipeline + CodeBuild（`infra/bootstrap-cicd.sh` + `.codebuild/`）。PR 进 `Test`/`main` 经 GitHub webhook 跑 gate；提交进 `main` 自动跑 Gate→人工审批→部署。GitHub Actions 被组织策略 `local_only` 卡死，`gate.yml` 已删。详见 `docs/AWS_SDK_SPEC.md` §12 |
-| 运行环境（规划） | EC2 模块化单体 + 5 个 Lambda（4 采集器 + 1 回调）。4 个采集器（weather/volcano/flight/road）已于 2026-09-03 随 SAM 栈 `stayright-dev-weather-collector` 部署上线并实测；回调 Lambda（第 5 个）代码未写、未部署。详见 `docs/AWS_SDK_SPEC.md` §13.2 部署时间线 |
-| IaC（规划） | 非代码资源用脚本创建、Lambda 走 AWS SAM（`detect/template.yaml`）。`infra/` 目前是空占位 |
+| 运行环境 | **dev 账户（已下线）的历史记录**：EC2 模块化单体 + 5 个 Lambda（4 采集器 + 1 回调）规划；4 个采集器曾于 2026-09-03 随 SAM 栈 `stayright-dev-weather-collector` 部署上线并实测；回调 Lambda（第 5 个）代码未写、未部署。**prod 账户（`ictgs-team5`）现状（2026-09-18 起，架构已改，永久性，非临时权宜）**：⚠️ **4 采集器 + 回调都不走 Lambda 了**——采集器 Lambda 因 `sam deploy` 需要 `iam:CreateRole` 建执行角色、这个账户身份对 IAM 彻底锁死（课程侧永久边界）而作废，改为 C# 后端 + 4 个采集器**全部跑在 `stayright-prod-bastion` 这一台 EC2 上**，采集器用 `cronie` 定时调度（替代 EventBridge Scheduler，频率对齐原 `template.yaml`）；回调 Lambda（第 5 个）**确认永久不需要**——不是 IAM 问题挡住的，是 C# 后端 `backend/Features/Cases/CaseActionsController.cs` + Data Protection 签名 token 已经实现了同样的"邮件一键操作"功能（同步直调，不经队列），跟原 Python 计划是完全不同的技术路线但做的是同一件事。技术栈规划正式从"5 个 Lambda"收窄为"4 个"。详见 `docs/AWS_SDK_SPEC.md` §13.2 部署时间线 |
+| IaC（规划，Lambda 部分已作废） | 非代码资源用脚本创建；`detect/template.yaml`（AWS SAM）描述的 Lambda 部署方式在 `ictgs-team5` 账户里**走不通**（见上一行），处于"写了但用不上"状态，若后续 IAM 权限放开可随时切回，采集器业务代码不用改（只有 `adapters/config.py`/`secrets.py` 新增了环境变量优先读取的兼容层）。`infra/` 目前是空占位 |
 | CD | CodePipeline `stayright-dev-pipeline`（盯 `main`，`DetectChanges: true`）：Gate → 人工审批 → Deploy（backend 走 SSM RunCommand 到 EC2；frontend 走 S3 sync + CloudFront 失效）。tag `v*` 部署 demo 仍属规划 |
 
 ---
@@ -60,10 +61,8 @@ cd detect && .venv/Scripts/python -m pytest
 ```
 
 但**真要把后端/前端跑起来联调，就得连数据库**。已不再本地跑 Docker Postgres——
-本地开发统一连线上 EC2 的共享 `stayright` 库，走 SSM 端口转发隧道（`localhost:15432`）。
-**隧道跟着项目启停**（`scripts/dev.sh`，2026-09-11 起默认方案），不跑项目时不连 EC2；
-不再用开机常驻的 launchd 服务默认开启（`db-tunnel-install.sh` 仍保留作为可选的常驻方案）。
-连法、隧道命令、实例 ID / 口令来源见 `docs/DATABASE_ACCESS.md`。需要 IAM `ssm:StartSession` 权限，找 Zachary。
+本地开发连 prod RDS 的共享 `stayright` 库。⚠️ **2026-09-18 更新**：旧 dev 账户的 SSM 隧道方案（`scripts/dev.sh`/`db-tunnel.sh`/`db-tunnel-install.sh`）已删除——prod EC2 永久没有 IAM instance role，SSM 用不了。现在走 **SSH 隧道**到跳板机（私钥目前只有 Zachary 持有）。
+连法见 `docs/DATABASE_ACCESS.md` §3.2。
 
 **规划**：加一层 `STAYRIGHT_LOCAL=1` 开关，把 AWS 调用切到 `adapters/fakes.py` 的内存实现，让打真实 AWS 的运行时也能本地跑。目前 `fakes.py`、这个开关、`src/runtimes/worker` 都还没落地——`detect/src/adapters/` 里只有 `aws.py` / `config.py` / `secrets.py`，直接调 boto3。
 
@@ -110,6 +109,7 @@ src/runtimes/   进程外壳（EC2 worker / ttl_scanner / Lambda handlers）
 
 1. 资源名**绝不硬编码**，一律 `cfg("KEY")` 从 SSM 读（`/stayright/{STAGE}/{KEY}`，共 12 个 key）
 2. 密钥一律 `secret("name")` 从 Secrets Manager 读（`db/password`、`token/hmac-key`、`oag/api-key`）
+   > ⚠️ **例外（2026-09-18 新增，配套 EC2 无 IAM instance role 的场景）**：`cfg()`/`secret()`（`detect/src/adapters/config.py`/`secrets.py`）现在会先看同名环境变量有没有设置，设了就直接用，不打 SSM/Secrets Manager；没设才照旧走 boto3。给没有 IAM role 的宿主（prod EC2 跑采集器 cron）留的口子，值仍然只能来自 SSM/Secrets Manager 这个唯一真相来源，只是运行时改成部署时人工注入——跟下方「新账户约束」里 C# 后端的密钥注入例外是同一条逻辑的延伸，不是放弃这条铁律
 3. boto3 client 只从 `adapters/aws.py` 的 `client()` 拿，**模块级创建一次**
 4. SQS **成功才 `delete_message`**；失败让异常抛出去，靠可见性超时自动重投
 5. 区域固定 `ap-southeast-2`，不要在代码里写别的区域
@@ -161,7 +161,7 @@ src/runtimes/   进程外壳（EC2 worker / ttl_scanner / Lambda handlers）
 
 那份文档的 §7「数据库设计与变更约定」是硬约束，要点：
 
-- **本地开发统一连线上 EC2 的共享 `stayright` 库**（2026-09-10 Zachary 拍板），走 SSM 端口转发隧道（`localhost:15432`，保活脚本 `scripts/db-tunnel.sh` / `db-tunnel-install.sh`，断线自动重连）。不再本地跑 Docker Postgres，`docker-compose.yml` 已删
+- **本地开发统一连 prod RDS 的共享 `stayright` 库**（2026-09-10 Zachary 拍板，2026-09-18 从旧 dev 账户 SSM 隧道改为 prod SSH 隧道，见 `docs/DATABASE_ACCESS.md` §3.2）。不再本地跑 Docker Postgres，`docker-compose.yml` 已删
 - 不用 ORM · 命名参数 `%(name)s` · 不写 `SELECT *` · 空间计算交给数据库
 - **SRID 统一 `4326`**；几何列名 `geom`，向量列名 `embedding`
 - 时间列一律 `timestamptz`
@@ -182,11 +182,12 @@ src/runtimes/   进程外壳（EC2 worker / ttl_scanner / Lambda handlers）
 
 ## 环境现状
 
-AWS 环境已就绪（SSM / Secrets / S3 / SQS / EventBridge / Bedrock / SES / EC2+PostGIS+pgvector）。
-Lambda ×5：4 个采集器（weather/volcano/flight/road）已于 2026-09-03 部署上线并实测；回调 Lambda（第 5 个）未写。详见 `docs/AWS_SDK_SPEC.md` §13.2。
+⚠️ **2026-09-17 起，dev/Test 运行环境（990393187001 账号）已下线**——EC2 停机（未终止，数据保留）、4 个采集器 Lambda（连同 SAM 栈、EventBridge 调度）、CloudFront、2 个 S3 桶（`raw`/`site`，含当时仅有的数据库备份）均已删除。SQS/EventBridge 总线、CodeBuild/CodePipeline、SSM 参数、Secrets Manager 密钥、VPC 网络资源、业务数据桶 `policy-docs` 均评估后保留未动。完整清理范围、保留理由、遗留待办见 `docs/AWS_SDK_SPEC.md` §1「2026-09-17：dev 环境下线」。
 
-⚠️ 两件最容易踩的：**SES 处于沙箱模式，每个新收件邮箱都要单独验证**；**EC2 按需开停，平时是停机状态**。
-需要真机环境（连线上数据库、跑真 AWS、加 SES 收件邮箱）时找 Zachary。
+**当前影响**：本地开发经 SSM 隧道连的共享 `stayright` 库连不上（EC2 停机）；`main` 分支自动部署的 Deploy 阶段（SSM RunCommand 到这台 EC2）会失败，Gate 阶段（PR 跑 pytest/dotnet build/前端 lint&build）不受影响；dev 前端站点因 CloudFront 已删不可访问。若要恢复，EC2 数据还在（直接开机即可），Lambda/CloudFront 需要重新部署。
+
+⚠️ 历史注（下线前）：Lambda ×5 曾 4/5 部署上线（weather/volcano/flight/road，2026-09-03），回调 Lambda（第 5 个）此前就未写。dev 环境曾用 SES 的 SMTP 端点发件（沙箱模式，收件人需单独验证）——**2026-09-18 起该方案已作废**，邮件通知定为通用 SMTP，不再依赖 SES，prod 账号不需要做 SES 发件人验证（详见上方技术栈表「邮件通知」行）。
+需要真机环境（连线上数据库、跑真 AWS）时找 Zachary。
 
 ## CI / 部署
 
@@ -379,3 +380,11 @@ gate = pytest（detect/）+ dotnet build（backend/）+ 前端 lint & build
 | 2026-09-15 | 新增「新账户（课程 demo 账户）约束」 | 课程分配的新 AWS 账户（`ictgs-team5`，$200 额度）到位，落地 `docs/proposals/AWS_PROD_ENV_LAMBDA_MIGRATION.md` §7 决策点 4 的"独立新账户"方案；新增单一 cloud owner、预算告警、最小规格/serverless 优先、禁止触碰账户内预置的 `AWSAccelerator`/`ControlTower`/`CloudHealth` 资源、移动端 API 地址稳定性等约束。新增 `docs/NEW_ACCOUNT_CHECKLIST.md` 配套执行清单；同步更新该 proposal 文档与 `scripts/`/`infra/bootstrap-cicd.sh` 的账户可移植性 |
 | 2026-09-15（补） | 新账户接入实测 | 账户团队名订正为 `ictgs-team5`（账户 ID `025066268612`，此前误写 `ictgs-team1`）；CLI 用 `aws configure sso` 接入（SSO 自动续期）；`list-stacks` 核查账户内预置资源，新发现 `TenableOrgOnboardStackset`/`AzureDefenderforCloud` 两类禁止触碰的基线栈，已补进上一条的禁止清单；建好 AWS Budgets 三档告警（$50/$100/$150 → `szha564@aucklanduni.ac.nz`）；发现账户在建任何项目资源前已有 ~$15/月基线花费，会挤占 $200 额度。VPC/RDS/EC2 等实际建资源步骤暂停，等 tutor 确认方案后再继续。详见 `docs/AWS_SDK_SPEC.md` §13.2 2026-09-15 条目、`docs/NEW_ACCOUNT_CHECKLIST.md` 打勾进度 |
 | 2026-09-16 | prod 基建建成 + 新增 IAM 权限边界约束（Zachary 拍板） | VPC/RDS（PostgreSQL+pgvector+PostGIS）/EC2 跳板机在 `ictgs-team5` 建成；实测确认 `ICTGSStudentPermissionSet` 无 IAM 写权限且该边界永久不可改，本账户 EC2 无法挂 IAM instance role——原「4 个 IAM User + SSM 隧道供团队直连 prod」方案作废，改为 Zachary 一人持有 EC2 SSH key 手动管理；新增「新账户约束」小节的 IAM 权限边界条目，记录了对「密钥一律从 Secrets Manager 读」铁律的一次范围受限的例外（仅本账户 prod EC2：密钥人工注入，不在运行时调 Secrets Manager API）。已向 Zachary 确认 `025066268612` 是 team5 专属账户。详见 `docs/AWS_SDK_SPEC.md` §8.1、`docs/NEW_ACCOUNT_CHECKLIST.md` |
+| 2026-09-17 | dev/Test 运行环境（990393187001 账号）下线（Zachary 拍板） | 转向 prod 独立账户后 dev 环境不再需要长期在线：EC2 停机（非终止，数据保留）、4 个采集器 Lambda + SAM 栈 + EventBridge 调度、CloudFront、2 个 S3 桶（`raw`/`site`，含当时仅有的两份数据库备份）已删除；孤儿 CloudWatch 日志组一并清理。评估后保留未动：业务数据桶 `policy-docs`（真实酒店政策 PDF）、SQS/EventBridge 总线、CodeBuild/CodePipeline（含 PR 门禁 `stayright-gate`）、SSM 参数、Secrets Manager 密钥、VPC 网络资源（EC2 仍在其中）。同时确认 prod 部署不复用 dev 账户的 SSM/Secrets 值，需重新生成；记录 `GEMINI_API_KEY` 收进 Secrets Manager（`stayright/prod/gemini/api-key`）的计划，修复此前裸环境变量未走 Secrets Manager 的遗留问题，待 Zachary 本地执行确认。详见 `docs/AWS_SDK_SPEC.md` §1、§4.3、§13.2 2026-09-17 条目 |
+| 2026-09-18 | prod 账户 S3/SQS/EventBridge/SSM/Secrets 建齐；邮件通知方案定为 SMTP，不走 SES（开发团队拍板） | prod（`ictgs-team5`）新建 S3×2/SQS×3/EventBridge 总线，写齐全部 12 个 SSM 参数 + 5 个 Secrets（`oag/api-key`/`gemini/api-key` 为 Zachary 提供的真实密钥）。核查后端代码发现邮件通知实际走通用 SMTP（MailKit，`backend/Infrastructure/Email/SmtpEmailService.cs`），从未接入 AWS SES SDK——`docs/AWS_SDK_SPEC.md` §5.6 描述的 SES 方案是历史上踩过坑后放弃的路径，与现状不符；开发团队确认邮件通知维持 SMTP 方案，prod 不需要做 SES 发件人验证。技术栈表新增「邮件通知」行；详见 `docs/AWS_SDK_SPEC.md` §13.2 2026-09-18 条目、`docs/NEW_ACCOUNT_CHECKLIST.md` |
+| 2026-09-18（续） | prod RDS 建表 + C# 后端首次部署（均用 `test2` 分支，明确不用 `main`） | 用 `test2` 分支代码对 prod RDS 跑通 EF Core 迁移（建表 + seed + RAG backfill）；`stayright-prod-bastion` EC2 从零初始化部署 C# 后端——手写 systemd 服务 `stayright-api`、手动注入密钥到 `/opt/stayright/.env`（DB/Gemini/Bedrock/SMTP/`INGEST_SHARED_KEY`，符合 §8.1 人工注入例外）。`scripts/deploy-backend.sh` 走的 `aws ssm send-command` 在无 IAM role 的 prod EC2 上用不了，本次用 SSH 手动替代，脚本本身待后续改造为 prod 可用版本。踩坑：Amazon Linux 2023 缺 `libicu` 导致 .NET 启动 core dump，`dnf install libicu` 解决。首次部署刻意用 `test2` 而非 `main`——`main` 留给以后接入 CodePipeline 自动部署时用。详见 `docs/AWS_SDK_SPEC.md` §13.2、`docs/NEW_ACCOUNT_CHECKLIST.md` |
+| 2026-09-18（再续） | 4 个采集器 Lambda 方案作废，改跑 EC2 cron（Zachary 拍板） | `sam deploy` 需要 `iam:CreateRole` 给每个函数建执行角色，实测这个账户的登录身份对 IAM 彻底锁死——新建角色、挂载任意已有角色（`iam:PassRole`，含几个疑似课程留给学生用的通用角色）全部 `AccessDenied`，连只读的 `GetRole` 都不行；这是课程侧永久权限边界，跟 EC2 拿不到 instance role 同源，不是会话/工具限制，Zachary 本人登录控制台操作也会在同一处卡住。改为 4 个采集器全部跑在 `stayright-prod-bastion` EC2 上，`cronie` 定时调度替代 EventBridge Scheduler。配套给 `detect/src/adapters/config.py`/`secrets.py` 的 `cfg()`/`secret()` 加环境变量优先读取路径（见上方「AWS 五条铁律」第 2 条的例外说明），已跑通全部既有单测。详见 `docs/AWS_SDK_SPEC.md` §13.2、`docs/NEW_ACCOUNT_CHECKLIST.md` |
+| 2026-09-18（又续） | Bedrock 经典调用路径被组织级 SCP 全面拒绝（不分厂商），不是账户内 model access 开关问题 | 实测 `bedrock-runtime converse`/控制台 Playground 调用直接报 `AccessDeniedException`，错误信息指向**组织管理账号**（`801934657318`，不是我们的 `025066268612`）的一条 SCP 显式拒绝 `bedrock:InvokeModel`——SCP 显式拒绝优先级高于任何账户内 IAM 权限，账户内开模型访问、加权限都没用。Zachary 控制台复核确认：Claude Haiku 4.5 **和** 亚马逊自家的 `amazon.nova-2-lite-v1:0` 同时被拒，纠正了最初"只针对 Anthropic"的推测——这条 SCP 是拦整个经典 `bedrock:InvokeModel` 动作，不分厂商。较新的 `bedrock-mantle` 入口（GLM/Devstral 等第三方模型）能跑通，是因为走的是完全不同的底层 API，没被这条 SCP 覆盖，不代表账户放行了非 Anthropic 模型。跟 IAM 角色创建被锁死同一模式：课程侧组织层面限制功能范围，需要找 tutor 确认能否放开。**不阻塞现状**：Bedrock 只是 Gemini 的 fallback 路径，主路径 Gemini 走普通 HTTPS API 不受影响，已在跑（RAG embedding、chat 均验证过）；影响范围仅限"Gemini 故障时的降级链路"暂不可用。若要不依赖 Bedrock 换一个可用的 fallback（如走 `bedrock-mantle` 的第三方模型），属于架构选型变更，需另行拍板。详见 `docs/AWS_SDK_SPEC.md` §13.2 |
+| 2026-09-18（终） | 回调 Lambda（第 5 个）确认永久不需要，C# 后端已有等价实现（Zachary 确认） | 排查"要不要把回调 Lambda 也改道走 EC2"时发现它根本不用做——C# 后端 `backend/Features/Cases/CaseActionsController.cs`（`GET /verify` + `POST /execute`）配合 `backend/Infrastructure/CaseActionTokenService.cs`（ASP.NET Core Data Protection 签名 token，14 天过期）已经实现了"客人点邮件里的一键操作链接→选方案→生效"的完整功能，且是**同步直调**（不经队列），跟 `docs/AWS_SDK_SPEC.md` §5.9 原计划的 HMAC+Lambda+SQS 是完全不同的技术路线。§5.9 正式标记废弃；`CALLBACKS_QUEUE_URL`/`FUNCTION_URL` 这两个此前为该方案预留的资源确认是废弃产物，SQS 队列空闲无成本暂不清理。技术栈规划正式从"5 个 Lambda"收窄为"4 个"，这是永久架构决定，不是被 IAM 权限问题绕开的权宜之计。详见 `docs/AWS_SDK_SPEC.md` §13.2 |
+| 2026-09-18（完结） | 前端部署到 prod（CloudFront + S3），prod 核心部署全部完成 | 建 CloudFront 分发 `E25ZVA8NPIGQGM`（`d1s582gz77wdm.cloudfront.net`）代理 S3 静态前端 + 后端 `/api/*`；为此把后端监听地址从 `127.0.0.1` 改成 `0.0.0.0`（征得 Zachary 同意），EC2 安全组只放行 CloudFront 官方 IP 段（托管前缀列表），未对公网开放。验证通过：前端 200、`/api/*` 代理到后端返回预期 403。至此 prod 核心链路全部跑通，仅剩 Bedrock SCP、IAM 锁死两项待 tutor 协助。详见 `docs/AWS_SDK_SPEC.md` §13.2 |
+| 2026-09-18（清理） | 删除 6 个跟 prod 账户永久不兼容的旧 dev 脚本，剩下 3 个改成 prod 默认值并实测跑通（Zachary 拍板） | 删除：`deploy-backend.sh`/`db-tunnel.sh`/`db-tunnel-install.sh`/`dev.sh`（`aws ssm`，需要 IAM instance role）+ `seed-demo-full.sh`（`aws lambda invoke`，那个 Lambda 已不存在）/`seed-demo-second-case.sh`（也用 `aws ssm send-command`）。保留的 `deploy-frontend.sh`/`seed-hotels.sh`/`clean-demo-state.sh` 改成默认指向 prod，仍可传参覆盖，三个都实测跑通。本地开发连库改为 SSH 隧道，`docs/DATABASE_ACCESS.md` §3.2 同步改写。详见 `docs/AWS_SDK_SPEC.md` §13.2 |
