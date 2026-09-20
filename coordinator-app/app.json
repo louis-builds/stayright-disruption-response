@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "Coordinator App",
+    "slug": "coordinator-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "nz.stayright.coordinator",
+      "usesCleartextTraffic": true,
+      "permissions": [
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.MANAGE_EXTERNAL_STORAGE",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "apiBaseUrl": "http://192.168.68.50:5080"
+    },
+    "plugins": [
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "StayRight needs media access to upload the latest call recording.",
+          "savePhotosPermission": "StayRight needs media access to upload the latest call recording.",
+          "isAccessMediaLocationEnabled": true,
+          "granularPermissions": [
+            "audio"
+          ]
+        }
+      ],
+      "expo-audio"
+    ]
+  }
+}
