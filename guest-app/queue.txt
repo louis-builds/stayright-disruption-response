@@ -1,0 +1,362 @@
+===TASK===
+max_iterations: 25
+completion_promise: "TASK1_VERIFIED"
+---
+项目目录:/Users/yangdongqing/it/Claude/Kakapo/guest-app(所有文件操作、命令执行都在这个目录下进行,先 cd 过去)。
+
+Task 1: 项目脚手架 + 鉴权架构 + 导航结构
+
+> 项目背景（适用于全部 11 个 Task）：客户端App（客人自助 + 中断响应伴随App）。来源脑图：`/Users/yangdongqing/it/Claude/客户端App.xmind`。代码目录：`Kakapo/guest-app/`（新目录，同仓库，跟 `Kakapo/coordinator-app/` 平级）。
+>
+> **英文系统**：所有用户可见 UI 文案一律英文，跟现有 Web 前端一致；代码注释用中文。后端存的中文分类字符串（转人工原因、结案原因等）保留原值不改，只在展示层用 `escalationReasonLabel`/`CLOSE_REASONS.label` 这类映射转英文再显示——这个坑已经在 Web 和协调员App上各踩过一次，这次从 Task 1 起就要避免，不要等复核阶段才发现。
+>
+> **推送通知走真实 Expo Push**（不是 stub）：Expo Push 免费、不需要付费账号，后端要新增设备 token 注册接口，并在通知创建时真正推送。
+
+- `npx create-expo-app` 脚手架，TypeScript 模板。目录结构复用协调员App已验证过的分层：`src/features/<feature>/{types.ts,api.ts,use<Feature>.ts,<Screen>.tsx,index.ts}`。
+- 鉴权：原生 Cookie Jar 自动带 session（`fetch` + `credentials:"include"`），不手动管理 token，不用 `@react-native-cookies/cookies`（已废弃、无 New Architecture 支持，协调员App踩过这个坑）。`AsyncStorage` 只存 `rememberedIdentifier` 字符串（key 前缀 `guest-app:`），不存任何鉴权凭证。
+- `AuthContext`：冷启动调 `GET /api/auth/me` 恢复会话并回填 `user`（协调员App第一版漏了这步，冷启动后 Settings 显示不出用户信息，这次直接做对）。
+- 登出：真实 `POST /api/auth/logout`，触发后端 `SignOutAsync`。
+- 导航：底部 Tab（Home / Bookings / Notifications / Settings），Home Tab 内嵌 Stack（Home → CaseConversation → OptionsFlow），支持从通知/订单卡片跨 Tab 跳转到 CaseConversation（`navigation.dispatch(CommonActions.navigate(...))` 模式，协调员App已验证）。
+- `src/shared/escalationLabels.ts`：从 `frontend/src/features/coordinator/escalationLabels.ts` 移植（内容跟协调员App的 `src/shared/escalationLabels.ts` 一致，直接复用即可）。
+- `.env.example`：`EXPO_PUBLIC_API_BASE_URL=http://localhost:5080`。
+
+---
+Verify (from verifier.md: "Task 1: 脚手架与鉴权架构验收"):
+> 项目目录（适用于全部 11 个 Task）：`/Users/yangdongqing/it/Claude/Kakapo/guest-app`（所有文件操作、命令执行都在这个目录下进行，先 cd 过去）。
+
+- `npx tsc --noEmit` 通过，`tsconfig.json` `strict: true`。
+- 冷启动带已登录 Cookie 重新打开 App，直接进主界面且用户信息（昵称/邮箱/电话）正确回显，不是空白/占位符——用浏览器 fresh tab 冷加载验证过。
+- 登出后 Cookie 真的失效（再次访问受保护接口应该 401，不是前端假装登出）。
+- 导航结构：底部 4 个 Tab 都能点击切换，Home Tab 内的 Stack 能从 Home 进 CaseConversation 再进 OptionsFlow，返回按钮工作正常。
+- `escalationLabels.ts` 的 7 个 key 跟协调员App/Web端完全一致，没有拼写差异。
+
+通用验收检查清单(每个任务都要过一遍):
+
+1. 实现与描述一致性:严格核对实际实现和 plan.md 里的描述是否一致,揪出不准确的地方。
+2. 交互体验:loading 效果是否到位;是否需要分页;搜索是否覆盖全面且合理;是否需要消息/通知机制;软提示(hint/tooltip)是否充足合理;页面加载顺序是否有合理的渐进过程。
+3. 权限依赖检查:不该有权限执行某操作时,UI 上不能还显示/暴露这个操作入口。
+4. 操作流程时序:用户当前阶段不该看到的后续操作,不能提前露出来。
+5. 页面空间利用率:空白区域不能只靠改颜色糊弄过去,要补实际内容;可以用占位图片,但图片不能重复使用。空白率检查必须至少在两种视口尺寸下截图核对(比如 1440×900 和 1920×1080),只用一种小尺寸截图(比如 800×450)很容易因为内容刚好填满截图而漏掉真实宽屏/高视口下的大片空白——这是真实踩过的坑,不是假设。
+6. 背景设计:可以考虑配一些(可动态的)背景图。
+7. 更新时效性:该实时推送的用实时机制,该轮询的按合理间隔轮询,不要用错更新机制。
+8. 布局紧凑对齐:同一行/同一 grid 里高度不一致的卡片,默认给 grid 加 align_items="stretch" 让同行卡片等高,不要用 align_items="start" 放任参差不齐。多列 grid 里如果混入"额外"的单个卡片(不是天然成对的两列内容),必须显式让它 span 满整行(grid_column="1 / -1" 之类),不能依赖浏览器自动布局把它塞进某一列——那样会被相邻列的高度撑出一整块和内容无关的死区空白,这也是真实踩过的坑。核查时不能只"看着还行",要用相邻元素间距和该布局用的 spacing token 比一下,明显超出(两倍以上)就是没对齐好,不是设计意图。
+
+Only output <promise>TASK1_VERIFIED</promise> (exact tag format, required by the stop hook) once the verification above fully passes. If it fails, fix the issue and re-verify — do not output the promise early.
+
+===TASK===
+max_iterations: 25
+completion_promise: "TASK2_VERIFIED"
+---
+项目目录:/Users/yangdongqing/it/Claude/Kakapo/guest-app(所有文件操作、命令执行都在这个目录下进行,先 cd 过去)。
+
+Task 2: 后端推送通知模块（新增）
+
+真实 Expo Push 集成，不是权限请求 UI 那种 stub。
+
+- 新增 `backend/Infrastructure/Data/Entities/DeviceToken.cs`：`Id, UserId, ExpoPushToken, Platform(ios/android), CreatedAt, UpdatedAt`。`(UserId, ExpoPushToken)` 唯一索引（同一用户多设备可以有多个 token，同一 token 不重复注册）。
+- `backend/Features/Push/`（照搬现有 `Features/*` 分层）：
+  - `IDeviceTokenRepository`/`DeviceTokenRepository`：注册（upsert）、按 UserId 查询、注销（删除）。
+  - `IExpoPushSender`/`ExpoPushSender`：调 Expo 的 `https://exp.host/--/api/v2/push/send`，批量发送（Expo 一次请求最多 100 条，超过要分批）。失败/无效 token（Expo 返回 `DeviceNotRegistered`）要能删除失效 token，不能让死 token 一直占着重试。
+  - `PushController`：`POST /api/push/register`（body: `{expoPushToken, platform}`，`[Authorize]` 任意登录角色）、`DELETE /api/push/register`（登出前调用，注销当前设备 token）。
+- **集成点**：`AppDbContext.SaveChangesAsync` 里已经有拦截 `ChangeTracker` 做 case workflow history 记录的现成模式（`recordingWorkflowHistory` 那段），照这个思路扩展——在 `base.SaveChangesAsync` 成功之后，检查这次保存里有没有新增的 `Notification` 实体，有的话查这些 `UserId` 名下注册过的 `DeviceToken`，调 `IExpoPushSender` 推送（title/body 直接用 `Notification.Title`/`Body`）。这样不用改动现在散落在 7 个文件里创建通知的调用点（`CaseService`/`CaseRepository`/`CoordinatorService`/`OptionsAdminService`/`OptionsAdminRepository`/`DisruptionService`/`DisruptionRepository`），一个地方接管，别的地方零改动。
+- `IExpoPushSender` 通过依赖注入拿，`AppDbContext` 不能直接 new 一个 HttpClient——用 `IServiceScopeFactory` 在 `SaveChangesAsync` 里开一个 scope 解析（DbContext 本身生命周期不该持有别的 scoped 服务的直接引用）。
+- 迁移：`AddDeviceTokens`。
+
+---
+Verify (from verifier.md: "Task 2: 推送通知后端模块验收"):
+- `dotnet build backend/TravelDisruptionAgent.Api.csproj` 干净，0 warning（跟现有代码库一致的标准）。
+- 迁移能在本地库跑通（`dotnet ef database update`），`device_tokens` 表结构正确，`(user_id, expo_push_token)` 唯一索引存在。
+- 用 curl 实测：`POST /api/push/register` 注册一个假 token 成功；查数据库确认落库；`DELETE /api/push/register` 后数据库里对应行消失。
+- 用 curl 触发一次真实会创建 Notification 的操作（比如案件转人工），确认 `SaveChangesAsync` 拦截逻辑被触发（可以先注册一个真的 Expo push token 到自己手机上的 Expo Go 验证真的收到推送，或者至少确认 `IExpoPushSender.SendAsync` 被调用、Expo API 返回的 receipt 状态被正确处理）。
+- 确认这个模块**没有改动**现有 7 个创建通知的调用点（`CaseService`/`CaseRepository`/`CoordinatorService`/`OptionsAdminService`/`OptionsAdminRepository`/`DisruptionService`/`DisruptionRepository`），全部零改动，只在 `AppDbContext.SaveChangesAsync` 一个地方接管。
+- Expo 返回 `DeviceNotRegistered` 时对应 token 被自动清理，不会一直重试推送到一个失效 token。
+- 测试期间产生的测试用户/device_token 数据验证完清理掉。
+
+通用验收检查清单(每个任务都要过一遍):
+
+1. 实现与描述一致性:严格核对实际实现和 plan.md 里的描述是否一致,揪出不准确的地方。
+2. 交互体验:loading 效果是否到位;是否需要分页;搜索是否覆盖全面且合理;是否需要消息/通知机制;软提示(hint/tooltip)是否充足合理;页面加载顺序是否有合理的渐进过程。
+3. 权限依赖检查:不该有权限执行某操作时,UI 上不能还显示/暴露这个操作入口。
+4. 操作流程时序:用户当前阶段不该看到的后续操作,不能提前露出来。
+5. 页面空间利用率:空白区域不能只靠改颜色糊弄过去,要补实际内容;可以用占位图片,但图片不能重复使用。空白率检查必须至少在两种视口尺寸下截图核对(比如 1440×900 和 1920×1080),只用一种小尺寸截图(比如 800×450)很容易因为内容刚好填满截图而漏掉真实宽屏/高视口下的大片空白——这是真实踩过的坑,不是假设。
+6. 背景设计:可以考虑配一些(可动态的)背景图。
+7. 更新时效性:该实时推送的用实时机制,该轮询的按合理间隔轮询,不要用错更新机制。
+8. 布局紧凑对齐:同一行/同一 grid 里高度不一致的卡片,默认给 grid 加 align_items="stretch" 让同行卡片等高,不要用 align_items="start" 放任参差不齐。多列 grid 里如果混入"额外"的单个卡片(不是天然成对的两列内容),必须显式让它 span 满整行(grid_column="1 / -1" 之类),不能依赖浏览器自动布局把它塞进某一列——那样会被相邻列的高度撑出一整块和内容无关的死区空白,这也是真实踩过的坑。核查时不能只"看着还行",要用相邻元素间距和该布局用的 spacing token 比一下,明显超出(两倍以上)就是没对齐好,不是设计意图。
+
+Only output <promise>TASK2_VERIFIED</promise> (exact tag format, required by the stop hook) once the verification above fully passes. If it fails, fix the issue and re-verify — do not output the promise early.
+
+===TASK===
+max_iterations: 25
+completion_promise: "TASK3_VERIFIED"
+---
+项目目录:/Users/yangdongqing/it/Claude/Kakapo/guest-app(所有文件操作、命令执行都在这个目录下进行,先 cd 过去)。
+
+Task 3: 登录页 + 注册页 + 权限引导页
+
+- 登录页：复用现有客人账号登录，用户名/邮箱二选一识别（同一输入框），密码显示/隐藏切换，remember me。视觉参考协调员App LoginScreen 的酷炫渐变背景手法，但换一套配色（不要跟协调员App视觉撞车）。
+- 注册页：Email、Phone、Nickname、Gender、Language、Password、ConfirmPassword——**不需要地址/地图选择**（`RegisterRequest.Hotel` 字段只在 `Role==hotel` 时必填，guest 角色注册表单本来就没有地址这一项，之前脑图担心的 MapPicker 简化问题不存在，直接跳过）。
+- 首次启动/权限引导页：只请求通知权限（这个App没有麦克风/呼叫需求，权限集合比协调员App简单）。拒绝时的兜底提示复用协调员App PermissionsScreen 的处理模式（引导去系统设置）。
+- 权限引导通过后，调 `expo-notifications` 拿到 push token，调 `POST /api/push/register` 注册。
+
+---
+Verify (from verifier.md: "Task 3: 登录/注册/权限引导页验收"):
+- 登录：用户名和邮箱都能登录成功；密码显示/隐藏切换实测有效（不是只切换了图标，输入框类型真的变了）；remember me 勾选后下次冷启动用户名自动填充。
+- 注册：guest 角色注册表单里**没有**地址/地图相关字段；提交后端真实 `/api/auth/register`，用一个新邮箱实测注册成功并能用新账号登录。
+- 权限引导页：请求通知权限，拒绝后有兜底提示且能跳转系统设置；授权后确认调用了 `POST /api/push/register`（可以在网络请求记录里确认这次请求真的发出去了）。
+
+通用验收检查清单(每个任务都要过一遍):
+
+1. 实现与描述一致性:严格核对实际实现和 plan.md 里的描述是否一致,揪出不准确的地方。
+2. 交互体验:loading 效果是否到位;是否需要分页;搜索是否覆盖全面且合理;是否需要消息/通知机制;软提示(hint/tooltip)是否充足合理;页面加载顺序是否有合理的渐进过程。
+3. 权限依赖检查:不该有权限执行某操作时,UI 上不能还显示/暴露这个操作入口。
+4. 操作流程时序:用户当前阶段不该看到的后续操作,不能提前露出来。
+5. 页面空间利用率:空白区域不能只靠改颜色糊弄过去,要补实际内容;可以用占位图片,但图片不能重复使用。空白率检查必须至少在两种视口尺寸下截图核对(比如 1440×900 和 1920×1080),只用一种小尺寸截图(比如 800×450)很容易因为内容刚好填满截图而漏掉真实宽屏/高视口下的大片空白——这是真实踩过的坑,不是假设。
+6. 背景设计:可以考虑配一些(可动态的)背景图。
+7. 更新时效性:该实时推送的用实时机制,该轮询的按合理间隔轮询,不要用错更新机制。
+8. 布局紧凑对齐:同一行/同一 grid 里高度不一致的卡片,默认给 grid 加 align_items="stretch" 让同行卡片等高,不要用 align_items="start" 放任参差不齐。多列 grid 里如果混入"额外"的单个卡片(不是天然成对的两列内容),必须显式让它 span 满整行(grid_column="1 / -1" 之类),不能依赖浏览器自动布局把它塞进某一列——那样会被相邻列的高度撑出一整块和内容无关的死区空白,这也是真实踩过的坑。核查时不能只"看着还行",要用相邻元素间距和该布局用的 spacing token 比一下,明显超出(两倍以上)就是没对齐好,不是设计意图。
+
+Only output <promise>TASK3_VERIFIED</promise> (exact tag format, required by the stop hook) once the verification above fully passes. If it fails, fix the issue and re-verify — do not output the promise early.
+
+===TASK===
+max_iterations: 25
+completion_promise: "TASK4_VERIFIED"
+---
+项目目录:/Users/yangdongqing/it/Claude/Kakapo/guest-app(所有文件操作、命令执行都在这个目录下进行,先 cd 过去)。
+
+Task 4: 首页 / 仪表盘页
+
+对齐现有 Web 端 `GuestHomePage.tsx`：
+
+- 欢迎语 + 行程概览统计
+- 「需要处理」优先提醒条：有未解决中断案件时置顶展示，带入住倒计时，点进去直达案件对话
+- 即将入住的订单预览（最多 3 条）+「查看全部订单」入口跳 Bookings Tab
+- 最近中断通知列表，支持搜索
+- 当前案件状态摘要卡片，点进去直达案件对话
+- 「StayRight 如何帮您」三步说明卡片
+
+---
+Verify (from verifier.md: "Task 4: 首页/仪表盘页验收"):
+- 严格核对实现与 plan.md 描述是否一致：欢迎语、行程统计、优先提醒条、订单预览、通知列表、案件摘要卡、三步说明卡都要在。
+- 交互体验：loading 效果到位；有未解决案件时优先提醒条正确置顶展示，倒计时数字准确；通知搜索覆盖标题/正文。
+- 权限/流程时序：没有未解决案件时不该出现"优先提醒条"这类误导性入口。
+- 页面空间利用率、加载渐变过程用真实数据在模拟器/浏览器里实测，不是只看代码。
+
+通用验收检查清单(每个任务都要过一遍):
+
+1. 实现与描述一致性:严格核对实际实现和 plan.md 里的描述是否一致,揪出不准确的地方。
+2. 交互体验:loading 效果是否到位;是否需要分页;搜索是否覆盖全面且合理;是否需要消息/通知机制;软提示(hint/tooltip)是否充足合理;页面加载顺序是否有合理的渐进过程。
+3. 权限依赖检查:不该有权限执行某操作时,UI 上不能还显示/暴露这个操作入口。
+4. 操作流程时序:用户当前阶段不该看到的后续操作,不能提前露出来。
+5. 页面空间利用率:空白区域不能只靠改颜色糊弄过去,要补实际内容;可以用占位图片,但图片不能重复使用。空白率检查必须至少在两种视口尺寸下截图核对(比如 1440×900 和 1920×1080),只用一种小尺寸截图(比如 800×450)很容易因为内容刚好填满截图而漏掉真实宽屏/高视口下的大片空白——这是真实踩过的坑,不是假设。
+6. 背景设计:可以考虑配一些(可动态的)背景图。
+7. 更新时效性:该实时推送的用实时机制,该轮询的按合理间隔轮询,不要用错更新机制。
+8. 布局紧凑对齐:同一行/同一 grid 里高度不一致的卡片,默认给 grid 加 align_items="stretch" 让同行卡片等高,不要用 align_items="start" 放任参差不齐。多列 grid 里如果混入"额外"的单个卡片(不是天然成对的两列内容),必须显式让它 span 满整行(grid_column="1 / -1" 之类),不能依赖浏览器自动布局把它塞进某一列——那样会被相邻列的高度撑出一整块和内容无关的死区空白,这也是真实踩过的坑。核查时不能只"看着还行",要用相邻元素间距和该布局用的 spacing token 比一下,明显超出(两倍以上)就是没对齐好,不是设计意图。
+
+Only output <promise>TASK4_VERIFIED</promise> (exact tag format, required by the stop hook) once the verification above fully passes. If it fails, fix the issue and re-verify — do not output the promise early.
+
+===TASK===
+max_iterations: 25
+completion_promise: "TASK5_VERIFIED"
+---
+项目目录:/Users/yangdongqing/it/Claude/Kakapo/guest-app(所有文件操作、命令执行都在这个目录下进行,先 cd 过去)。
+
+Task 5: 我的订单页
+
+对齐 `MyBookingsPage.tsx`：状态筛选 tab（全部/已确认/需关注/已重订/已取消，带各分类数量）、搜索（酒店名/确认号）、分页、订单卡片（酒店、房型、入住/离店日期、确认号、状态），有关联案件的点进去直达案件对话。
+
+---
+Verify (from verifier.md: "Task 5: 我的订单页验收"):
+- 状态筛选 tab（全部/已确认/需关注/已重订/已取消）切换后列表和计数联动正确；搜索覆盖酒店名和确认号；分页正确翻页不丢数据。
+- 每条订单卡片信息完整（酒店、房型、日期、确认号、状态），有关联案件的点击能直达案件对话，没有的点击不报错。
+- 列表区域不能太小，起码占页面 40% 以上；空状态/加载中/无匹配结果三种状态都要实测截图确认。
+
+通用验收检查清单(每个任务都要过一遍):
+
+1. 实现与描述一致性:严格核对实际实现和 plan.md 里的描述是否一致,揪出不准确的地方。
+2. 交互体验:loading 效果是否到位;是否需要分页;搜索是否覆盖全面且合理;是否需要消息/通知机制;软提示(hint/tooltip)是否充足合理;页面加载顺序是否有合理的渐进过程。
+3. 权限依赖检查:不该有权限执行某操作时,UI 上不能还显示/暴露这个操作入口。
+4. 操作流程时序:用户当前阶段不该看到的后续操作,不能提前露出来。
+5. 页面空间利用率:空白区域不能只靠改颜色糊弄过去,要补实际内容;可以用占位图片,但图片不能重复使用。空白率检查必须至少在两种视口尺寸下截图核对(比如 1440×900 和 1920×1080),只用一种小尺寸截图(比如 800×450)很容易因为内容刚好填满截图而漏掉真实宽屏/高视口下的大片空白——这是真实踩过的坑,不是假设。
+6. 背景设计:可以考虑配一些(可动态的)背景图。
+7. 更新时效性:该实时推送的用实时机制,该轮询的按合理间隔轮询,不要用错更新机制。
+8. 布局紧凑对齐:同一行/同一 grid 里高度不一致的卡片,默认给 grid 加 align_items="stretch" 让同行卡片等高,不要用 align_items="start" 放任参差不齐。多列 grid 里如果混入"额外"的单个卡片(不是天然成对的两列内容),必须显式让它 span 满整行(grid_column="1 / -1" 之类),不能依赖浏览器自动布局把它塞进某一列——那样会被相邻列的高度撑出一整块和内容无关的死区空白,这也是真实踩过的坑。核查时不能只"看着还行",要用相邻元素间距和该布局用的 spacing token 比一下,明显超出(两倍以上)就是没对齐好,不是设计意图。
+
+Only output <promise>TASK5_VERIFIED</promise> (exact tag format, required by the stop hook) once the verification above fully passes. If it fails, fix the issue and re-verify — do not output the promise early.
+
+===TASK===
+max_iterations: 25
+completion_promise: "TASK6_VERIFIED"
+---
+项目目录:/Users/yangdongqing/it/Claude/Kakapo/guest-app(所有文件操作、命令执行都在这个目录下进行,先 cd 过去)。
+
+Task 6: 案件对话页 + 重订方案页
+
+- 案件对话页对齐 `CaseConversationPage.tsx`：AI 线程（只读，看 AI 已经答过什么）+ 协调员线程（可收发消息），案件基本信息展示，有可选方案时明显入口跳重订方案页。
+- 重订方案页对齐 `OptionsFlowPage.tsx`：查看多个重订选项（延期原酒店/候补酒店/取消退款）、查看政策原文、选择方案确认执行、对延期方案提出别的日期。
+
+---
+Verify (from verifier.md: "Task 6: 案件对话页 + 重订方案页验收"):
+- 案件对话页：AI 线程和协调员线程能正确切换且内容不串；协调员线程能发消息、历史消息正确展示；有可选方案时入口明显可点。
+- 重订方案页：能看到 AI/协调员生成的方案、能查看政策原文、选择并确认执行、对延期方案能提出别的日期——每个操作路径都要实测点一遍，不能只看有没有渲染出来。
+- 详情类页面要有明显的返回按钮，覆盖/重叠问题（政策弹层、日期选择器等）要确认不挡住关键操作。
+
+通用验收检查清单(每个任务都要过一遍):
+
+1. 实现与描述一致性:严格核对实际实现和 plan.md 里的描述是否一致,揪出不准确的地方。
+2. 交互体验:loading 效果是否到位;是否需要分页;搜索是否覆盖全面且合理;是否需要消息/通知机制;软提示(hint/tooltip)是否充足合理;页面加载顺序是否有合理的渐进过程。
+3. 权限依赖检查:不该有权限执行某操作时,UI 上不能还显示/暴露这个操作入口。
+4. 操作流程时序:用户当前阶段不该看到的后续操作,不能提前露出来。
+5. 页面空间利用率:空白区域不能只靠改颜色糊弄过去,要补实际内容;可以用占位图片,但图片不能重复使用。空白率检查必须至少在两种视口尺寸下截图核对(比如 1440×900 和 1920×1080),只用一种小尺寸截图(比如 800×450)很容易因为内容刚好填满截图而漏掉真实宽屏/高视口下的大片空白——这是真实踩过的坑,不是假设。
+6. 背景设计:可以考虑配一些(可动态的)背景图。
+7. 更新时效性:该实时推送的用实时机制,该轮询的按合理间隔轮询,不要用错更新机制。
+8. 布局紧凑对齐:同一行/同一 grid 里高度不一致的卡片,默认给 grid 加 align_items="stretch" 让同行卡片等高,不要用 align_items="start" 放任参差不齐。多列 grid 里如果混入"额外"的单个卡片(不是天然成对的两列内容),必须显式让它 span 满整行(grid_column="1 / -1" 之类),不能依赖浏览器自动布局把它塞进某一列——那样会被相邻列的高度撑出一整块和内容无关的死区空白,这也是真实踩过的坑。核查时不能只"看着还行",要用相邻元素间距和该布局用的 spacing token 比一下,明显超出(两倍以上)就是没对齐好,不是设计意图。
+
+Only output <promise>TASK6_VERIFIED</promise> (exact tag format, required by the stop hook) once the verification above fully passes. If it fails, fix the issue and re-verify — do not output the promise early.
+
+===TASK===
+max_iterations: 25
+completion_promise: "TASK7_VERIFIED"
+---
+项目目录:/Users/yangdongqing/it/Claude/Kakapo/guest-app(所有文件操作、命令执行都在这个目录下进行,先 cd 过去)。
+
+Task 7: 通知中心页 + 个人资料页 + 设置页
+
+- 通知中心：全部通知列表（不只首页那几条），已读/未读标记，点击直达对应案件，推送到达时系统通知栏 + App 内均可见。
+- 个人资料页对齐 `ProfilePage.tsx`：基本信息 + 资料完整度、修改邮箱、修改密码、账号信息。
+- 设置页：通知分类开关（新中断提醒/案件状态变化/方案就绪提醒）、登出（登出前先调 `DELETE /api/push/register` 注销当前设备 token）、App 版本 / 权限状态一览。
+
+---
+Verify (from verifier.md: "Task 7: 通知中心页 + 个人资料页 + 设置页验收"):
+- 通知中心：全部通知能加载、已读未读状态正确切换、点击跳转到正确的案件；有推送权限时收到系统推送后App内也能看到对应通知（不是只有系统通知栏有）。
+- 个人资料页：基本信息展示、资料完整度计算逻辑跟 Web 端一致、修改邮箱/密码接口真实调用成功。
+- 设置页：通知分类开关持久化生效；登出前真实调用 `DELETE /api/push/register`（用网络请求记录确认）再执行登出；App 版本/权限状态展示准确。
+
+通用验收检查清单(每个任务都要过一遍):
+
+1. 实现与描述一致性:严格核对实际实现和 plan.md 里的描述是否一致,揪出不准确的地方。
+2. 交互体验:loading 效果是否到位;是否需要分页;搜索是否覆盖全面且合理;是否需要消息/通知机制;软提示(hint/tooltip)是否充足合理;页面加载顺序是否有合理的渐进过程。
+3. 权限依赖检查:不该有权限执行某操作时,UI 上不能还显示/暴露这个操作入口。
+4. 操作流程时序:用户当前阶段不该看到的后续操作,不能提前露出来。
+5. 页面空间利用率:空白区域不能只靠改颜色糊弄过去,要补实际内容;可以用占位图片,但图片不能重复使用。空白率检查必须至少在两种视口尺寸下截图核对(比如 1440×900 和 1920×1080),只用一种小尺寸截图(比如 800×450)很容易因为内容刚好填满截图而漏掉真实宽屏/高视口下的大片空白——这是真实踩过的坑,不是假设。
+6. 背景设计:可以考虑配一些(可动态的)背景图。
+7. 更新时效性:该实时推送的用实时机制,该轮询的按合理间隔轮询,不要用错更新机制。
+8. 布局紧凑对齐:同一行/同一 grid 里高度不一致的卡片,默认给 grid 加 align_items="stretch" 让同行卡片等高,不要用 align_items="start" 放任参差不齐。多列 grid 里如果混入"额外"的单个卡片(不是天然成对的两列内容),必须显式让它 span 满整行(grid_column="1 / -1" 之类),不能依赖浏览器自动布局把它塞进某一列——那样会被相邻列的高度撑出一整块和内容无关的死区空白,这也是真实踩过的坑。核查时不能只"看着还行",要用相邻元素间距和该布局用的 spacing token 比一下,明显超出(两倍以上)就是没对齐好,不是设计意图。
+
+Only output <promise>TASK7_VERIFIED</promise> (exact tag format, required by the stop hook) once the verification above fully passes. If it fails, fix the issue and re-verify — do not output the promise early.
+
+===TASK===
+max_iterations: 25
+completion_promise: "TASK8_VERIFIED"
+---
+项目目录:/Users/yangdongqing/it/Claude/Kakapo/guest-app(所有文件操作、命令执行都在这个目录下进行,先 cd 过去)。
+
+Task 8: 页面功能与体验优化 Loop（第 1 轮，动态展开）
+
+跟协调员App同一套机制：动态发现系统当前所有页面，对每个页面套用 `通用功能优化需求.txt` + `通用页面优化需求.txt`（React Native App，鼠标相关要求换触屏等价物）。
+
+---
+Verify (from verifier.md: "Task 8: 第 1 轮页面优化验收"):
+- 同 Task 4-7 的验证方式，动态发现的页面列表要跟实际系统页面数量对得上（不能漏页面）。
+- 每个页面对两份优化需求文档逐条过一遍，不适用的条目要有理由说明，不是直接跳过不提。
+- 跑完这一轮用 `tsc --noEmit` 验证没有引入编译错误。
+
+通用验收检查清单(每个任务都要过一遍):
+
+1. 实现与描述一致性:严格核对实际实现和 plan.md 里的描述是否一致,揪出不准确的地方。
+2. 交互体验:loading 效果是否到位;是否需要分页;搜索是否覆盖全面且合理;是否需要消息/通知机制;软提示(hint/tooltip)是否充足合理;页面加载顺序是否有合理的渐进过程。
+3. 权限依赖检查:不该有权限执行某操作时,UI 上不能还显示/暴露这个操作入口。
+4. 操作流程时序:用户当前阶段不该看到的后续操作,不能提前露出来。
+5. 页面空间利用率:空白区域不能只靠改颜色糊弄过去,要补实际内容;可以用占位图片,但图片不能重复使用。空白率检查必须至少在两种视口尺寸下截图核对(比如 1440×900 和 1920×1080),只用一种小尺寸截图(比如 800×450)很容易因为内容刚好填满截图而漏掉真实宽屏/高视口下的大片空白——这是真实踩过的坑,不是假设。
+6. 背景设计:可以考虑配一些(可动态的)背景图。
+7. 更新时效性:该实时推送的用实时机制,该轮询的按合理间隔轮询,不要用错更新机制。
+8. 布局紧凑对齐:同一行/同一 grid 里高度不一致的卡片,默认给 grid 加 align_items="stretch" 让同行卡片等高,不要用 align_items="start" 放任参差不齐。多列 grid 里如果混入"额外"的单个卡片(不是天然成对的两列内容),必须显式让它 span 满整行(grid_column="1 / -1" 之类),不能依赖浏览器自动布局把它塞进某一列——那样会被相邻列的高度撑出一整块和内容无关的死区空白,这也是真实踩过的坑。核查时不能只"看着还行",要用相邻元素间距和该布局用的 spacing token 比一下,明显超出(两倍以上)就是没对齐好,不是设计意图。
+
+Only output <promise>TASK8_VERIFIED</promise> (exact tag format, required by the stop hook) once the verification above fully passes. If it fails, fix the issue and re-verify — do not output the promise early.
+
+===TASK===
+max_iterations: 25
+completion_promise: "TASK9_VERIFIED"
+---
+项目目录:/Users/yangdongqing/it/Claude/Kakapo/guest-app(所有文件操作、命令执行都在这个目录下进行,先 cd 过去)。
+
+Task 9: 页面功能与体验优化 Loop（第 2 轮，动态展开）
+
+同 Task 8 机制，第 2 轮重新发现页面列表并再跑一遍两份优化需求文档，确认第 1 轮引入的新元素也经过同样检查。
+
+---
+Verify (from verifier.md: "Task 9: 第 2 轮页面优化验收"):
+- 重新动态发现页面列表，如果第 1 轮新增了子页面/组件，这一轮的子任务数量应该能反映出来。
+- 第 2 轮改动的页面里，第 1 轮已经优化过的点没有被推翻或劣化（回归检查：抽查 1-2 个第 1 轮加的功能，第 2 轮跑完还在正常工作）。
+- 跑完这一轮用 `tsc --noEmit` 验证没有引入编译错误。
+
+通用验收检查清单(每个任务都要过一遍):
+
+1. 实现与描述一致性:严格核对实际实现和 plan.md 里的描述是否一致,揪出不准确的地方。
+2. 交互体验:loading 效果是否到位;是否需要分页;搜索是否覆盖全面且合理;是否需要消息/通知机制;软提示(hint/tooltip)是否充足合理;页面加载顺序是否有合理的渐进过程。
+3. 权限依赖检查:不该有权限执行某操作时,UI 上不能还显示/暴露这个操作入口。
+4. 操作流程时序:用户当前阶段不该看到的后续操作,不能提前露出来。
+5. 页面空间利用率:空白区域不能只靠改颜色糊弄过去,要补实际内容;可以用占位图片,但图片不能重复使用。空白率检查必须至少在两种视口尺寸下截图核对(比如 1440×900 和 1920×1080),只用一种小尺寸截图(比如 800×450)很容易因为内容刚好填满截图而漏掉真实宽屏/高视口下的大片空白——这是真实踩过的坑,不是假设。
+6. 背景设计:可以考虑配一些(可动态的)背景图。
+7. 更新时效性:该实时推送的用实时机制,该轮询的按合理间隔轮询,不要用错更新机制。
+8. 布局紧凑对齐:同一行/同一 grid 里高度不一致的卡片,默认给 grid 加 align_items="stretch" 让同行卡片等高,不要用 align_items="start" 放任参差不齐。多列 grid 里如果混入"额外"的单个卡片(不是天然成对的两列内容),必须显式让它 span 满整行(grid_column="1 / -1" 之类),不能依赖浏览器自动布局把它塞进某一列——那样会被相邻列的高度撑出一整块和内容无关的死区空白,这也是真实踩过的坑。核查时不能只"看着还行",要用相邻元素间距和该布局用的 spacing token 比一下,明显超出(两倍以上)就是没对齐好,不是设计意图。
+
+Only output <promise>TASK9_VERIFIED</promise> (exact tag format, required by the stop hook) once the verification above fully passes. If it fails, fix the issue and re-verify — do not output the promise early.
+
+===TASK===
+max_iterations: 25
+completion_promise: "TASK10_VERIFIED"
+---
+项目目录:/Users/yangdongqing/it/Claude/Kakapo/guest-app(所有文件操作、命令执行都在这个目录下进行,先 cd 过去)。
+
+Task 10: 页面功能与体验优化 Loop（第 3 轮，动态展开）
+
+同上，第 3 轮。页面功能和体验应收敛——如果发现某页面已经没有可优化点，直接说明"已检查，满足两份文档要求"即可，不强凑改动。
+
+---
+Verify (from verifier.md: "Task 10: 第 3 轮页面优化验收"):
+- 同上验证方式，第 3 轮跑完后随手打开几个页面，视觉和交互体验相比 Task 7 刚建完时要有明显提升，不是三轮都在做同样的表面改动。
+- 对没有可优化点的页面，子任务里要有明确说明"已检查，符合要求"的记录，而不是为了有产出硬改。
+- 跑完这一轮用 `tsc --noEmit` 验证没有引入编译错误。
+
+通用验收检查清单(每个任务都要过一遍):
+
+1. 实现与描述一致性:严格核对实际实现和 plan.md 里的描述是否一致,揪出不准确的地方。
+2. 交互体验:loading 效果是否到位;是否需要分页;搜索是否覆盖全面且合理;是否需要消息/通知机制;软提示(hint/tooltip)是否充足合理;页面加载顺序是否有合理的渐进过程。
+3. 权限依赖检查:不该有权限执行某操作时,UI 上不能还显示/暴露这个操作入口。
+4. 操作流程时序:用户当前阶段不该看到的后续操作,不能提前露出来。
+5. 页面空间利用率:空白区域不能只靠改颜色糊弄过去,要补实际内容;可以用占位图片,但图片不能重复使用。空白率检查必须至少在两种视口尺寸下截图核对(比如 1440×900 和 1920×1080),只用一种小尺寸截图(比如 800×450)很容易因为内容刚好填满截图而漏掉真实宽屏/高视口下的大片空白——这是真实踩过的坑,不是假设。
+6. 背景设计:可以考虑配一些(可动态的)背景图。
+7. 更新时效性:该实时推送的用实时机制,该轮询的按合理间隔轮询,不要用错更新机制。
+8. 布局紧凑对齐:同一行/同一 grid 里高度不一致的卡片,默认给 grid 加 align_items="stretch" 让同行卡片等高,不要用 align_items="start" 放任参差不齐。多列 grid 里如果混入"额外"的单个卡片(不是天然成对的两列内容),必须显式让它 span 满整行(grid_column="1 / -1" 之类),不能依赖浏览器自动布局把它塞进某一列——那样会被相邻列的高度撑出一整块和内容无关的死区空白,这也是真实踩过的坑。核查时不能只"看着还行",要用相邻元素间距和该布局用的 spacing token 比一下,明显超出(两倍以上)就是没对齐好,不是设计意图。
+
+Only output <promise>TASK10_VERIFIED</promise> (exact tag format, required by the stop hook) once the verification above fully passes. If it fails, fix the issue and re-verify — do not output the promise early.
+
+===TASK===
+max_iterations: 25
+completion_promise: "TASK11_VERIFIED"
+---
+项目目录:/Users/yangdongqing/it/Claude/Kakapo/guest-app(所有文件操作、命令执行都在这个目录下进行,先 cd 过去)。
+
+Task 11: 测试用例生成与执行（动态展开）
+
+动态发现系统所有页面，每个页面按 `通用测试用例需求.txt` 写一份测试用例文件（`guest-app/test-cases/{page}.md`），再按 `通用测试需求.txt` 用 `webapp-testing` skill 逐个测试点截图验证，测出 bug 立刻修复并截图回归确认。
+
+---
+Verify (from verifier.md: "Task 11: 测试用例生成与执行验收"):
+- `guest-app/test-cases/` 目录下每个系统页面都有一份对应的测试用例文件，用例覆盖的功能点数量看得出不只是核心需求里写到的那几条（比如设置页的"App版本信息展示"这种边角功能也应该被覆盖到）。
+- 抽查 2-3 份测试用例文件，每个测试点都能在执行记录/日志里找到对应的 `webapp-testing` skill 截图产出，不是只写了用例没有真的跑。
+- 如果执行过程中确实发现过 bug（正常情况下体量这么大的项目大概率会有），能在提交记录或日志里看到"发现问题 → 修复 → 回归截图确认通过"的完整链路，而不是发现了就跳过。
+- 最终跑一遍 `npx tsc --noEmit` 和现有后端 `dotnet build`，确认这一整轮测试和之前 3 轮页面优化没有引入编译错误。
+
+通用验收检查清单(每个任务都要过一遍):
+
+1. 实现与描述一致性:严格核对实际实现和 plan.md 里的描述是否一致,揪出不准确的地方。
+2. 交互体验:loading 效果是否到位;是否需要分页;搜索是否覆盖全面且合理;是否需要消息/通知机制;软提示(hint/tooltip)是否充足合理;页面加载顺序是否有合理的渐进过程。
+3. 权限依赖检查:不该有权限执行某操作时,UI 上不能还显示/暴露这个操作入口。
+4. 操作流程时序:用户当前阶段不该看到的后续操作,不能提前露出来。
+5. 页面空间利用率:空白区域不能只靠改颜色糊弄过去,要补实际内容;可以用占位图片,但图片不能重复使用。空白率检查必须至少在两种视口尺寸下截图核对(比如 1440×900 和 1920×1080),只用一种小尺寸截图(比如 800×450)很容易因为内容刚好填满截图而漏掉真实宽屏/高视口下的大片空白——这是真实踩过的坑,不是假设。
+6. 背景设计:可以考虑配一些(可动态的)背景图。
+7. 更新时效性:该实时推送的用实时机制,该轮询的按合理间隔轮询,不要用错更新机制。
+8. 布局紧凑对齐:同一行/同一 grid 里高度不一致的卡片,默认给 grid 加 align_items="stretch" 让同行卡片等高,不要用 align_items="start" 放任参差不齐。多列 grid 里如果混入"额外"的单个卡片(不是天然成对的两列内容),必须显式让它 span 满整行(grid_column="1 / -1" 之类),不能依赖浏览器自动布局把它塞进某一列——那样会被相邻列的高度撑出一整块和内容无关的死区空白,这也是真实踩过的坑。核查时不能只"看着还行",要用相邻元素间距和该布局用的 spacing token 比一下,明显超出(两倍以上)就是没对齐好,不是设计意图。
+
+Only output <promise>TASK11_VERIFIED</promise> (exact tag format, required by the stop hook) once the verification above fully passes. If it fails, fix the issue and re-verify — do not output the promise early.
