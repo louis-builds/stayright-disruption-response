@@ -115,7 +115,7 @@ const styles = StyleSheet.create({
   checkboxMark: { color: "#fff", fontSize: 12, fontWeight: "700" },
   tagCreateRow: { flexDirection: "row", gap: 8, alignItems: "center" },
   tagCreateInput: { flex: 1 },
-  input: { borderWidth: 1, borderColor: theme.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: theme.ink, textAlignVertical: "center" },
+  input: { borderWidth: 1, borderColor: theme.border, borderRadius: 8, paddingHorizontal: 12, fontSize: 14, color: theme.ink, height: 44, textAlignVertical: "center", includeFontPadding: false },
   primaryButton: { backgroundColor: theme.accent, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 9, alignItems: "center", justifyContent: "center" },
   primaryButtonText: { color: "#fff", fontSize: 12, fontWeight: "700" },
   secondaryButton: { backgroundColor: theme.borderLight, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 9, alignItems: "center", justifyContent: "center" },

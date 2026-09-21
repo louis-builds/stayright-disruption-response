@@ -200,7 +200,7 @@ const styles = StyleSheet.create({
   cardLabel: { fontSize: 14, fontWeight: "800", color: theme.ink },
   switchRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   switchLabel: { fontSize: 13, color: theme.mutedDark },
-  input: { borderWidth: 1, borderColor: theme.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13, color: theme.ink, textAlignVertical: "center" },
+  input: { borderWidth: 1, borderColor: theme.border, borderRadius: 8, paddingHorizontal: 12, fontSize: 13, color: theme.ink, height: 42, textAlignVertical: "center", includeFontPadding: false },
   successText: { color: theme.success, fontSize: 12, fontWeight: "600" },
   errorText: { color: theme.danger, fontSize: 12, fontWeight: "600" },
   primaryButton: { backgroundColor: theme.accent, borderRadius: 8, paddingVertical: 11, alignItems: "center" },

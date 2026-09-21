@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
   dangerButtonText: { color: theme.danger, fontSize: 11, fontWeight: "700" },
   addRow: { flexDirection: "row", gap: 8, marginTop: 4 },
   addRowInput: { flex: 1 },
-  input: { borderWidth: 1, borderColor: theme.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: theme.ink, textAlignVertical: "center" },
+  input: { borderWidth: 1, borderColor: theme.border, borderRadius: 8, paddingHorizontal: 12, fontSize: 14, color: theme.ink, height: 44, textAlignVertical: "center", includeFontPadding: false },
   secondaryButton: { backgroundColor: theme.borderLight, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 10, justifyContent: "center" },
   secondaryButtonText: { color: theme.ink, fontSize: 13, fontWeight: "700" },
   buttonDisabled: { opacity: 0.5 },

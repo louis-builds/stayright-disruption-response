@@ -331,10 +331,10 @@ const styles = StyleSheet.create({
   title: { fontSize: 24, fontWeight: "700", color: "#202438" },
   subtitle: { fontSize: 13, color: "#777b8e", marginBottom: 8 },
   input: {
-    borderWidth: 1, borderColor: "#e1e4ec", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: "#202438",
-    // Android 上不设 textAlignVertical 时,带 paddingVertical 的单行输入框文字会偏上、
-    // 聚焦后内部滚动错位(小米 HyperOS 上尤其明显)——显式居中即可。
-    textAlignVertical: "center",
+    borderWidth: 1, borderColor: "#e1e4ec", borderRadius: 10, paddingHorizontal: 14, fontSize: 15, color: "#202438",
+    // HyperOS/Android 15 上 paddingVertical + 默认行高会让单行输入文字偏上:
+    // 去掉纵向 padding、改用固定高度 + 显式居中(includeFontPadding 去掉中文字体的额外下留白)。
+    height: 48, textAlignVertical: "center", includeFontPadding: false,
     // Web 预览下 Chromium 自带的焦点描边(橙色)会盖过下面 inputFocused 的紫色边框——
     // 真机上没有浏览器 outline 这回事,这条纯粹是让 Expo Web 调试预览显示得和真机一致。
     ...(Platform.OS === "web" ? { outlineStyle: "none" as const } : {}),
