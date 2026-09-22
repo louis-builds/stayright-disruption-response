@@ -13,16 +13,23 @@ public class CallRepository(AppDbContext db) : ICallRepository
     public Task<Call?> FindAsync(Guid id, CancellationToken ct = default) =>
         db.Calls.FirstOrDefaultAsync(c => c.Id == id, ct);
 
+    public Task<Call?> FindWithDetailsAsync(Guid id, CancellationToken ct = default) =>
+        WithDetails().FirstOrDefaultAsync(c => c.Id == id, ct);
+
     public Task<List<Call>> ListForCaseAsync(Guid caseId, CancellationToken ct = default) =>
-        db.Calls.Where(c => c.CaseId == caseId).OrderByDescending(c => c.StartedAt).ToListAsync(ct);
+        WithDetails().Where(c => c.CaseId == caseId).OrderByDescending(c => c.StartedAt).ToListAsync(ct);
+
+    public Task<List<Call>> ListIncomingForGuestAsync(Guid guestUserId, CancellationToken ct = default) =>
+        WithDetails()
+            .Where(c => c.ReceiverUserId == guestUserId && c.Status == "ringing")
+            .OrderByDescending(c => c.StartedAt)
+            .ToListAsync(ct);
 
     public Task<PagedResult<Call>> ListForCoordinatorAsync(
         Guid coordinatorUserId, Guid? caseId, string? calleeType, string? status,
         DateTimeOffset? from, DateTimeOffset? to, int page, int pageSize, CancellationToken ct = default)
     {
-        var query = db.Calls
-            .Include(c => c.Case).ThenInclude(c => c!.Booking).ThenInclude(b => b!.GuestUser)
-            .Include(c => c.Case).ThenInclude(c => c!.Booking).ThenInclude(b => b!.Hotel)
+        var query = WithDetails()
             .Where(c => c.InitiatedByCoordinatorId == coordinatorUserId);
         if (caseId is { } cid) query = query.Where(c => c.CaseId == cid);
         if (!string.IsNullOrWhiteSpace(calleeType)) query = query.Where(c => c.CalleeType == calleeType);
@@ -43,4 +50,8 @@ public class CallRepository(AppDbContext db) : ICallRepository
         db.CallRecordings.FirstOrDefaultAsync(r => r.CallId == callId, ct);
 
     public Task SaveChangesAsync(CancellationToken ct = default) => db.SaveChangesAsync(ct);
+
+    private IQueryable<Call> WithDetails() => db.Calls
+        .Include(c => c.Case).ThenInclude(c => c!.Booking).ThenInclude(b => b!.GuestUser)
+        .Include(c => c.Case).ThenInclude(c => c!.Booking).ThenInclude(b => b!.Hotel);
 }

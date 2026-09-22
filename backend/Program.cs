@@ -61,6 +61,7 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
+builder.Services.AddSignalR();
 
 var sessionIdleTimeoutMinutes = int.TryParse(Environment.GetEnvironmentVariable("SESSION_IDLE_TIMEOUT_MINUTES"), out var m) ? m : 60;
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
@@ -188,6 +189,7 @@ app.UseMiddleware<ForbiddenResponseMiddleware>();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<CallHub>("/hubs/calls");
 
 app.Run();
 
