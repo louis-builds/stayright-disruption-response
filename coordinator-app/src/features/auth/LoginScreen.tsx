@@ -220,7 +220,16 @@ const styles = StyleSheet.create({
   brandBadgeIcon: { fontSize: 26 },
   brandLabel: { color: "rgba(255,255,255,0.7)", fontSize: 12, letterSpacing: 2, textTransform: "uppercase" },
   brandTagline: { color: "rgba(255,255,255,0.45)", fontSize: 12 },
-  card: { backgroundColor: "#ffffff", borderRadius: 20, padding: 24, gap: 12, shadowColor: "#000", shadowOpacity: 0.3, shadowRadius: 20, shadowOffset: { width: 0, height: 10 }, elevation: 8 },
+  card: {
+    backgroundColor: "#ffffff",
+    borderRadius: 20,
+    padding: 24,
+    gap: 12,
+    ...Platform.select({
+      web: { boxShadow: "0 10px 20px rgba(0, 0, 0, 0.3)" },
+      default: { shadowColor: "#000", shadowOpacity: 0.3, shadowRadius: 20, shadowOffset: { width: 0, height: 10 }, elevation: 8 },
+    }),
+  },
   title: { fontSize: 24, fontWeight: "700", color: "#0f172a" },
   subtitle: { fontSize: 13, color: "#64748b", marginBottom: 8 },
   input: { borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15 },

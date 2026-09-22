@@ -1,10 +1,10 @@
 import { getRecordingPermissionsAsync } from "expo-audio";
 import Constants from "expo-constants";
-import * as MediaLibrary from "expo-media-library";
 import * as Notifications from "expo-notifications";
 import { useEffect, useRef, useState } from "react";
 import { Animated, AppState, Easing, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { changePassword, useAuth } from "../auth";
+import { getMediaLibraryAudioPermission } from "../auth/mediaPermissions";
 import { getCallsConfig } from "../calls/api";
 import { hasAllFilesAccess, requestAllFilesAccess } from "../calls/findLatestRecording";
 import type { CallsConfig } from "../calls/types";
@@ -90,7 +90,7 @@ export function SettingsScreen() {
     const refresh = () => {
       void getRecordingPermissionsAsync().then((r) => setMicStatus(r.granted ? "Granted" : "Not granted"));
       void Notifications.getPermissionsAsync().then((r) => setNotifStatus(r.granted ? "Granted" : "Not granted"));
-      void MediaLibrary.getPermissionsAsync().then((r) => setMediaStatus(r.granted ? "Granted" : "Not granted"));
+      void getMediaLibraryAudioPermission().then((r) => setMediaStatus(r.granted ? "Granted" : "Not granted"));
       setFilesStatus(hasAllFilesAccess() ? "Granted" : "Not granted");
     };
     refresh();

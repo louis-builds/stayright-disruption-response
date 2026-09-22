@@ -491,6 +491,7 @@ const styles = StyleSheet.create({
   msgVotes: { flexDirection: "row", gap: 6 },
   voteButton: { width: 32, height: 28, borderRadius: 8, backgroundColor: "#f1f5f9", alignItems: "center", justifyContent: "center" },
   voteButtonActive: { backgroundColor: "#ddd6fe" },
+  voteText: { fontSize: 15 },
   composerRow: { flexDirection: "row", gap: 8, alignItems: "flex-end", padding: 10, borderTopWidth: 1, borderTopColor: "#eef2f7" },
   composerInput: { flex: 1, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, padding: 10, fontSize: 13, maxHeight: 100 },
   sendButton: { backgroundColor: "#4f46e5", borderRadius: 8, paddingHorizontal: 14, paddingVertical: 10 },

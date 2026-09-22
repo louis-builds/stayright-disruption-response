@@ -1,10 +1,11 @@
-import { Device, type Call as TwilioCall } from "@twilio/voice-sdk";
+import type { Call as TwilioCall, Device as TwilioDevice } from "@twilio/voice-sdk";
 
-let device: Device | null = null;
+let device: TwilioDevice | null = null;
 let connection: TwilioCall | null = null;
 
 export async function connectVoice(token: string, callId: string) {
   await disconnectVoice();
+  const { Device } = await import("@twilio/voice-sdk");
   device = new Device(token, { logLevel: "error" });
   await device.register();
   connection = await device.connect({ params: { CallId: callId } });
