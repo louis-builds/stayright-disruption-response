@@ -5,23 +5,20 @@
 
 ---
 
-## 0. 只有一个库：线上 EC2 的共享 `stayright` 库
+## 0. 只有一个库：prod EC2（`stayright-prod-bastion`）背后的 RDS `stayright` 库
 
-**2026-09-10 起（Zachary 拍板）：不再本地跑 Docker Postgres。** 本地开发一律经
-SSM 端口转发隧道连线上 EC2 的共享 `stayright` 库。根目录 `docker-compose.yml` /
-`Dockerfile.postgres` 已删除。
+> ⚠️ **2026-09-18 更新**：本节下方 §2–§3 描述的是**旧 dev 账户（990393187001，已下线）**的 SSM 隧道连法，`scripts/dev.sh`/`db-tunnel.sh`/`db-tunnel-install.sh` 三个脚本已删除（不兼容 prod 账户——prod EC2 永久没有 IAM instance role，SSM agent 注册不上，`aws ssm start-session` 用不了）。**现在的连法是 SSH 隧道**，见下方新 §3.2。§2 的 AWS CLI/Session Manager 插件安装步骤不再需要；§3.1 的开机确认步骤不适用（prod EC2 是跳板机，常驻不停机，直连 RDS）。
+
+**2026-09-10 起（Zachary 拍板）：不再本地跑 Docker Postgres。** 本地开发经 SSH 隧道连 prod RDS 的 `stayright` 库。根目录 `docker-compose.yml` / `Dockerfile.postgres` 已删除。
 
 | | 说明 |
 |---|---|
-| 谁能用 | 需要 AWS IAM 用户 + `ssm:StartSession` 权限——**找 Zachary 申请** |
+| 谁能用 | 目前只有 Zachary 持有 EC2 跳板机的 SSH 私钥（`stayright-prod-bastion-key.pem`）——团队其他成员要连，找 Zachary 代为操作或申请私钥分发方案（尚未定，见 `docs/NEW_ACCOUNT_CHECKLIST.md`） |
 | 数据 | **全员共享**，改数据前在群里说一声 |
-| 连法 | 开 SSM 隧道 → 本地 `localhost:15432` → EC2 容器 `pg:5432`（§2–§4） |
+| 连法 | SSH 隧道到跳板机 → 转发到 RDS 私有端点（§3.2）；也可以直接 SSH 进跳板机后本机装了 `psql` 直连 |
 | schema 变更 | 只走 EF Core 迁移，且**默认不在本地自动执行**（§5） |
 
-> 📌 **线上实机形态**：Postgres 跑在 EC2 上的 Docker 容器 `pg`（镜像
-> `postgis/postgis:16-3.4` + 补装 pgvector，监听 `127.0.0.1:5432`），不是系统服务。
-> 在 EC2 上直接执行 SQL 用 `sudo docker exec pg psql -U app -d stayright -c "..."`。
-> EC2 **按需开停**，平时停机——连不上先确认实例在跑（§3.1）。
+> 📌 **prod 实机形态**：真正的 RDS（PostgreSQL 16.15 + pgvector 0.8.2 + PostGIS 3.4.6），不是 EC2 上的 Docker 容器——跟旧 dev 账户"Postgres 跑在 EC2 Docker 容器里"的形态不一样。RDS 端点：`stayright-prod-db.cpua0yc0ue7o.ap-southeast-2.rds.amazonaws.com:5432`，非公开访问，只能从同 VPC 内（即从跳板机）连。跳板机 `stayright-prod-bastion` 常驻不停机（EIP `3.105.155.148`）。
 
 ---
 
@@ -102,71 +99,41 @@ aws ec2 describe-instances --profile stayright --region ap-southeast-2 \
 
 状态不是 `running` 就找 Zachary 开机。
 
-### 3.2 开端口转发（保活方式）
+### 3.2 SSH 隧道到 RDS（现行方式，2026-09-18 起）
 
-裸 `aws ssm start-session` 会因为 **SSM 空闲 20 分钟自动断**、网络抖动、笔记本睡眠
-而掉线，且不会自己重连。用仓库里的保活脚本：它断了自动重连（带退避），并每 20s 发
-一次真实 Postgres 流量顶掉空闲超时。
+prod EC2 跳板机没有 IAM instance role，`aws ssm start-session` 用不了——直接用 SSH 端口转发，私钥找 Zachary 要（`stayright-prod-bastion-key.pem`）。
 
-**推荐：`scripts/dev.sh`（隧道跟着项目一起起/停）**
+**开隧道**（本地端口自选，不要跟本地其他服务冲突）：
 
 ```bash
-# 实例 ID 找 Zachary；用命名 profile 再加 AWS_PROFILE=...
-EC2_INSTANCE_ID=i-xxxxxxxx scripts/dev.sh          # 隧道 + 后端 + 前端
-EC2_INSTANCE_ID=i-xxxxxxxx scripts/dev.sh backend  # 只要隧道 + 后端
-scripts/dev.sh frontend                            # 只起前端，不碰隧道
+ssh -i ~/.ssh/stayright-prod-bastion-key.pem -f -N \
+  -L 15433:stayright-prod-db.cpua0yc0ue7o.ap-southeast-2.rds.amazonaws.com:5432 \
+  ec2-user@3.105.155.148
 ```
 
-Ctrl+C 一次性把隧道、后端、前端全部停掉——**不会常驻**，不跑项目时不连 EC2。
-2026-09-11 起改为默认方案（原先 `db-tunnel-install.sh` 装的开机常驻 launchd 服务已卸载）。
+`-f -N` 让它在后台跑不占终端。之后本地连 `localhost:15433` 就是连到 RDS。
 
-**备选：装成开机自启的常驻服务**（想让隧道一直在，不跟项目启停走可以用这个）：
+**关隧道**：找到进程杀掉——`pkill -f "L 15433:stayright-prod-db"`（换成你自己起的端口号）。
+
+**更简单：直接 SSH 进跳板机再连**（不用在本地开隧道，跳板机上已经装了 `psql`）：
 
 ```bash
-EC2_INSTANCE_ID=i-xxxxxxxx scripts/db-tunnel-install.sh
+ssh -i ~/.ssh/stayright-prod-bastion-key.pem ec2-user@3.105.155.148
+psql "host=stayright-prod-db.cpua0yc0ue7o.ap-southeast-2.rds.amazonaws.com port=5432 dbname=stayright user=app"
 ```
 
-- 看日志：`tail -f ~/Library/Logs/stayright-db-tunnel.log`
-- 卸载：`scripts/db-tunnel-install.sh uninstall`
-
-**临时前台跑一次隧道本身**（任意平台，Ctrl+C 结束，不带后端/前端）：
+密码从 Secrets Manager 取（需要 `ictgs-team5` 账户的 AWS 权限）：
 
 ```bash
-EC2_INSTANCE_ID=i-xxxxxxxx scripts/db-tunnel.sh
+aws secretsmanager get-secret-value --secret-id "stayright/prod/db/password" \
+  --profile ictgs-team5 --region ap-southeast-2 --query SecretString --output text
 ```
 
-**手动一条命令**（不想用脚本时，注意断了要自己重开）：
+**DBeaver 等 GUI 工具**：用它们自带的 SSH 隧道功能（连接配置里的 "SSH" 标签页），主机/用户名/私钥填跳板机信息，数据库连接信息填 RDS 真实地址，不用手动开隧道、不用改成 `localhost`——工具自己处理。
 
-```bash
-aws ssm start-session --region ap-southeast-2 --target <实例ID> \
-  --document-name AWS-StartPortForwardingSession \
-  --parameters '{"portNumber":["5432"],"localPortNumber":["15432"]}'
-```
+### 3.3 用完
 
-> Windows / Linux：没有 launchd，用脚本前台跑，或自己包一层 `nssm` / systemd user service
-> 拉起 `db-tunnel.sh`（脚本本身是 bash，Windows 需 Git Bash / WSL）。
-
-### 3.3 把 SSM 空闲超时提到 60 分钟（账号级，Zachary 做一次）
-
-默认 20 分钟。保活脚本已能顶住，但提高上限多一层保险：
-
-```bash
-cat > /tmp/ssm-prefs.json <<'JSON'
-{ "schemaVersion": "1.0", "description": "Session Manager defaults",
-  "sessionType": "Standard_Stream",
-  "inputs": { "idleSessionTimeout": "60", "maxSessionDuration": "",
-              "shellProfile": { "linux": "", "windows": "" } } }
-JSON
-aws ssm create-document --region ap-southeast-2 --name SSM-SessionManagerRunShell \
-  --document-type Session --document-format JSON --content file:///tmp/ssm-prefs.json
-# 已存在就换成： aws ssm update-document --name SSM-SessionManagerRunShell \
-#   --document-version '$LATEST' --document-format JSON --content file:///tmp/ssm-prefs.json
-```
-
-### 3.4 用完
-
-停常驻服务：`scripts/db-tunnel-install.sh uninstall`。EC2 用完通知 Zachary 可以停机
-（按需开停省成本；实例停了隧道自然连不上，重开机后保活脚本会自动接上）。
+隧道不是常驻服务，不用时随手关掉（见上方"关隧道"）。跳板机本身常驻不停机，不需要通知谁开关机。
 
 ---
 
@@ -181,13 +148,17 @@ aws ssm create-document --region ap-southeast-2 --name SSM-SessionManagerRunShel
 
 新建连接（插头图标 → PostgreSQL），隧道开着的前提下填：
 
+**推荐用 DBeaver 自带的 SSH 隧道**（连接向导的 "SSH" 标签页填跳板机信息：主机 `3.105.155.148`、端口 `22`、用户名 `ec2-user`、认证方式选公钥、私钥选 `stayright-prod-bastion-key.pem`），"主要" 标签页直接填 RDS 真实信息，不用手动开隧道：
+
 | 字段 | 值 |
 |---|---|
-| Host | `127.0.0.1` |
-| Port | **`15432`** |
+| Host | `stayright-prod-db.cpua0yc0ue7o.ap-southeast-2.rds.amazonaws.com` |
+| Port | `5432` |
 | Database | `stayright` |
 | Username | `app` |
-| Password | 见 Secrets Manager `stayright/dev/db/password`（找 Zachary） |
+| Password | 见 Secrets Manager `stayright/prod/db/password`（找 Zachary，或有 `ictgs-team5` 权限自己取） |
+
+（如果是自己手动开的 SSH 隧道，见 §3.2，Host 填 `127.0.0.1`、Port 填你自己起隧道时用的本地端口）
 
 点 **Test Connection** → `Connected` → **Finish**（首次会提示下载 JDBC 驱动，同意）。
 

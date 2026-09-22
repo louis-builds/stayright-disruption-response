@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # 演示前清场：把三个 Web 端的 pending 全部清干净（自验证 + 重试直到真正归零）。
 #
-#   ./scripts/clean-demo-state.sh
+#   ./scripts/clean-demo-state.sh            # 默认打 prod（ictgs-team5）
+#   BASE=https://xxx ./scripts/clean-demo-state.sh   # 打别的环境
 #
 # 清理内容（全部走正式 API，不直接碰库）：
 #   ① Coordinator：关闭所有未结案件（不只 Alice）；resolve 所有 Demo Storm /
@@ -11,10 +12,12 @@
 #      待确认换房方案全部确认掉（每轮后重新拉取验证，最多 5 轮），
 #      酒店账号的通知全部已读
 #
-# 与演示脚本的关系：先跑本脚本清场，再跑 seed-demo-case.sh / seed-demo-full.sh 注水开演。
+# 2026-09-18：配套的 seed-demo-full.sh / seed-demo-second-case.sh 已删除（用了
+# SSM/Lambda，跟 prod 账户不兼容）。演示注水目前只剩 seed-hotels.sh 可用。
 set -euo pipefail
 
-BASE="${BASE:?Set BASE (no cross-account default, e.g. https://<your-cloudfront-domain>)}"
+# 2026-09-18：dev 账户已下线，prod（ictgs-team5）是唯一在跑的环境，默认值改指向它。
+BASE="${BASE:-https://d1s582gz77wdm.cloudfront.net}"
 COORD_EMAIL="${COORD_EMAIL:-coord1@example.com}"
 COORD_PASS="${COORD_PASS:-Password123!}"
 CLOSE_REASON="人工决议结案"
@@ -137,6 +140,6 @@ cat <<EOF
 ① Coordinator 队列 pending: ${Q}
 ② 通知未读：协调员 / Alice / 全部酒店前台均已清零（见上）
 ③ 酒店 pending 询单/方案: 全部确认
-现在可以运行 ./scripts/seed-demo-full.sh 注水开演
+演示注水目前只剩 ./scripts/seed-hotels.sh 可用（seed-demo-full.sh 已删除）
 ========================================
 EOF
