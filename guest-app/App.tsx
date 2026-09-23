@@ -3,6 +3,7 @@ import { Platform, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { enableScreens } from "react-native-screens";
 import { AuthProvider } from "./src/features/auth";
+import { CallProvider } from "./src/features/calls/CallProvider";
 import { RootNavigator } from "./src/navigation/RootNavigator";
 
 if (Platform.OS === "web") {
@@ -36,7 +37,7 @@ if (Platform.OS === "web") {
           left: 0 !important;
           right: 0 !important;
           bottom: 0 !important;
-          z-index: 2147483647 !important;
+          z-index: 100 !important;
           background: #fff !important;
         }
       `;
@@ -50,7 +51,7 @@ export default function App() {
     <SafeAreaProvider style={{ flex: 1 }}>
       <View style={{ flex: 1 }}>
         <AuthProvider>
-          <RootNavigator />
+          <CallProvider><RootNavigator /></CallProvider>
         </AuthProvider>
       </View>
       <StatusBar style="auto" />

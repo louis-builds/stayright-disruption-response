@@ -1,7 +1,7 @@
 import { requestRecordingPermissionsAsync } from "expo-audio";
-import * as MediaLibrary from "expo-media-library";
 import * as Notifications from "expo-notifications";
 import { hasAllFilesAccess, requestAllFilesAccess } from "../calls/findLatestRecording";
+import { requestMediaLibraryAudioPermission } from "./mediaPermissions";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Animated, AppState, Easing, Linking, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 
@@ -114,7 +114,7 @@ export function PermissionsScreen({ onContinue }: { onContinue: () => void }) {
   const requestMedia = useCallback(async () => {
     setRequestingMedia(true);
     try {
-      const { status } = await MediaLibrary.requestPermissionsAsync(false, ["audio"]);
+      const { status } = await requestMediaLibraryAudioPermission();
       setMediaState(status === "granted" ? "granted" : "denied");
     } finally {
       setRequestingMedia(false);

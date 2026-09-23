@@ -22,6 +22,8 @@ import { useMyCalls } from "./useMyCalls";
 type Props = NativeStackScreenProps<CallsStackParamList, "MyCalls">;
 
 const STATUS_LABELS: Record<string, string> = {
+  ringing: "Waiting for answer",
+  rejected: "Declined",
   connecting: "Connecting",
   in_progress: "In progress",
   completed: "Completed",
@@ -30,7 +32,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 function CallRow({ item, onPress }: { item: Call; onPress: () => void }) {
-  const playable = item.status === "completed";
+  const playable = false;
   return (
     <Pressable
       style={({ pressed }) => [styles.row, !playable && styles.rowDisabled, pressed && playable && styles.rowPressed]}
@@ -48,6 +50,7 @@ function CallRow({ item, onPress }: { item: Call; onPress: () => void }) {
         {item.confirmationNo ? ` · ${item.confirmationNo}` : ""}
       </Text>
       <Text style={styles.rowMeta}>
+        Not recorded ·{" "}
         {new Date(item.startedAt).toLocaleString()}
         {item.durationSeconds !== null ? ` · ${item.durationSeconds}s` : ""}
       </Text>
@@ -72,6 +75,7 @@ export function MyCallsScreen({ navigation }: Props) {
     { key: "completed", label: "Completed" },
     { key: "failed", label: "Failed" },
     { key: "no_answer", label: "No answer" },
+    { key: "rejected", label: "Declined" },
   ];
 
   const entrance = useRef(new Animated.Value(0)).current;
