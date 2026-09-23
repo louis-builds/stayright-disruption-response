@@ -52,7 +52,7 @@ public class CallService(
         call.Status = "in_progress";
         call.AnsweredAt = now;
         call.UpdatedAt = now;
-        await repo.SaveChangesAsync(ct);
+        await repo.TransitionAsync(call, "ringing", ct);
 
         var dto = ToDto(call);
         await hub.Clients.User(call.InitiatedByCoordinatorId.ToString()).SendAsync("CallAccepted", dto, ct);
@@ -71,7 +71,7 @@ public class CallService(
         call.EndedAt = now;
         call.EndedReason = "rejected";
         call.UpdatedAt = now;
-        await repo.SaveChangesAsync(ct);
+        await repo.TransitionAsync(call, "ringing", ct);
 
         var dto = ToDto(call);
         await hub.Clients.User(call.InitiatedByCoordinatorId.ToString()).SendAsync("CallRejected", dto, ct);
@@ -88,11 +88,12 @@ public class CallService(
             throw new CallStateConflictException($"A {call.Status} call cannot be ended");
 
         var now = DateTimeOffset.UtcNow;
+        var previousStatus = call.Status;
         call.Status = call.Status == "ringing" ? "no_answer" : "completed";
         call.EndedAt = now;
         call.EndedReason = role == "coordinator" ? "ended_by_caller" : "ended_by_receiver";
         call.UpdatedAt = now;
-        await repo.SaveChangesAsync(ct);
+        await repo.TransitionAsync(call, previousStatus, ct);
 
         var dto = ToDto(call);
         await hub.Clients.Users(call.InitiatedByCoordinatorId.ToString(), call.ReceiverUserId.ToString())

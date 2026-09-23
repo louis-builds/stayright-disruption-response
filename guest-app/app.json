@@ -12,6 +12,7 @@
     "android": {
       "package": "nz.stayright.guest",
       "usesCleartextTraffic": true,
+      "permissions": ["android.permission.RECORD_AUDIO", "android.permission.MODIFY_AUDIO_SETTINGS"],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -24,7 +25,10 @@
       "favicon": "./assets/favicon.png"
     },
     "extra": {
-      "apiBaseUrl": "http://192.168.68.50:5080"
-    }
+      "apiBaseUrl": "http://localhost:5080"
+    },
+    "plugins": [
+      ["@config-plugins/react-native-webrtc", { "microphonePermission": "Allow StayRight to use your microphone for voice calls." }]
+    ]
   }
 }

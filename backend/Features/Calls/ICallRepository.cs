@@ -19,4 +19,5 @@ public interface ICallRepository
     Task<CallRecording?> FindRecordingByCallIdAsync(Guid callId, CancellationToken ct = default);
 
     Task SaveChangesAsync(CancellationToken ct = default);
+    Task TransitionAsync(Call call, string expectedStatus, CancellationToken ct = default);
 }

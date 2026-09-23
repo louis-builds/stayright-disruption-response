@@ -15,7 +15,7 @@ import {
 } from "react-native";
 import type { CasesStackParamList } from "../../navigation/CasesStack";
 import { listForCase } from "../calls/api";
-import { startCoordinatorCall } from "../calls/startCoordinatorCall";
+import { useCalling } from "../calls/CallProvider";
 import type { Call, CalleeType } from "../calls/types";
 import { escalationReasonLabel } from "../../shared/escalationLabels";
 import { useNetworkStatus } from "../../shared/network/useNetworkStatus";
@@ -191,6 +191,7 @@ function CloseCaseCard({ onClose }: { onClose: (reason: string, summary: string)
 }
 
 export function CaseDetailScreen({ route, navigation }: Props) {
+  const calling = useCalling();
   const { caseId } = route.params;
   const {
     caseInfo, thread, setThread, messages, loading, sending, sendMessage, vote, markMessageRead, unreadIncomingIds,
@@ -229,9 +230,7 @@ export function CaseDetailScreen({ route, navigation }: Props) {
   async function handleCall(calleeType: CalleeType) {
     setCallingType(calleeType);
     try {
-      const res = await startCoordinatorCall(caseId, calleeType);
-      if (res.code === 0) navigation.navigate("InCall", { caseId, callId: res.data.id, calleeType });
-      else Alert.alert("Call failed", res.message || "Could not start the call.");
+      await calling.controller.call(caseId);
     } catch {
       Alert.alert("Call failed", "Could not start the call.");
     } finally {
@@ -274,12 +273,10 @@ export function CaseDetailScreen({ route, navigation }: Props) {
       </View>
 
       <View style={styles.callRow}>
-        <Pressable style={({ pressed }) => [styles.callButton, styles.callGuestButton, pressed && styles.buttonPressed]} onPress={() => void handleCall("guest")} disabled={callingType !== null || !isOnline}>
+        <Pressable accessibilityRole="button" style={({ pressed }) => [styles.callButton, styles.callGuestButton, (!calling.online || calling.busy) && styles.buttonDisabled, pressed && styles.buttonPressed]} onPress={() => void handleCall("guest")} disabled={callingType !== null || !isOnline || !calling.online || calling.busy}>
           {callingType === "guest" ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.callButtonText}>📞 Call Guest</Text>}
         </Pressable>
-        <Pressable style={({ pressed }) => [styles.callButton, styles.callHotelButton, pressed && styles.buttonPressed]} onPress={() => void handleCall("hotel")} disabled={callingType !== null || !isOnline}>
-          {callingType === "hotel" ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.callButtonText}>📞 Call Hotel</Text>}
-        </Pressable>
+        <Text style={styles.metaText}>{calling.online ? "Guest must have the app open." : "Connecting calling service…"}</Text>
       </View>
 
       <View style={styles.panelTabs}>

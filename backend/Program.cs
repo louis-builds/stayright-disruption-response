@@ -98,6 +98,9 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
             }
         };
     });
+builder.Services.AddAuthentication().AddScheme<AuthenticationSchemeOptions, CallSignalingAuthentication>(
+    CallSignalingAuthentication.SchemeName, _ => { });
+builder.Services.AddSingleton<CallSignalingTokens>();
 builder.Services.AddAuthorization();
 
 builder.Services.AddScoped<IUserRepository, UserRepository>();
@@ -189,7 +192,7 @@ app.UseMiddleware<ForbiddenResponseMiddleware>();
 app.UseAuthorization();
 
 app.MapControllers();
-app.MapHub<CallHub>("/hubs/calls");
+app.MapHub<CallHub>("/api/hubs/calls", options => options.CloseOnAuthenticationExpiration = true);
 
 app.Run();
 

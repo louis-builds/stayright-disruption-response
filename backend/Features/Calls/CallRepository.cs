@@ -51,6 +51,18 @@ public class CallRepository(AppDbContext db) : ICallRepository
 
     public Task SaveChangesAsync(CancellationToken ct = default) => db.SaveChangesAsync(ct);
 
+    public async Task TransitionAsync(Call call, string expectedStatus, CancellationToken ct = default)
+    {
+        var count = await db.Calls.Where(c => c.Id == call.Id && c.Status == expectedStatus)
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.Status, call.Status)
+                .SetProperty(c => c.AnsweredAt, call.AnsweredAt)
+                .SetProperty(c => c.EndedAt, call.EndedAt)
+                .SetProperty(c => c.EndedReason, call.EndedReason)
+                .SetProperty(c => c.UpdatedAt, call.UpdatedAt), ct);
+        if (count == 0) throw new CallStateConflictException("The call changed. Refresh its status.");
+        db.Entry(call).State = EntityState.Unchanged;
+    }
+
     private IQueryable<Call> WithDetails() => db.Calls
         .Include(c => c.Case).ThenInclude(c => c!.Booking).ThenInclude(b => b!.GuestUser)
         .Include(c => c.Case).ThenInclude(c => c!.Booking).ThenInclude(b => b!.Hotel);
