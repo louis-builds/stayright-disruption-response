@@ -1,6 +1,6 @@
 """Poll the four signal sources and, whenever a regional-scale disruption
-(DisruptionEvent) is detected, feed it into the LangGraph flow in
-agent/langgraph_framework.py.
+(DisruptionEvent) is detected, feed it into the LangGraph flow assembled in
+agent/graph.py.
 
   collectors (detect_*_events) -> list[DisruptionEvent] -> dedup -> build_initial_state
   -> graph.stream(...)  runs the graph node by node
@@ -39,7 +39,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from langgraph.checkpoint.memory import InMemorySaver
 
-from agent.langgraph_framework import build_agent_graph, build_initial_state
+from agent import build_agent_graph, build_initial_state
 from scripts.run_detect import (
     _sim_flight_status,
     _sim_forecast,
@@ -58,7 +58,7 @@ STOP_AFTER_NODE = "identify_bookings"  # when not --full, the graph interrupts r
 
 
 async def compile_graph(*, full: bool):
-    """Compile langgraph_framework's graph. In non-full mode, interrupt_after stops it right
+    """Compile the agent graph. In non-full mode, interrupt_after stops it right
     after identify_bookings — everything downstream (check_case_type / notify /
     rank_and_explain, …) never runs.
 

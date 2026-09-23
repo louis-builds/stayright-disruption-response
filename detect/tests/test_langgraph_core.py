@@ -1,9 +1,9 @@
-"""Fast, no-DB, no-MCP-subprocess regression tests for the pure parts of
-agent/langgraph_framework.py: MCP result unwrapping and the graph's routing
-logic. These run on every push (see gate.yml / buildspec-gate.yml) precisely
-because they're cheap and catch the kind of change most likely to silently
-break the agent's control flow — a routing threshold, a stub's return shape,
-the MCP unwrap contract — without needing Postgres or a live LLM.
+"""Fast, no-DB, no-MCP-subprocess regression tests for the pure parts of the agent
+(agent/mcp_client.py's MCP result unwrapping, agent/nodes.py's routing logic). These run
+on every push (see buildspec-gate.yml) precisely because they're cheap and catch the
+kind of change most likely to silently break the agent's control flow — a routing
+threshold, a stub's return shape, the MCP unwrap contract — without needing Postgres or
+a live LLM.
 
 Slower, integration-shaped coverage of the actual MCP round-trip lives in
 tests/test_mcp_identify.py; this file only covers what needs zero I/O.
@@ -16,9 +16,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from agent.langgraph_framework import (
-    _unwrap,
-    build_initial_state,
+from agent.mcp_client import _unwrap
+from agent.nodes import (
     check_case_type,
     coordinate_booking,
     escalate_to_human,
@@ -26,6 +25,7 @@ from agent.langgraph_framework import (
     route_after_case_check,
     route_after_rank,
 )
+from agent.state import build_initial_state
 from src.detect.models import DisruptionEvent
 
 
