@@ -131,6 +131,12 @@ aws secretsmanager get-secret-value --secret-id "stayright/prod/db/password" \
 
 **DBeaver 等 GUI 工具**：用它们自带的 SSH 隧道功能（连接配置里的 "SSH" 标签页），主机/用户名/私钥填跳板机信息，数据库连接信息填 RDS 真实地址，不用手动开隧道、不用改成 `localhost`——工具自己处理。
 
+### 3.2b 给团队其他成员开通访问（2026-09-23 起）
+
+这个账户对 IAM 彻底锁死（课程侧永久边界），没法走"4 个 IAM User"那条路——最终方案是 **OS 级 SSH key 管理**：每个开发者用自己的密钥对，Zachary 手动把对方的公钥加进跳板机的 `authorized_keys`，并加上限制，让这把 key **只能转发到 RDS:5432，登不了 shell、跑不了命令**。不需要改安全组，也不需要任何 IAM 权限。
+
+完整流程（开发者要做什么、Zachary 要跑什么脚本、密码怎么单独分发、怎么撤销权限、安全边界说明）见 **`docs/TEAM_DB_ACCESS.md`**，不在这里重复——避免两份文档各改一半、内容漂移。配套脚本：`scripts/add-dev-ssh-key.sh`。
+
 ### 3.3 用完
 
 隧道不是常驻服务，不用时随手关掉（见上方"关隧道"）。跳板机本身常驻不停机，不需要通知谁开关机。
