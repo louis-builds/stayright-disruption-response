@@ -16,9 +16,9 @@ name: Gate
 
 on:
   pull_request:
-    branches: [Test2]
+    branches: [test2]
   push:
-    branches: [Test2]
+    branches: [test2]
 
 jobs:
   python:
