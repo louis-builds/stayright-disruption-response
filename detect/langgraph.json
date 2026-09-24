@@ -1,0 +1,7 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "kakapo": "./agent/graph.py:get_agent"
+  },
+  "env": "../.env"
+}

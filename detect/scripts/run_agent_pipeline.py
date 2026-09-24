@@ -12,7 +12,7 @@ trigger, so this mock flight round is what demonstrates the whole chain end to e
 --mock-at 0 disables the injection; --simulate fakes all four sources instead.
 
 By default the graph **stops right after identify_bookings** (interrupt_after +
-InMemorySaver) — check_case_type and everything downstream is a teammate's work in
+InMemorySaver) — check_needs_escalation and everything downstream is a teammate's work in
 progress and isn't run yet. Pass --full to run the whole graph (needs GEMINI_API_KEY and
 some quota left).
 
@@ -59,8 +59,8 @@ STOP_AFTER_NODE = "identify_bookings"  # when not --full, the graph interrupts r
 
 async def compile_graph(*, full: bool):
     """Compile the agent graph. In non-full mode, interrupt_after stops it right
-    after identify_bookings — everything downstream (check_case_type / notify /
-    rank_and_explain, …) never runs.
+    after identify_bookings — everything downstream (check_needs_escalation / notify /
+    recommend_options, …) never runs.
 
     build_agent_graph needs an await (MCP tools connect to the server once during assembly to fetch schema).
     """
@@ -150,8 +150,8 @@ def describe_event(event: DisruptionEvent) -> str:
 async def run_event_through_graph(event: DisruptionEvent, graph, *, full: bool) -> None:
     """Feed one DisruptionEvent into the graph, printing each node's output as it runs.
 
-    In non-full mode, the graph interrupts right after identify_bookings — check_case_type
-    and everything after it never runs. identify_bookings / rank_* nodes go through MCP
+    In non-full mode, the graph interrupts right after identify_bookings — check_needs_escalation
+    and everything after it never runs. identify_bookings / recommend_* nodes go through MCP
     (async), so this uses astream.
     """
     state = build_initial_state(event)
@@ -168,8 +168,8 @@ async def run_event_through_graph(event: DisruptionEvent, graph, *, full: bool) 
                 for b in bookings:
                     print(f"      - {b['booking_id']} / guest {b['guest_id']} / {b['hotel_name']} "
                           f"({b['check_in']} -> {b['check_out']})")
-            elif node == "check_case_type":
-                print(f"    check_case_type -> needs_escalation={update.get('needs_escalation')} "
+            elif node == "check_needs_escalation":
+                print(f"    check_needs_escalation -> needs_escalation={update.get('needs_escalation')} "
                       f"reason={update.get('escalation_reason')}")
             else:
                 print(f"    {node} -> {update}")
@@ -187,7 +187,7 @@ def main() -> None:
     parser.add_argument("--interval", type=float, default=60.0, help="seconds between polls (default 60)")
     parser.add_argument("--iterations", type=int, default=0, help="stop after N rounds (default 0 = run forever)")
     parser.add_argument("--once", action="store_true", help="poll once and exit (equivalent to --iterations 1)")
-    parser.add_argument("--full", action="store_true", help="run the whole graph (including LLM nodes like rank_and_explain; needs GEMINI_API_KEY)")
+    parser.add_argument("--full", action="store_true", help="run the whole graph (including LLM nodes like recommend_options; needs GEMINI_API_KEY)")
     parser.add_argument("--dedup-cooldown-minutes", type=float, default=60.0,
                         help="don't re-feed the same location+event type into the graph within this window unless severity increases (default 60; 0 disables)")
     parser.add_argument("--dedup-state", type=Path, default=Path("output/.agent_pipeline_dedup.json"),

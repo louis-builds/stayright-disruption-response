@@ -3,10 +3,10 @@ into the graph's initial state."""
 
 from __future__ import annotations
 
-import operator
 from typing import Any, Optional
 
 from langchain.messages import AnyMessage, HumanMessage
+from langgraph.graph.message import add_messages
 from typing_extensions import Annotated, TypedDict
 
 from src.detect.models import DisruptionEvent
@@ -20,7 +20,12 @@ class DisruptionState(TypedDict):
     ranking_confidence: Optional[float]
     booking_success: Optional[bool]
     final_message: Optional[str]
-    messages: Annotated[list[AnyMessage], operator.add]
+    # add_messages (not plain operator.add) coerces plain dicts into real BaseMessage
+    # objects -- code that builds state itself (build_initial_state below) always
+    # constructs proper HumanMessage/etc. instances so this didn't matter there, but
+    # LangGraph Studio submits messages as JSON dicts, which operator.add would leave
+    # as dicts instead of real messages, and the model client can't read those.
+    messages: Annotated[list[AnyMessage], add_messages]
     llm_calls: int
 
 

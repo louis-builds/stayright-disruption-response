@@ -33,12 +33,12 @@ sample_event = DisruptionEvent(
 async def main() -> None:
     agent = await get_agent()
 
-    try:
-        png_bytes = agent.get_graph(xray=True).draw_mermaid_png()
-        pathlib.Path("kakapo_graph.png").write_bytes(png_bytes)
-        print("Saved graph diagram to kakapo_graph.png")
-    except Exception as e:
-        print(f"Could not render graph diagram: {e}")
+    # try:
+    #     png_bytes = agent.get_graph(xray=True).draw_mermaid_png()
+    #     pathlib.Path("kakapo_graph.png").write_bytes(png_bytes)
+    #     print("Saved graph diagram to kakapo_graph.png")
+    # except Exception as e:
+    #     print(f"Could not render graph diagram: {e}")
 
     result = await agent.ainvoke(build_initial_state(sample_event))
     print(f"\nidentify_bookings -> {len(result.get('affected_bookings') or [])} affected booking(s)")

@@ -16,6 +16,10 @@ htmlcov/
 # scripts/run_demo.py 写出的 handoff JSON，运行时产物不进仓库
 output/
 
+# langgraph dev（Studio）本地运行时缓存与调试产物
+detect/.langgraph_api/
+detect/*.png
+
 # 环境与密钥 —— 严禁提交
 .env
 .env.*

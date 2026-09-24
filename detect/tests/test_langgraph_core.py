@@ -18,12 +18,12 @@ import pytest
 
 from agent.mcp_client import _unwrap
 from agent.nodes import (
-    check_case_type,
+    check_needs_escalation,
     coordinate_booking,
     escalate_to_human,
     notify_affected_guest,
-    route_after_case_check,
-    route_after_rank,
+    route_after_escalation_check,
+    route_after_recommendation,
 )
 from agent.state import build_initial_state
 from src.detect.models import DisruptionEvent
@@ -55,45 +55,45 @@ class TestUnwrap:
         assert _unwrap(result) == ["plain text answer"]
 
 
-class TestRouteAfterCaseCheck:
+class TestRouteAfterEscalationCheck:
     def test_escalates_when_flagged(self):
-        assert route_after_case_check({"needs_escalation": True}) == "escalate_to_human"
+        assert route_after_escalation_check({"needs_escalation": True}) == "escalate_to_human"
 
     def test_notifies_guest_otherwise(self):
-        assert route_after_case_check({"needs_escalation": False}) == "notify_affected_guest"
-        assert route_after_case_check({}) == "notify_affected_guest"
+        assert route_after_escalation_check({"needs_escalation": False}) == "notify_affected_guest"
+        assert route_after_escalation_check({}) == "notify_affected_guest"
 
 
-class TestRouteAfterRank:
+class TestRouteAfterRecommendation:
     def _state(self, *, tool_calls=None, ranking_confidence=None):
         last_message = SimpleNamespace(tool_calls=tool_calls)
         return {"messages": [last_message], "ranking_confidence": ranking_confidence}
 
     def test_goes_back_to_tools_while_the_llm_still_wants_to_call_one(self):
         state = self._state(tool_calls=[{"name": "search_alternative_properties"}])
-        assert route_after_rank(state) == "rank_tool_node"
+        assert route_after_recommendation(state) == "execute_recommendation_tools"
 
     def test_escalates_on_low_confidence_once_tool_calls_are_done(self):
         state = self._state(tool_calls=[], ranking_confidence=0.3)
-        assert route_after_rank(state) == "escalate_to_human"
+        assert route_after_recommendation(state) == "escalate_to_human"
 
     def test_proceeds_to_generate_message_on_high_confidence(self):
         state = self._state(tool_calls=[], ranking_confidence=0.9)
-        assert route_after_rank(state) == "generate_message"
+        assert route_after_recommendation(state) == "generate_message"
 
     def test_defaults_to_high_confidence_when_none_was_ever_set(self):
-        # ranking_confidence is only set when rank_and_explain stopped calling tools;
+        # ranking_confidence is only set when recommend_options stopped calling tools;
         # a missing value must not accidentally read as "low confidence, escalate"
         state = self._state(tool_calls=[], ranking_confidence=None)
-        assert route_after_rank(state) == "generate_message"
+        assert route_after_recommendation(state) == "generate_message"
 
 
 class TestOrchestrationStubs:
     """These nodes are still placeholders (see their TODOs); pin down their current
     contract so a change to the stub's shape is a deliberate, visible diff."""
 
-    def test_check_case_type_never_escalates_yet(self):
-        assert check_case_type({}) == {"needs_escalation": False, "escalation_reason": None}
+    def test_check_needs_escalation_never_escalates_yet(self):
+        assert check_needs_escalation({}) == {"needs_escalation": False, "escalation_reason": None}
 
     def test_notify_affected_guest_is_a_noop_for_now(self):
         assert notify_affected_guest({}) == {}

@@ -1,9 +1,9 @@
 """Node and routing functions for the disruption-response graph.
 
-rank_and_explain / rank_tool_node are the exception — they live in graph.py instead,
-because they close over the MCP tool list fetched once at graph-assembly time (needed
-to bind tools to the model). Everything here is self-contained and independently
-testable without a live LLM or database connection.
+recommend_options / execute_recommendation_tools are the exception — they live in
+graph.py instead, because they close over the MCP tool list fetched once at
+graph-assembly time (needed to bind tools to the model). Everything here is
+self-contained and independently testable without a live LLM or database connection.
 """
 
 import logging
@@ -12,7 +12,7 @@ from typing import Literal
 
 from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model
-from langchain.messages import SystemMessage
+from langchain.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 
 from agent.mcp_client import IDENTIFY_STDIO, load_mcp_tools
@@ -28,7 +28,9 @@ log = logging.getLogger("kakapo.agent")
 # run identify/routing tests. Only fetch it from the node that actually needs the LLM.
 @lru_cache(maxsize=1)
 def get_model():
-    return init_chat_model("gemini-2.5-flash", model_provider="google_genai", temperature=0)
+    # gemini-2.5-flash's free tier is 20 requests/day; flash-lite's free tier is much
+    # higher (250/day) -- swap back once billing is on or the free tier changes.
+    return init_chat_model("gemini-3.5-flash-lite", model_provider="google_genai", temperature=0)
 
 
 async def identify_bookings(state: DisruptionState, config: RunnableConfig | None = None) -> dict:
@@ -49,7 +51,7 @@ async def identify_bookings(state: DisruptionState, config: RunnableConfig | Non
     return {"affected_bookings": list(rows)}
 
 
-def check_case_type(state: DisruptionState) -> dict:
+def check_needs_escalation(state: DisruptionState) -> dict:
     """Decide whether this needs to escalate up front — group bookings, VIP, disputes (rule-based, no LLM)."""
     # TODO: replace with the real rule logic
     return {"needs_escalation": False, "escalation_reason": None}
@@ -69,9 +71,14 @@ def generate_message(state: DisruptionState) -> dict:
     reproduction rate either. A few retries usually get a non-empty result; if it stays empty,
     fall back to a canned message rather than let the guest get nothing.
     """
-    prompt = [
-        SystemMessage(content="Write a warm, clear message to the guest summarising the rebooking outcome.")
-    ] + state["messages"]
+    # The conversation history's last turn is recommend_options's final AI reply, but
+    # gemini-3.5-flash-lite rejects a request that ends on an assistant turn ("prefilling")
+    # -- append a trailing human turn so the request always ends on a user message.
+    prompt = (
+        [SystemMessage(content="Write a warm, clear message to the guest summarising the rebooking outcome.")]
+        + state["messages"]
+        + [HumanMessage(content="Now write that message to the guest.")]
+    )
 
     for _ in range(3):
         content = get_model().invoke(prompt).content
@@ -92,17 +99,17 @@ def escalate_to_human(state: DisruptionState) -> dict:
     return {"final_message": "Escalated to human support with full context."}
 
 
-def route_after_case_check(state: DisruptionState) -> Literal["notify_affected_guest", "escalate_to_human"]:
+def route_after_escalation_check(state: DisruptionState) -> Literal["notify_affected_guest", "escalate_to_human"]:
     if state.get("needs_escalation"):
         return "escalate_to_human"
     return "notify_affected_guest"
 
 
-def route_after_rank(state: DisruptionState) -> Literal["rank_tool_node", "generate_message", "escalate_to_human"]:
+def route_after_recommendation(state: DisruptionState) -> Literal["execute_recommendation_tools", "generate_message", "escalate_to_human"]:
     last_message = state["messages"][-1]
     # The LLM still wants to call a tool (search properties / check policy) — back to the tool node
     if getattr(last_message, "tool_calls", None):
-        return "rank_tool_node"
+        return "execute_recommendation_tools"
     # The LLM has given its final recommendation but confidence is too low — escalate
     if (state.get("ranking_confidence") or 1.0) < 0.6:
         return "escalate_to_human"
