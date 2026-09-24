@@ -1,10 +1,12 @@
 # 系统结构图 & 关键时序图
 
-**最后核实**：2026-09-24（对照代码/AWS 控制台实际核实过一遍，不是凭记忆写的）
+**最后核实**：2026-09-24（三个手机 App 连 CloudFront 已在 Android 模拟器上实测走通，不是只改了配置没验证）
+
+这份文档描述的是**部署在 AWS 上的生产环境**，不含本地开发流程——本地怎么连库、怎么起服务见 `docs/DATABASE_ACCESS.md` / `docs/TEAM_DB_ACCESS.md` / `docs/DEV_DB_SETUP.md`，这里不重复。
 
 这份文档回答两个问题：
 
-1. **结构图**——Web 前端、三个手机 App、后端、数据库、外部服务之间实际连的是谁、走的是哪条路（当前状态，含"手机 App 目前没打通 prod"这个容易搞混的点）。
+1. **结构图**——Web 前端、三个手机 App、后端、数据库、外部服务在生产环境里实际连的是谁、走的是哪条路。
 2. **时序图**——一条扰动从被采集到案件解决，具体按什么顺序经过哪些接口（对应 `CLAUDE.md`"必须遵循的模式"里"采集 → 变化检测 → 匹配 → 闸门 → 裁决 → 触达 → 回调 → 重订"那条描述，这里画成了实际验证过的接口调用顺序）。
 
 两张图都用 Mermaid 写，GitHub 打开本文件会直接渲染，不需要额外工具；改代码/改部署方式之后，**图跟着改，不要让它变成第二份漂移的文档**。
@@ -24,8 +26,6 @@ flowchart TB
 
     CF["CloudFront<br/>d1s582gz77wdm.cloudfront.net"]
     S3Static["S3 静态资源<br/>OAC，桶不公开"]
-    LocalBackend["本地开发后端<br/>dotnet run · 局域网IP/localhost :5080"]
-    SSHClient["SSH 隧道客户端<br/>stayright-dev-&lt;name&gt; 私钥"]
 
     subgraph EC2["EC2 · stayright-prod-bastion"]
         Backend["C# 后端<br/>systemd stayright-api :5080"]
@@ -41,16 +41,12 @@ flowchart TB
     S3Policy["S3 policy-docs<br/>酒店政策 PDF"]
 
     Web -->|HTTPS 公网| CF
-    Guest -.->|局域网 HTTP，当前非 prod| LocalBackend
-    Hotel -.->|局域网 HTTP，当前非 prod| LocalBackend
-    Coord -.->|局域网 HTTP，当前非 prod| LocalBackend
+    Guest -->|"HTTPS，eas.json production profile"| CF
+    Hotel -->|"HTTPS，eas.json production profile"| CF
+    Coord -->|"HTTPS，eas.json production profile"| CF
 
     CF -->|默认行为| S3Static
     CF -->|"/api/* 转发"| Backend
-
-    LocalBackend -.->|本机进程用隧道连库| SSHClient
-    SSHClient -.->|"端口转发 → RDS:5432（仅限此端口）"| RDS
-    SSHClient -.->|"❌ 不可达：permitopen 限定仅 RDS，到不了 backend :5080"| Backend
 
     Backend -->|同 VPC 直连 Npgsql| RDS
     Detect -.->|读 bookings/hotels 做匹配| RDS
@@ -63,21 +59,21 @@ flowchart TB
     Backend --> S3Policy
 
     classDef prod fill:#DCE7F0,stroke:#2C5F8A,color:#1C2333;
-    classDef dev fill:#F3E2CC,stroke:#B5651D,color:#1C2333;
+    classDef client fill:#F3E2CC,stroke:#B5651D,color:#1C2333;
     classDef neutral fill:#EDEAE2,stroke:#8a8a8a,color:#1C2333;
-    class Web,CF,S3Static,Backend,RDS,Detect,Handoff prod;
-    class Guest,Hotel,Coord,LocalBackend,SSHClient dev;
+    class CF,S3Static,Backend,RDS,Detect,Handoff prod;
+    class Web,Guest,Hotel,Coord client;
     class Gemini,Bedrock,SMTP,S3Policy neutral;
 ```
 
-**图例**：蓝色系 = prod 生产链路；橙色系 = 手机 App 目前实际走的路径（连本地开发后端，本地后端再经受限 SSH 隧道连 prod RDS）；灰色 = 后端对外调用的外部服务。虚线箭头（含那条带 ❌ 的）是当前验证过"确实走不通/不是常态"的连接，画出来是为了显式标注边界，不是设计目标。
+**图例**：蓝色系 = EC2/RDS 组成的生产核心链路；橙色系 = 四个客户端（Web + 三个手机 App），全部经 CloudFront 打进来；灰色 = 后端对外调用的外部服务。实线箭头都是已验证可用的连接；虚线（`detect → RDS` 那条）是只读查询，跟其他写入路径区分开。
 
 ### 几个容易搞混的点
 
-- **手机 App 现在没有连 prod**：三个 App 默认地址都是局域网 IP（`192.168.68.50:5080`）或 `localhost:5080`，仓库里搜不到 CloudFront 域名。要打通需要给它们加一份指向 `https://d1s582gz77wdm.cloudfront.net` 的生产构建配置（`EXPO_PUBLIC_API_BASE_URL`），而且要注意 Cookie/Session 认证在 App 的跨域 HTTPS 场景下是否稳定，需要实测，不能假设它自动和 Web 端行为一致。
-- **SSH 隧道到不了 EC2 后端**：给团队开的 key 用 `permitopen="<rds-host>:5432"` 精确限定，只能转发到 RDS 这一个地址的这一个端口，到不了同一台 EC2 上跑的后端（:5080）——两条独立通道，不是"能连库就能连后端"。
-- **EC2 后端连库不走隧道**：它和 RDS 同一个 VPC，直连 Npgsql，SSH 隧道只是给人手动本地开发用的，跟 prod 运行时无关。
+- **四个客户端走的是同一个入口**：Web 前端和三个手机 App（生产构建，`eas.json` 的 `production` profile）都连 `https://d1s582gz77wdm.cloudfront.net`，CloudFront 按路径分流——静态资源走 S3，`/api/*` 转发到 EC2 后端。三个手机 App 这条路径已在 2026-09-24 于 Android 模拟器实测：登录、Cookie/Session 跨域认证、真实 prod 数据读取全部验证通过。
+- **EC2 后端连库直连，不经任何中间层**：后端和 RDS 在同一个 VPC，走 Npgsql 直连 5432 端口。
 - **detect 采集器没有对外接口**：是 EC2 上的 cron 任务，不能被手机/前端直接调用，只能通过它写入 `handoff.jsonl` → 后端摄入 → 案件/通知这条链路间接产生影响。
+- **EC2 安全组只放行 CloudFront**：后端 5080 端口的入站规则只认 CloudFront 官方 IP 段（托管前缀列表），不对公网裸开——所有客户端流量必须经过 CloudFront 这一层，没有绕开的路径。
 
 ---
 
@@ -128,6 +124,6 @@ sequenceDiagram
 
 ## 维护约定
 
-- 这两张图描述的是**当前实现状态**，不是设计目标——如果做了架构变更（比如手机 App 真的打通了 prod、或者认证方式从 Cookie 换成 Token），**先改代码再改图**，图跟着代码走，不要反过来。
+- 这两张图描述的是**生产环境的当前实现状态**，不是设计目标——架构变了（比如换了认证方式、加了新的外部服务），**先改代码再改图**，图跟着代码走，不要反过来。
 - 改动较大时更新顶部"最后核实"日期。
-- 不在这里重复 `docs/AWS_SDK_SPEC.md`（AWS 资源清单/写法）或 `docs/DATABASE_ACCESS.md`（连库步骤）的内容，这份文档只画"连接关系"和"调用顺序"，具体怎么连、密钥怎么给见那两份文档。
+- 本文档只画生产环境的"连接关系"和"调用顺序"，不含本地开发流程——本地怎么连库、密钥怎么给见 `docs/DATABASE_ACCESS.md` / `docs/TEAM_DB_ACCESS.md` / `docs/DEV_DB_SETUP.md`；AWS 资源清单/写法见 `docs/AWS_SDK_SPEC.md`。不在这里重复那几份文档的内容。
