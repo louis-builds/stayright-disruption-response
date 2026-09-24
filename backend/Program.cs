@@ -61,6 +61,7 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
+builder.Services.AddSignalR();
 
 var sessionIdleTimeoutMinutes = int.TryParse(Environment.GetEnvironmentVariable("SESSION_IDLE_TIMEOUT_MINUTES"), out var m) ? m : 60;
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
@@ -97,6 +98,9 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
             }
         };
     });
+builder.Services.AddAuthentication().AddScheme<AuthenticationSchemeOptions, CallSignalingAuthentication>(
+    CallSignalingAuthentication.SchemeName, _ => { });
+builder.Services.AddSingleton<CallSignalingTokens>();
 builder.Services.AddAuthorization();
 
 builder.Services.AddScoped<IUserRepository, UserRepository>();

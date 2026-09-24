@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # 向已部署环境批量注入演示酒店（纯公开 API，无需 AWS/数据库权限）。
 #
-#   ./scripts/seed-hotels.sh            # 注入 scripts/hotels-seed.json 里全部酒店
-#   BASE=https://xxx ./scripts/seed-hotels.sh
+#   ./scripts/seed-hotels.sh            # 默认打 prod（ictgs-team5），注入 scripts/hotels-seed.json 里全部酒店
+#   BASE=https://xxx ./scripts/seed-hotels.sh   # 打别的环境
 #
 # 对每家酒店做三件事（幂等，可重复跑）：
 #   1. POST /api/auth/register   建酒店 + 房型 + 前台账号（邮箱已存在则跳过建店）
@@ -13,7 +13,8 @@
 # 数据源与 backend/SeedData 一致（本地全新环境由 SeedRunner 自动带上）。
 set -euo pipefail
 
-BASE="${BASE:?Set BASE (no cross-account default, e.g. https://<your-cloudfront-domain>)}"
+# 2026-09-18：dev 账户已下线，prod（ictgs-team5）是唯一在跑的环境，默认值改指向它。
+BASE="${BASE:-https://d1s582gz77wdm.cloudfront.net}"
 DATA="${DATA:-$(dirname "$0")/hotels-seed.json}"
 
 JAR="$(mktemp)"; trap 'rm -f "$JAR"' EXIT

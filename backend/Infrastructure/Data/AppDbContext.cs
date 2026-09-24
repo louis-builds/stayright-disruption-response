@@ -292,6 +292,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IServiceScopeF
         {
             e.HasIndex(x => x.CaseId);
             e.HasIndex(x => x.InitiatedByCoordinatorId);
+            e.HasIndex(x => x.ReceiverUserId);
         });
 
         modelBuilder.Entity<CallRecording>(e =>

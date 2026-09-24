@@ -1,0 +1,25 @@
+# 本地开发用数据库（不连 AWS 时的替代方案，见 docs/DATABASE_ACCESS.md）。
+# 默认连线上共享库；本 compose 只在你想完全本地化时起一个带 pgvector 的
+# Postgres 16，监听本机 15432（与 SSM 隧道同一端口，后端零配置切换）。
+#
+#   docker compose up -d pg
+#   cd backend && RUN_DB_MIGRATE=1 dotnet run   # 首次：迁移 + seed 到本地库
+services:
+  pg:
+    image: pgvector/pgvector:pg16
+    container_name: stayright-pg-local
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app_password}
+      POSTGRES_DB: stayright
+    ports:
+      - "15432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d stayright"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+volumes:
+  pgdata:

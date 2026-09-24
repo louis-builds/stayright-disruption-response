@@ -7,7 +7,9 @@ public interface ICallRepository
 {
     Task AddAsync(Call call, CancellationToken ct = default);
     Task<Call?> FindAsync(Guid id, CancellationToken ct = default);
+    Task<Call?> FindWithDetailsAsync(Guid id, CancellationToken ct = default);
     Task<List<Call>> ListForCaseAsync(Guid caseId, CancellationToken ct = default);
+    Task<List<Call>> ListIncomingForGuestAsync(Guid guestUserId, CancellationToken ct = default);
     Task<PagedResult<Call>> ListForCoordinatorAsync(
         Guid coordinatorUserId, Guid? caseId, string? calleeType, string? status,
         DateTimeOffset? from, DateTimeOffset? to, int page, int pageSize, CancellationToken ct = default);
@@ -17,4 +19,5 @@ public interface ICallRepository
     Task<CallRecording?> FindRecordingByCallIdAsync(Guid callId, CancellationToken ct = default);
 
     Task SaveChangesAsync(CancellationToken ct = default);
+    Task TransitionAsync(Call call, string expectedStatus, CancellationToken ct = default);
 }

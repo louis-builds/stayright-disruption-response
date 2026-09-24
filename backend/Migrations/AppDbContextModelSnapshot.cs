@@ -171,6 +171,10 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<DateTimeOffset?>("AnsweredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("answered_at");
+
                     b.Property<string>("CalleeType")
                         .IsRequired()
                         .HasColumnType("text")
@@ -188,9 +192,17 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("ended_at");
 
+                    b.Property<string>("EndedReason")
+                        .HasColumnType("text")
+                        .HasColumnName("ended_reason");
+
                     b.Property<Guid>("InitiatedByCoordinatorId")
                         .HasColumnType("uuid")
                         .HasColumnName("initiated_by_coordinator_id");
+
+                    b.Property<Guid>("ReceiverUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("receiver_user_id");
 
                     b.Property<DateTimeOffset>("StartedAt")
                         .HasColumnType("timestamp with time zone")
@@ -213,6 +225,9 @@ namespace TravelDisruptionAgent.Api.Migrations
 
                     b.HasIndex("InitiatedByCoordinatorId")
                         .HasDatabaseName("ix_calls_initiated_by_coordinator_id");
+
+                    b.HasIndex("ReceiverUserId")
+                        .HasDatabaseName("ix_calls_receiver_user_id");
 
                     b.ToTable("calls", (string)null);
                 });

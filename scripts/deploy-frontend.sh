@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # 前端部署到 S3 + CloudFront 失效。
 #
-#   ./scripts/deploy-frontend.sh
+#   ./scripts/deploy-frontend.sh                 # 默认部署到 prod（ictgs-team5）
+#   SITE_BUCKET=... CF_DIST_ID=... ./scripts/deploy-frontend.sh   # 覆盖成别的账户/环境
 #
 # VITE_API_BASE_URL 置空 → client.ts 走同源相对路径 /api/*，与域名解耦。
 # 不用 `aws s3 sync --delete`（8/27 教训：误删过桶里文件）。
@@ -10,8 +11,10 @@
 set -euo pipefail
 
 REGION="${AWS_REGION:-ap-southeast-2}"
-SITE_BUCKET="${SITE_BUCKET:?Set SITE_BUCKET (no cross-account default)}"
-CF_DIST_ID="${CF_DIST_ID:?Set CF_DIST_ID (no cross-account default)}"
+# 2026-09-18：dev 账户已下线，prod（ictgs-team5）是唯一在跑的环境，默认值改指向它；
+# 仍可通过环境变量覆盖，不是硬编码死。
+SITE_BUCKET="${SITE_BUCKET:-stayright-prod-site-025066268612}"
+CF_DIST_ID="${CF_DIST_ID:-E25ZVA8NPIGQGM}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FE="$REPO_ROOT/frontend"
 
