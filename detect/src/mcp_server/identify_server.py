@@ -65,16 +65,7 @@ def search_alternative_properties(
     ]
 
 
-@mcp.tool()
-def get_cancellation_policy(property_id: str) -> str:
-    """Look up a property's real cancellation/rebooking policy text (placeholder implementation).
 
-    Args:
-        property_id: property ID
-    """
-    # TODO: replace with real policy database/knowledge-base retrieval (RAG) —
-    # never let the LLM invent policy terms from memory
-    return "Free cancellation up to 24 hours before check-in. After that, one night's charge applies."
 
 
 if __name__ == "__main__":

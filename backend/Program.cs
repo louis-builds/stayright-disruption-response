@@ -149,6 +149,7 @@ builder.Services.AddScoped<IDeviceTokenRepository, DeviceTokenRepository>();
 builder.Services.AddScoped<IExpoPushSender, ExpoPushSender>();
 builder.Services.AddHostedService<FaqClusteringJob>();
 builder.Services.AddHostedService<HandoffIngestJob>();
+builder.Services.AddMcpServer().WithHttpTransport().WithToolsFromAssembly();
 
 var app = builder.Build();
 
@@ -192,8 +193,7 @@ app.UseMiddleware<ForbiddenResponseMiddleware>();
 app.UseAuthorization();
 
 app.MapControllers();
-app.MapHub<CallHub>("/api/hubs/calls", options => options.CloseOnAuthenticationExpiration = true);
-
+app.MapMcp("/mcp");
 app.Run();
 
 static string BuildConnectionString(IConfiguration config)

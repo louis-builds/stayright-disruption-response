@@ -2,7 +2,7 @@
 
 Uses an in-process MCPServer instance as the connection target (skipping the subprocess),
 and mocks out get_connection in the server module — CI has no postgres, real-database
-verification goes through agent/mcp_smoke.py.
+verification goes through scripts/run_agent_demo.py or scripts/run_agent_pipeline.py.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from agent.langgraph_framework import identify_bookings
+from agent.nodes import identify_bookings
 from src.detect.models import DisruptionEvent
 from src.mcp_server import identify_server
 
@@ -102,7 +102,7 @@ def test_no_candidates_returns_empty_list(rows):
 
 @pytest.mark.parametrize("rows", [[]], indirect=True)
 def test_server_exposes_matched_bookings_tool(rows):
-    from agent.langgraph_framework import load_mcp_tools
+    from agent.mcp_client import load_mcp_tools
 
     tools = {tool.name: tool for tool in asyncio.run(load_mcp_tools(identify_server.mcp))}
 
