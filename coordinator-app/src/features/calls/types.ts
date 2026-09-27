@@ -1,5 +1,5 @@
 export type CalleeType = "guest" | "hotel";
-export type CallStatus = "connecting" | "in_progress" | "completed" | "failed" | "no_answer";
+export type CallStatus = "connecting" | "ringing" | "in_progress" | "completed" | "failed" | "no_answer" | "rejected";
 export type RecordingStatus = "pending" | "transcribing" | "summarizing" | "done" | "failed";
 
 export type TelephonyProvider = "mock" | "twilio" | "system";
@@ -10,6 +10,8 @@ export interface Call {
   calleeType: CalleeType;
   status: CallStatus;
   startedAt: string;
+  answeredAt?: string | null;
+  endedReason?: string | null;
   endedAt: string | null;
   durationSeconds: number | null;
   guestNickname: string | null;

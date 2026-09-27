@@ -1,13 +1,11 @@
 import { getRecordingPermissionsAsync } from "expo-audio";
 import Constants from "expo-constants";
-import * as MediaLibrary from "expo-media-library";
 import * as Notifications from "expo-notifications";
 import { useEffect, useRef, useState } from "react";
 import { Animated, AppState, Easing, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { changePassword, useAuth } from "../auth";
-import { getCallsConfig } from "../calls/api";
+import { getMediaLibraryAudioPermission } from "../auth/mediaPermissions";
 import { hasAllFilesAccess, requestAllFilesAccess } from "../calls/findLatestRecording";
-import type { CallsConfig } from "../calls/types";
 import { BASE_URL } from "../../shared/api/client";
 import { useNotificationPrefs } from "./notificationPrefs";
 
@@ -83,22 +81,18 @@ export function SettingsScreen() {
   const [notifStatus, setNotifStatus] = useState("Checking…");
   const [mediaStatus, setMediaStatus] = useState("Checking…");
   const [filesStatus, setFilesStatus] = useState("Checking…");
-  const [callsConfig, setCallsConfig] = useState<CallsConfig | null>(null);
   const entrance = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const refresh = () => {
       void getRecordingPermissionsAsync().then((r) => setMicStatus(r.granted ? "Granted" : "Not granted"));
       void Notifications.getPermissionsAsync().then((r) => setNotifStatus(r.granted ? "Granted" : "Not granted"));
-      void MediaLibrary.getPermissionsAsync().then((r) => setMediaStatus(r.granted ? "Granted" : "Not granted"));
+      void getMediaLibraryAudioPermission().then((r) => setMediaStatus(r.granted ? "Granted" : "Not granted"));
       setFilesStatus(hasAllFilesAccess() ? "Granted" : "Not granted");
     };
     refresh();
     const sub = AppState.addEventListener("change", (next) => {
       if (next === "active") refresh();
-    });
-    void getCallsConfig().then((res) => {
-      if (res.code === 0) setCallsConfig(res.data);
     });
     return () => sub.remove();
   }, []);
@@ -152,11 +146,11 @@ export function SettingsScreen() {
       <View style={styles.card}>
         <Text style={styles.cardLabel}>Calling</Text>
         <Text style={styles.aboutText}>
-          Dialer: {callsConfig?.dialer ?? "…"} · Recordings: {callsConfig?.recordingStore ?? "…"}
+          App-to-app voice calls · Not recorded
         </Text>
         <Text style={styles.aboutText}>API: {BASE_URL}</Text>
         <Text style={styles.aboutText}>
-          Change CALLS_DIALER / CALLS_RECORDING_STORE in the server .env. Twilio needs a paid account for NZ numbers.
+          Both apps must remain open during calls. Android requires a development build.
         </Text>
       </View>
 

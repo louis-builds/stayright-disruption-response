@@ -25,6 +25,10 @@ public class CaseCallsController(ICallService callService) : ControllerBase
         {
             return NotFound(ApiResponse<object?>.Fail(404, "Case not found"));
         }
+        catch (CallValidationException ex)
+        {
+            return BadRequest(ApiResponse<object?>.Fail(400, ex.Message));
+        }
     }
 
     [HttpGet]

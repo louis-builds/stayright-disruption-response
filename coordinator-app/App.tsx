@@ -3,6 +3,7 @@ import { Platform, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { enableScreens } from "react-native-screens";
 import { AuthProvider } from "./src/features/auth";
+import { CallProvider } from "./src/features/calls/CallProvider";
 import { RootNavigator } from "./src/navigation/RootNavigator";
 import { OfflineBanner } from "./src/shared/network/OfflineBanner";
 
@@ -37,7 +38,7 @@ export default function App() {
       <View style={{ flex: 1 }}>
         <OfflineBanner />
         <AuthProvider>
-          <RootNavigator />
+          <CallProvider><RootNavigator /></CallProvider>
         </AuthProvider>
       </View>
       <StatusBar style="auto" />

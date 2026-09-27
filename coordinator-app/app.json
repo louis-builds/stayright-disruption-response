@@ -30,7 +30,7 @@
       "favicon": "./assets/favicon.png"
     },
     "extra": {
-      "apiBaseUrl": "http://192.168.68.50:5080"
+      "apiBaseUrl": "http://localhost:5080"
     },
     "plugins": [
       [
@@ -44,7 +44,8 @@
           ]
         }
       ],
-      "expo-audio"
+      "expo-audio",
+      ["@config-plugins/react-native-webrtc", { "microphonePermission": "Allow StayRight to use your microphone for voice calls." }]
     ]
   }
 }
