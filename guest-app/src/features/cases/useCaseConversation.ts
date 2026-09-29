@@ -63,11 +63,15 @@ export function useCaseConversation(caseId: string, thread: Thread) {
         if (thread === "ai") {
           const res = await api.postChatMessage(caseId, content);
           if (res.code !== 0) throw new Error(res.message);
-          setMessages((prev) => [...prev.filter((m) => m.id !== tempId), ...res.data]);
+          // 发送这几百毫秒到几秒内(等 AI 生成回复), 8 秒轮询可能已经把这条客人消息拉回来过一次——
+          // 不能只按 tempId 过滤, 还得把 res.data 里这些真实 id 也从 prev 里去重, 不然轮询已插入的
+          // 那条 + 这里再 append 一次会短暂重复两行, 等下一轮轮询整表覆盖才消失。
+          const incomingIds = new Set(res.data.map((m) => m.id));
+          setMessages((prev) => [...prev.filter((m) => m.id !== tempId && !incomingIds.has(m.id)), ...res.data]);
         } else {
           const res = await api.postMessage(caseId, content, thread);
           if (res.code !== 0) throw new Error(res.message);
-          setMessages((prev) => [...prev.filter((m) => m.id !== tempId), res.data]);
+          setMessages((prev) => [...prev.filter((m) => m.id !== tempId && m.id !== res.data.id), res.data]);
         }
         await api.markThreadRead(caseId, thread);
       } catch (err) {

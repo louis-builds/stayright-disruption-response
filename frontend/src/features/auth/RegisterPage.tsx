@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "./AuthContext";
 import { MapPicker } from "./MapPicker";
 import { PasswordField } from "../../shared/components/PasswordField";
+import { loginPath } from "../../shared/layout/mobileLayout";
+import { useMobileLayout } from "../../shared/layout/MobileLayoutProvider";
 import type { Language, Role, RoomTypeInput } from "./types";
 import "./RegisterPage.css";
 
@@ -88,6 +90,7 @@ function passwordStrength(pw: string): { pct: number; label: string; tier: "weak
 export function RegisterPage() {
   const { register } = useAuth();
   const navigate = useNavigate();
+  const isMobile = useMobileLayout();
 
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
   const [nickname, setNickname] = useState("");
@@ -190,7 +193,7 @@ export function RegisterPage() {
       });
       setSubmitting(false);
       setSucceeded(true);
-      window.setTimeout(() => navigate("/login", { state: { registered: true } }), 420);
+      window.setTimeout(() => navigate(loginPath(), { state: { registered: true } }), 420);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");
       setSubmitting(false);
@@ -198,7 +201,7 @@ export function RegisterPage() {
   }
 
   return (
-    <div className="register-page">
+    <div className={`register-page${isMobile ? " register-page-m" : ""}`}>
       <div className="register-bg-decor" aria-hidden="true" />
       <div className="register-layout">
       <form onSubmit={handleSubmit} className="register-card">
@@ -429,7 +432,7 @@ export function RegisterPage() {
         </button>
 
         <p className="register-footer">
-          Already have an account? <a href="/login">Sign in</a>
+          Already have an account? <a href={loginPath()}>Sign in</a>
         </p>
       </form>
 

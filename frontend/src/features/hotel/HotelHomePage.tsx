@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import type { HotelTab } from "../../shared/components/HotelTopNav";
 import { Pagination, usePagination } from "../../shared/components/Pagination";
+import { useMobileLayout } from "../../shared/layout/MobileLayoutProvider";
 import { useAuth } from "../auth";
 import * as api from "./api";
 import { HotelDashboardShell } from "./HotelDashboardShell";
@@ -251,9 +252,11 @@ function TagManageModal({ target, customTags, guestTags, onChanged, onClose }: {
 
 export function HotelHomePage() {
   const { user } = useAuth();
+  const isMobile = useMobileLayout();
   const location = useLocation();
   const initialTab = (location.state as { tab?: Tab } | null)?.tab;
   const [tab, setTab] = useState<Tab>(initialTab ?? "todo");
+  const [hotelQueueTab, setHotelQueueTab] = useState<"inquiry" | "option">("inquiry");
 
   const [pendingInquiries, setPendingInquiries] = useState<InquiryItem[]>([]);
   const [pendingOptions, setPendingOptions] = useState<SelectedOptionItem[]>([]);
@@ -411,6 +414,7 @@ export function HotelHomePage() {
   // H2那块永远不会出现它，看着像是"处理记录消失了")。合并成一条按时间排序的历史。
   const doneItems = [
     ...doneInquiries.map((i) => ({
+      kind: "inquiry" as const,
       id: i.id, confirmationNo: i.confirmationNo, guestNickname: i.guestNickname,
       isReturningGuest: i.isReturningGuest, isHighValueGuest: i.isHighValueGuest,
       guestUserId: i.guestUserId,
@@ -430,6 +434,7 @@ export function HotelHomePage() {
           : null,
     })),
     ...doneOptions.map((o) => ({
+      kind: "option" as const,
       id: o.optionId, confirmationNo: o.confirmationNo, guestNickname: o.guestNickname,
       isReturningGuest: o.isReturningGuest, isHighValueGuest: o.isHighValueGuest,
       guestUserId: o.guestUserId,
@@ -442,8 +447,16 @@ export function HotelHomePage() {
     .filter((d) => matchesHotelFilter(taskFilter, d.confirmationNo, d.guestNickname, d.label, d.statusTag))
     .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 
-  const todoPage = usePagination(todoItems);
-  const donePage = usePagination(doneItems);
+  const visibleTodoItems = isMobile ? todoItems.filter((d) => d.kind === hotelQueueTab) : todoItems;
+  const visibleDoneItems = isMobile ? doneItems.filter((d) => d.kind === hotelQueueTab) : doneItems;
+  const todoPage = usePagination(visibleTodoItems);
+  const donePage = usePagination(visibleDoneItems);
+  const hotelQueueTabs = (
+    <nav className="m-section-tabs" aria-label="Request type">
+      <button type="button" className={hotelQueueTab === "inquiry" ? "active" : ""} onClick={() => setHotelQueueTab("inquiry")}>Requests</button>
+      <button type="button" className={hotelQueueTab === "option" ? "active" : ""} onClick={() => setHotelQueueTab("option")}>Selections</button>
+    </nav>
+  );
 
   const todoStats = useMemo(
     () => ({
@@ -477,7 +490,7 @@ export function HotelHomePage() {
     <HotelDashboardShell active={tab} onNavigate={setTab} onSearch={setTaskFilter}>
       <div className="coord-home">
         <div className="coord-panel">
-          {tab === "todo" && (
+          {tab === "todo" && !isMobile && (
             <div className="hotel-dashboard-header">
               <div className="hotel-dashboard-title">
                 <span className="hotel-dashboard-eyebrow">Live queue</span>
@@ -550,8 +563,9 @@ export function HotelHomePage() {
             </div>
           ) : tab === "todo" ? (
             <>
-              <h3 className="hotel-section-title">Pending requests</h3>
-              {todoItems.length === 0 ? (
+              {isMobile && hotelQueueTabs}
+              {!isMobile && <h3 className="hotel-section-title">Pending requests</h3>}
+              {visibleTodoItems.length === 0 ? (
                 <p className="coord-empty">No pending requests.</p>
               ) : (
                 <div className="hotel-request-list">
@@ -681,6 +695,7 @@ export function HotelHomePage() {
             </>
           ) : tab === "done" ? (
             <>
+              {!isMobile && (
               <div className="hotel-dashboard-header">
                 <div className="hotel-dashboard-title">
                   <span className="hotel-dashboard-eyebrow">Audit trail</span>
@@ -726,6 +741,7 @@ export function HotelHomePage() {
                   </div>
                 </div>
               </div>
+              )}
               {doneInquiries.length + doneOptions.length === 0 ? (
                 <div className="hotel-caught-up">
                   <span className="hotel-caught-up-icon" aria-hidden="true">
@@ -755,8 +771,9 @@ export function HotelHomePage() {
                 </div>
               ) : (
                 <>
-              <h3 className="hotel-section-title">Processed requests</h3>
-              {doneItems.length === 0 ? (
+              {isMobile && hotelQueueTabs}
+              {!isMobile && <h3 className="hotel-section-title">Processed requests</h3>}
+              {visibleDoneItems.length === 0 ? (
                 <p className="coord-empty">
                   {taskFilter.trim() ? "No processed requests match your filter." : "No processed requests yet."}
                 </p>

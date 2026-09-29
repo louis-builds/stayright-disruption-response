@@ -147,7 +147,7 @@ export function CoordinatorCaseWorkspacePage() {
 
   if (!user) return null;
 
-  return <CoordinatorDashboardShell user={user} active="reports" onNavigate={() => navigate("/coordinator/home")} onSearch={() => navigate("/coordinator/home")}>
+  const workspace = (
     <div className="case-workspace">
       <button className="case-workspace-back" onClick={() => navigate(-1)}>← Back to Cases</button>
       {caseInfo && <header className="case-workspace-hero">
@@ -194,5 +194,11 @@ export function CoordinatorCaseWorkspacePage() {
         </aside>
       </div>
     </div>
-  </CoordinatorDashboardShell>;
+  );
+
+  return (
+    <CoordinatorDashboardShell user={user} active="reports" onNavigate={() => navigate("/coordinator/home")} onSearch={() => navigate("/coordinator/home")}>
+      {workspace}
+    </CoordinatorDashboardShell>
+  );
 }

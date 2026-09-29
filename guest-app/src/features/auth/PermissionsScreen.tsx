@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Animated, Easing, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { registerPushToken } from "./api";
 import { EXPO_PUSH_TOKEN_KEY } from "./AuthContext";
+import { ServerAddressCard } from "./ServerAddressCard";
 
 type PermissionState = "unknown" | "granted" | "denied";
 
@@ -79,6 +80,8 @@ export function PermissionsScreen({ onContinue }: { onContinue: () => void }) {
       >
         <Text style={styles.title}>Stay informed about your trip</Text>
         <Text style={styles.subtitle}>We'll let you know the moment a disruption affects your booking.</Text>
+
+        <ServerAddressCard />
 
         <View style={styles.row}>
           <Animated.View style={[styles.rowIcon, notifState === "granted" && styles.rowIconGranted, { transform: [{ scale: bump }] }]}>

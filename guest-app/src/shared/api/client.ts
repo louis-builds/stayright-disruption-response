@@ -1,6 +1,34 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 import type { ApiResponse } from "./types";
+
+const SERVER_URL_OVERRIDE_KEY = "guest-app:serverUrlOverride";
+let overrideBaseUrl: string | null = null;
+
+// App.tsx 在挂载 AuthProvider 之前 await 这个,保证 AuthContext 挂载时发的第一个请求
+// (checking 会话状态)就已经用上了引导页里配置的地址,不用等这次请求失败了才生效。
+export async function loadServerUrlOverride(): Promise<void> {
+  try {
+    overrideBaseUrl = await AsyncStorage.getItem(SERVER_URL_OVERRIDE_KEY);
+  } catch {
+    overrideBaseUrl = null;
+  }
+}
+
+export async function setServerUrlOverride(url: string | null): Promise<void> {
+  overrideBaseUrl = url && url.trim() ? url.trim().replace(/\/$/, "") : null;
+  try {
+    if (overrideBaseUrl) await AsyncStorage.setItem(SERVER_URL_OVERRIDE_KEY, overrideBaseUrl);
+    else await AsyncStorage.removeItem(SERVER_URL_OVERRIDE_KEY);
+  } catch {
+    // 存不进 AsyncStorage 就只在内存里生效,这次会话还是能用,不阻断配置本身。
+  }
+}
+
+export function getServerUrlOverride(): string | null {
+  return overrideBaseUrl;
+}
 
 function lanHostFromExpo(): string | null {
   const candidates = [
@@ -23,6 +51,7 @@ function lanHostFromExpo(): string | null {
 }
 
 function resolveBaseUrl() {
+  if (overrideBaseUrl) return overrideBaseUrl;
   const extra = typeof Constants.expoConfig?.extra?.apiBaseUrl === "string"
     ? Constants.expoConfig.extra.apiBaseUrl
     : undefined;
@@ -35,7 +64,11 @@ function resolveBaseUrl() {
   return `http://${lan}:${port}`;
 }
 
-export const BASE_URL = resolveBaseUrl();
+// 引导页配置服务器地址后不重启App就要生效,不能再用挂载时算一次就冻结的常量——
+// 每次请求都重新算,取的是当时的 overrideBaseUrl。
+export function getBaseUrl(): string {
+  return resolveBaseUrl();
+}
 
 // 401/403 时通知外层(导航层)跳回登录页——避免 client.ts 直接依赖导航库,
 // 由 AuthContext 在启动时注册这个回调。
@@ -45,16 +78,22 @@ export function setUnauthorizedHandler(handler: (() => void) | null) {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<ApiResponse<T>> {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    ...init,
-    // 原生网络层自动带上并持久化 Cookie(iOS NSHTTPCookieStorage / Android CookieManager),
-    // 不需要手动管理 Cookie 头——credentials:"include" 让 RN 的 fetch 显式允许跨请求携带。
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-  });
+  const baseUrl = getBaseUrl();
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl}${path}`, {
+      ...init,
+      // 原生网络层自动带上并持久化 Cookie(iOS NSHTTPCookieStorage / Android CookieManager),
+      // 不需要手动管理 Cookie 头——credentials:"include" 让 RN 的 fetch 显式允许跨请求携带。
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...(init?.headers ?? {}),
+      },
+    });
+  } catch {
+    return { code: 503, message: `Cannot reach API at ${baseUrl}`, data: null as T };
+  }
 
   const body = (await res.json()) as ApiResponse<T>;
 

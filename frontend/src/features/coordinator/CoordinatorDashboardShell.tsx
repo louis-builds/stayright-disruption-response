@@ -2,6 +2,8 @@ import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import type { AuthUser } from "../auth/types";
 import type { CoordinatorTab } from "../../shared/components/CoordinatorTopNav";
 import { AvatarMenu } from "../../shared/components/AvatarMenu";
+import { MTabBar } from "../../shared/components/MTabBar";
+import { useMobileLayout } from "../../shared/layout/MobileLayoutProvider";
 import { NotificationBell } from "../notifications";
 import { SettingsPanel } from "./SettingsPanel";
 import "./CoordinatorDashboardShell.css";
@@ -17,6 +19,7 @@ const ITEMS: Array<{ key: Section; label: string; icon: string; tab: Coordinator
 export function CoordinatorDashboardShell({ active, children, onNavigate, onSearch }: {
   user: AuthUser; active: Section; children: ReactNode; onNavigate: (tab: CoordinatorTab) => void; onSearch: (query: string) => void;
 }) {
+  const isMobile = useMobileLayout();
   const [query, setQuery] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const submit = (event: FormEvent) => { event.preventDefault(); onSearch(query.trim()); };
@@ -27,6 +30,47 @@ export function CoordinatorDashboardShell({ active, children, onNavigate, onSear
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [settingsOpen]);
+
+  const settingsDialog = settingsOpen && (
+    <div className="tg-settings-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSettingsOpen(false); }}>
+      <section className="tg-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="tg-settings-title">
+        <header><div><small>COORDINATOR SETTINGS</small><h2 id="tg-settings-title">Automation preferences</h2><p>Control when AI-managed cases are handed to a coordinator.</p></div><button type="button" aria-label="Close settings" onClick={() => setSettingsOpen(false)}>×</button></header>
+        <div className="tg-settings-content"><SettingsPanel /></div>
+      </section>
+    </div>
+  );
+
+  if (isMobile) {
+    return (
+      <div className="tg-shell tg-shell-m">
+        <header className="tg-shell-m-top">
+          <div>
+            <small>StayRight NZ · Coordinator</small>
+            <strong>{currentSection}</strong>
+          </div>
+          <div className="tg-shell-m-actions">
+            <NotificationBell />
+            <AvatarMenu />
+          </div>
+        </header>
+        <main>{children}</main>
+        <MTabBar
+          items={[
+            ...ITEMS.filter((item) => !item.hidden).map((item) => ({
+              key: item.key,
+              label: item.label,
+              icon: item.icon,
+              active: active === item.key && !settingsOpen,
+              onClick: () => onNavigate(item.tab),
+            })),
+            { key: "settings", label: "Settings", icon: "⚙", active: settingsOpen, onClick: () => setSettingsOpen(true) },
+          ]}
+        />
+        {settingsDialog}
+      </div>
+    );
+  }
+
   return <div className="tg-shell">
     <aside className="tg-shell-sidebar">
       <div className="tg-shell-brand"><span>◎</span><div><strong>StayRight NZ</strong><small>COORDINATOR</small></div></div>
@@ -38,11 +82,6 @@ export function CoordinatorDashboardShell({ active, children, onNavigate, onSear
       <main>{children}</main>
       <footer><span>AI Agent</span><span>Legal</span><span>Privacy</span><span>© TravelGuard</span></footer>
     </div>
-    {settingsOpen && <div className="tg-settings-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSettingsOpen(false); }}>
-      <section className="tg-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="tg-settings-title">
-        <header><div><small>COORDINATOR SETTINGS</small><h2 id="tg-settings-title">Automation preferences</h2><p>Control when AI-managed cases are handed to a coordinator.</p></div><button type="button" aria-label="Close settings" onClick={() => setSettingsOpen(false)}>×</button></header>
-        <div className="tg-settings-content"><SettingsPanel /></div>
-      </section>
-    </div>}
+    {settingsDialog}
   </div>;
 }

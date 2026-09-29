@@ -9,7 +9,7 @@ export interface IceCandidate { candidate: string; sdpMid?: string | null; sdpML
 export interface IceServer { urls: string | string[]; username?: string; credential?: string; }
 export interface AudioPeer {
   prepare(servers: IceServer[]): Promise<void>;
-  offer(): Promise<string>;
+  offer(iceRestart?: boolean): Promise<string>;
   answer(sdp: string): Promise<string>;
   receiveAnswer(sdp: string): Promise<void>;
   addCandidate(candidate: IceCandidate): Promise<void>;

@@ -19,8 +19,13 @@ public class OptionsAdminRepository(AppDbContext db) : IOptionsAdminRepository
     public Task<string?> FindCaseStatusAsync(Guid caseId, CancellationToken ct = default) =>
         db.Cases.Where(c => c.Id == caseId).Select(c => c.Status).FirstOrDefaultAsync(ct);
 
-    public Task<List<Option>> ListOptionsAsync(Guid caseId, CancellationToken ct = default) =>
-        db.Options.Where(o => o.CaseId == caseId).OrderBy(o => o.CreatedAt).ToListAsync(ct);
+    private static readonly Dictionary<string, int> OptionTypeOrder = new() { ["defer"] = 0, ["alternate"] = 1, ["cancel"] = 2, ["custom"] = 3 };
+
+    public async Task<List<Option>> ListOptionsAsync(Guid caseId, CancellationToken ct = default)
+    {
+        var options = await db.Options.Where(o => o.CaseId == caseId).ToListAsync(ct);
+        return [.. options.OrderBy(o => OptionTypeOrder.GetValueOrDefault(o.OptionType, 99)).ThenBy(o => o.CreatedAt)];
+    }
 
     public Task<Option?> FindOptionAsync(Guid optionId, Guid caseId, CancellationToken ct = default) =>
         db.Options.FirstOrDefaultAsync(o => o.Id == optionId && o.CaseId == caseId, ct);

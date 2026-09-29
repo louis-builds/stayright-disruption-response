@@ -13,11 +13,12 @@ function fixture() {
     const groups = new Set();
     const log = [];
     let disconnected;
+    let reconnected;
     const emit = (event, value) => handlers.get(event)?.(structuredClone(value));
     const transport = {
       start: async () => {}, stop: async () => {},
       on: (event, handler) => handlers.set(event, handler),
-      reconnected: () => {}, disconnected: cb => { disconnected = cb; },
+      reconnected: cb => { reconnected = cb; }, disconnected: cb => { disconnected = cb; },
       invoke: async (method, id, payload) => {
         log.push(method);
         if (method === "JoinCall") groups.add(id);
@@ -64,19 +65,31 @@ function fixture() {
     };
     const controller = new CallController(role, api, transport, callbacks => {
       const peer = {
-        closed: false, muted: false, answers: 0, callbacks,
+        closed: false, muted: false, answers: 0, offers: 0, lastIceRestart: false, callbacks,
         prepare: options.prepare ?? (async () => {}),
-        offer: async () => "offer-sdp",
-        answer: async sdp => { assert.equal(sdp, "offer-sdp"); peer.answers++; callbacks.state("connected"); return "answer-sdp"; },
-        receiveAnswer: async sdp => { assert.equal(sdp, "answer-sdp"); callbacks.state("connected"); },
+        offer: async (iceRestart = false) => {
+          peer.offers++;
+          peer.lastIceRestart = !!iceRestart;
+          return "offer-sdp";
+        },
+        answer: async sdp => {
+          assert.equal(sdp, "offer-sdp");
+          peer.answers++;
+          if (!options.holdConnect) callbacks.state("connected");
+          return "answer-sdp";
+        },
+        receiveAnswer: async sdp => {
+          assert.equal(sdp, "answer-sdp");
+          if (!options.holdConnect) callbacks.state("connected");
+        },
         addCandidate: async () => {},
         mute: value => { peer.muted = value; }, play: async () => {},
         close: () => { peer.closed = true; },
       };
       peers.push(peer);
       return peer;
-    });
-    const result = { controller, emit, groups, log, disconnect: () => disconnected() };
+    }, { connectWindowMs: options.connectWindowMs, retryEveryMs: options.retryEveryMs });
+    const result = { controller, emit, groups, log, disconnect: () => disconnected(), reconnect: () => reconnected?.() };
     endpoints.push(result);
     return result;
   }
@@ -255,16 +268,81 @@ test("caller cancellation during guest microphone prompt must not accept after p
   } finally { await f.close(); }
 });
 
-test("signaling disconnect stops audio and closes server call", async () => {
+test("signaling disconnect keeps audio until the caller hangs up", async () => {
   const f = fixture();
   try {
     const caller = f.endpoint("coordinator"), guest = f.endpoint("guest");
     await caller.controller.start(); await guest.controller.start(); await caller.controller.call("case");
     await guest.controller.accept(); await flush();
     caller.disconnect(); await flush();
+    assert.equal(caller.controller.view.phase, "connected");
+    assert.equal(caller.controller.view.online, false);
+    assert.equal(guest.controller.view.phase, "connected");
+    assert.ok(f.peers.every(p => !p.closed));
+    assert.equal(f.calls.values().next().value.status, "in_progress");
+    caller.reconnect(); await flush();
+    assert.equal(caller.controller.view.online, true);
+    assert.equal(caller.controller.view.phase, "connected");
+  } finally { await f.close(); }
+});
+
+test("ICE failure retries with iceRestart and connects within the window", async () => {
+  const f = fixture();
+  try {
+    const caller = f.endpoint("coordinator", { holdConnect: true });
+    const guest = f.endpoint("guest", { holdConnect: true });
+    await caller.controller.start(); await guest.controller.start();
+    await caller.controller.call("case"); await guest.controller.accept(); await flush();
+    assert.equal(caller.controller.view.phase, "connecting");
+    assert.equal(caller.log.filter(m => m === "SendOffer").length, 1);
+    f.peers[0].callbacks.state("failed"); await flush();
+    assert.equal(caller.controller.view.phase, "connecting");
+    assert.equal(caller.controller.view.error, null);
+    assert.ok(caller.log.filter(m => m === "SendOffer").length >= 2);
+    assert.equal(f.peers[0].lastIceRestart, true);
+    f.peers[0].callbacks.state("connected");
+    f.peers[1].callbacks.state("connected");
+    await flush();
+    assert.equal(caller.controller.view.phase, "connected");
+    assert.equal(guest.controller.view.phase, "connected");
+  } finally { await f.close(); }
+});
+
+test("call fails only after 30s of unsuccessful audio connect retries", async () => {
+  const f = fixture();
+  try {
+    const caller = f.endpoint("coordinator", { holdConnect: true, connectWindowMs: 30, retryEveryMs: 5 });
+    const guest = f.endpoint("guest", { holdConnect: true, connectWindowMs: 30, retryEveryMs: 5 });
+    await caller.controller.start(); await guest.controller.start();
+    await caller.controller.call("case"); await guest.controller.accept(); await flush();
+    assert.equal(caller.controller.view.phase, "connecting");
+    f.peers[0].callbacks.state("failed"); await flush();
+    assert.equal(caller.controller.view.phase, "connecting");
+    await new Promise(resolve => setTimeout(resolve, 15));
+    assert.equal(caller.controller.view.phase, "connecting");
+    await new Promise(resolve => setTimeout(resolve, 40));
+    await flush();
     assert.equal(caller.controller.view.phase, "ended");
-    assert.equal(guest.controller.view.phase, "ended");
-    assert.ok(f.peers.every(p => p.closed));
+    assert.match(caller.controller.view.error, /Could not connect audio/);
+    assert.ok(caller.log.filter(m => m === "SendOffer").length >= 2);
+  } finally { await f.close(); }
+});
+
+test("mid-call ICE drop reconnects without ending the server call", async () => {
+  const f = fixture();
+  try {
+    const caller = f.endpoint("coordinator"), guest = f.endpoint("guest");
+    await caller.controller.start(); await guest.controller.start();
+    await caller.controller.call("case"); await guest.controller.accept(); await flush();
+    assert.equal(caller.controller.view.phase, "connected");
+    const offersBefore = caller.log.filter(m => m === "SendOffer").length;
+    f.peers[0].callbacks.state("disconnected");
+    assert.equal(caller.controller.view.phase, "connecting");
+    assert.equal(caller.controller.view.error, null);
+    await flush();
+    assert.ok(caller.log.filter(m => m === "SendOffer").length > offersBefore);
+    assert.equal(f.calls.values().next().value.status, "in_progress");
+    assert.equal(caller.controller.view.phase, "connected");
   } finally { await f.close(); }
 });
 

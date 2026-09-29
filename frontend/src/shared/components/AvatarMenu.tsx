@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../features/auth";
+import { loginPath } from "../layout/mobileLayout";
 import "./AvatarMenu.css";
 
 const DEFAULT_AVATAR =
@@ -44,7 +45,7 @@ export function AvatarMenu() {
             className="avatar-dropdown-item"
             onClick={() => {
               setOpen(false);
-              void logout().then(() => navigate("/login"));
+              void logout().then(() => navigate(loginPath()));
             }}
           >
             Log out

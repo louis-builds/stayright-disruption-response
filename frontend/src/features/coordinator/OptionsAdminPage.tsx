@@ -325,7 +325,10 @@ export function OptionsAdminPage() {
   }
 
   const submittedOption = options.find((option) => option.selected && option.executionRequestedAt) ?? null;
-  const displayedOptions = submittedOption ? [submittedOption] : options;
+  const optionTypeOrder: Record<string, number> = { defer: 0, alternate: 1, cancel: 2, custom: 3 };
+  const displayedOptions = [...(submittedOption ? [submittedOption] : options)].sort(
+    (a, b) => (optionTypeOrder[a.optionType] ?? 99) - (optionTypeOrder[b.optionType] ?? 99) || a.createdAt.localeCompare(b.createdAt),
+  );
   const selectionSubmitted = submittedOption !== null;
   const allUnavailable = displayedOptions.length > 0 && displayedOptions.every((o) => o.availability === "unavailable");
   const isClosed = caseSummary?.status === "closed";
@@ -339,13 +342,7 @@ export function OptionsAdminPage() {
 
   const availableCount = displayedOptions.filter((option) => option.availability !== "unavailable").length;
 
-  return (
-    <CoordinatorDashboardShell
-      user={user}
-      active="reports"
-      onNavigate={() => navigate("/coordinator/home")}
-      onSearch={() => navigate("/coordinator/home")}
-    >
+  const workspace = (
       <div className="options-workspace">
         <div className="options-workspace-topline">
           <button type="button" className="options-workspace-back" onClick={() => navigate(`/cases/${caseId}`)}>
@@ -470,6 +467,16 @@ export function OptionsAdminPage() {
       )}
       </div>
       </div>
+  );
+
+  return (
+    <CoordinatorDashboardShell
+      user={user}
+      active="reports"
+      onNavigate={() => navigate("/coordinator/home")}
+      onSearch={() => navigate("/coordinator/home")}
+    >
+      {workspace}
     </CoordinatorDashboardShell>
   );
 }

@@ -39,3 +39,7 @@
   background: #f1f6fa;
   border-color: #2e6f96;
 }
+
+html.m-site .app-shell-content {
+  padding: 1rem 0.9rem calc(1rem + env(safe-area-inset-bottom, 0px));
+}

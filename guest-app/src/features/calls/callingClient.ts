@@ -1,7 +1,7 @@
 import { HubConnectionBuilder, HubConnectionState, HttpTransportType, LogLevel } from "@microsoft/signalr";
 import { CallController } from "../../../../shared/calling/CallController";
 import type { CallSession, IceServer } from "../../../../shared/calling/contracts";
-import { BASE_URL } from "../../shared/api/client";
+import { getBaseUrl } from "../../shared/api/client";
 import { createAudioPeer } from "./audioPeer";
 
 export function makeCallController(role: "guest" | "coordinator") {
@@ -9,7 +9,7 @@ export function makeCallController(role: "guest" | "coordinator") {
     const abort = new AbortController();
     const timeout = setTimeout(() => abort.abort(), 10000);
     try {
-      const response = await fetch(BASE_URL + path, {
+      const response = await fetch(getBaseUrl() + path, {
         method, credentials: "include", signal: abort.signal,
         headers: { "Content-Type": "application/json" },
         body: data === undefined ? undefined : JSON.stringify(data),
@@ -19,7 +19,7 @@ export function makeCallController(role: "guest" | "coordinator") {
       return body.data;
     } finally { clearTimeout(timeout); }
   }
-  const hub = new HubConnectionBuilder().withUrl(BASE_URL + "/api/hubs/calls", {
+  const hub = new HubConnectionBuilder().withUrl(getBaseUrl() + "/api/hubs/calls", {
     accessTokenFactory: async () => (await request<{ token: string }>("/api/calls/signaling-token", "POST", {})).token,
     transport: HttpTransportType.WebSockets,
   }).configureLogging(LogLevel.Error).withAutomaticReconnect([0, 2000, 5000, 10000]).build();

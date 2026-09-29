@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import * as api from "./api";
 import type { CaseActionPreview } from "./api";
+import { loginPath } from "../../shared/layout/mobileLayout";
 import "./CaseActionConfirmPage.css";
 
 type Status = "loading" | "ready" | "confirming" | "done" | "error";
@@ -54,7 +55,7 @@ export function CaseActionConfirmPage() {
           <>
             <h1>This link isn't valid anymore</h1>
             <p className="case-action-body">{error}</p>
-            <Link className="case-action-secondary" to="/login">
+            <Link className="case-action-secondary" to={loginPath()}>
               Sign in instead
             </Link>
           </>

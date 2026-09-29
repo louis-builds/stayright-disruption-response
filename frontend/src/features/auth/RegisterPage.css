@@ -551,3 +551,12 @@
     animation: none;
   }
 }
+
+.register-page-m {
+  padding: calc(1.25rem + env(safe-area-inset-top, 0px)) 1rem calc(1.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+.register-page-m .register-card {
+  padding: 1.35rem 1.1rem;
+  border-radius: 16px;
+}

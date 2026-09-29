@@ -1,6 +1,8 @@
 import { type FormEvent, type ReactNode, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AvatarMenu } from "../../shared/components/AvatarMenu";
+import { MTabBar } from "../../shared/components/MTabBar";
+import { useMobileLayout } from "../../shared/layout/MobileLayoutProvider";
 import { NotificationBell } from "../notifications";
 import "./GuestDashboardShell.css";
 
@@ -8,12 +10,38 @@ type GuestSection = "dashboard" | "bookings" | "profile";
 
 export function GuestDashboardShell({ children, active = "dashboard", onSearch }: { children: ReactNode; active?: GuestSection; onSearch?: (query: string) => void }) {
   const navigate = useNavigate();
+  const isMobile = useMobileLayout();
   const [query, setQuery] = useState("");
   const sectionTitle = active === "bookings" ? "My Bookings" : active === "profile" ? "Profile Settings" : "Dashboard";
 
   function submit(event: FormEvent) {
     event.preventDefault();
     onSearch?.(query.trim());
+  }
+
+  if (isMobile) {
+    return (
+      <div className="guest-shell guest-shell-m">
+        <header className="guest-shell-m-top">
+          <div>
+            <small>StayRight NZ</small>
+            <strong>{sectionTitle}</strong>
+          </div>
+          <div className="guest-shell-m-actions">
+            <NotificationBell />
+            <AvatarMenu />
+          </div>
+        </header>
+        <main>{children}</main>
+        <MTabBar
+          items={[
+            { key: "dashboard", label: "Dashboard", icon: "▦", active: active === "dashboard", onClick: () => navigate("/guest/home") },
+            { key: "bookings", label: "Bookings", icon: "▣", active: active === "bookings", onClick: () => navigate("/bookings") },
+            { key: "profile", label: "Profile", icon: "⚙", active: active === "profile", onClick: () => navigate("/profile") },
+          ]}
+        />
+      </div>
+    );
   }
 
   return (
