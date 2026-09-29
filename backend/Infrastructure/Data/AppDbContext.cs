@@ -42,6 +42,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IServiceScopeF
     public DbSet<CallRecording> CallRecordings => Set<CallRecording>();
     public DbSet<CustomTag> CustomTags => Set<CustomTag>();
     public DbSet<GuestCustomTag> GuestCustomTags => Set<GuestCustomTag>();
+    public DbSet<BadCaseLearning> BadCaseLearnings => Set<BadCaseLearning>();
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
@@ -154,6 +155,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IServiceScopeF
             e.HasIndex(x => x.Email).IsUnique();
             e.HasIndex(x => x.HotelId);
             e.HasOne(x => x.Hotel).WithMany().HasForeignKey(x => x.HotelId).OnDelete(DeleteBehavior.SetNull);
+            e.Property(x => x.StayPreference).HasMaxLength(16);
         });
 
         modelBuilder.Entity<RoomType>(e =>
@@ -298,6 +300,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IServiceScopeF
         modelBuilder.Entity<CallRecording>(e =>
         {
             e.HasIndex(x => x.CallId).IsUnique();
+            e.Property(x => x.InsightsJson).HasColumnType("jsonb");
         });
 
         modelBuilder.Entity<CustomTag>(e =>
@@ -343,6 +346,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IServiceScopeF
         modelBuilder.Entity<UserDocumentVersion>(e =>
         {
             e.HasIndex(x => new { x.UserId, x.DocumentName }).IsUnique();
+        });
+
+        modelBuilder.Entity<BadCaseLearning>(e =>
+        {
+            e.HasIndex(x => x.MessageId).IsUnique();
+            e.HasOne(x => x.Message).WithMany().HasForeignKey(x => x.MessageId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Evaluator).WithMany().HasForeignKey(x => x.EvaluatorUserId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.RagDocument).WithMany().HasForeignKey(x => x.RagDocumentId).OnDelete(DeleteBehavior.SetNull);
         });
     }
 }

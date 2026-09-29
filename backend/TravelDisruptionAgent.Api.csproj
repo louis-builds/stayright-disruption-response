@@ -33,4 +33,11 @@
     <Content Include="SeedData/rag/**/*.md" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- Untracked Twilio leftovers import a package this branch does not reference. -->
+  <ItemGroup>
+    <Compile Remove="Features/Calls/TwilioTelephonyProvider.cs" />
+    <Compile Remove="Features/Calls/TwilioWebhookController.cs" />
+    <Compile Remove="Features/Calls/SystemTelephonyProvider.cs" />
+  </ItemGroup>
+
 </Project>

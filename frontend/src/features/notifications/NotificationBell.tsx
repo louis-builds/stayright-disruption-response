@@ -32,6 +32,10 @@ export function NotificationBell() {
     setOpen(false);
     // /cases/:id 是客人视角的对话页，酒店角色不是这个线程的参与者——点进去只会看到空对话框。
     // 酒店的通知只是提醒去"My to-dos"处理，点开就该只标记已读，不用跳一个没内容的页面。
+    if (user?.role === "coordinator" && type === "call_audit") {
+      navigate("/coordinator/call-reviews");
+      return;
+    }
     if (!caseId || user?.role === "hotel") return;
     if (user?.role === "coordinator" && type === "refund_pending") {
       navigate(`/coordinator/cases/${caseId}/escalation`);

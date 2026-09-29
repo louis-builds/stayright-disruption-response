@@ -4,6 +4,7 @@ public interface IKnowledgeBaseService
 {
     Task<List<RagDocumentDto>> ListDocumentsAsync(CancellationToken ct = default);
     Task<UploadResultDto> UploadDocumentAsync(UploadDocumentRequest request, CancellationToken ct = default);
+    Task<RagDocumentDto> AppendLearnedReplyAsync(string sectionMarkdown, CancellationToken ct = default);
     Task SetDefaultVersionAsync(string name, int version, CancellationToken ct = default);
     Task SetUserDocumentVersionAsync(Guid userId, string documentName, int version, CancellationToken ct = default);
 

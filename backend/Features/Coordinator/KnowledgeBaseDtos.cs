@@ -10,7 +10,18 @@ public record GoldenTestDto(Guid Id, string Input, string Expect, string Note);
 
 public record AddGoldenTestRequest(string Input, string Expect, string Note);
 
-public record GoldenTestRunItemDto(string Input, string Expect, string Actual, bool Passed);
+public record GoldenTestRunItemDto(
+    string Input, string Expect, string Actual, bool Passed,
+    string Kind,
+    string ExpectedSummary,
+    string ActualSummary,
+    string? ExpectedChunkHeading,
+    string? ExpectedChunkExcerpt,
+    string? RetrievedDocName,
+    string? RetrievedHeading,
+    string? RetrievedExcerpt,
+    double? RetrievedScore,
+    string? Reason);
 
 public record GoldenTestRunDto(
     Guid Id, string? TriggerDocumentName, int? TriggerVersion, int PassCount, int FailCount,

@@ -17,8 +17,7 @@ public static class SeedRunner
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
     };
 
-    // 这两份是唯一走 S3/本地全局开关的种子 RAG 文档；取消与改订政策.md 保持固定读本地仓库文件，
-    // 不受 RAG_DOC_SOURCE 影响（团队决定：那份还在走别的审核/发布流程，先不搬）。
+    // 这两份是唯一走 S3/本地全局开关的种子 RAG 文档。平台没有默认退款策略——退款条款只来自各酒店自己上传的政策。
     private static readonly HashSet<string> S3EligibleRagDocFiles = ["使用说明.md", "常见问题.md"];
 
     public static async Task RunAsync(AppDbContext db, IRagDocumentSource ragDocumentSource, ILogger logger, CancellationToken ct = default)
@@ -26,6 +25,7 @@ public static class SeedRunner
         if (await db.Users.AnyAsync(ct))
         {
             logger.LogInformation("Seed skipped: users table already has data.");
+            await EnsureAdminUserAsync(db, logger, ct);
             return;
         }
 
@@ -162,6 +162,34 @@ public static class SeedRunner
 
     private record RoomTypeSeed(Guid Id, Guid HotelId, string Name, string Description, List<string> Amenities,
         int Capacity, decimal PriceAmount, string Currency, List<string> ImageUrls);
+
+    /// <summary>
+    /// Full seed skips when users already exist. Always create the standalone admin account if missing.
+    /// </summary>
+    public static async Task EnsureAdminUserAsync(AppDbContext db, ILogger logger, CancellationToken ct = default)
+    {
+        const string email = "admin@example.com";
+        if (await db.Users.AnyAsync(u => u.Email == email, ct))
+            return;
+
+        var now = DateTimeOffset.UtcNow;
+        db.Users.Add(new User
+        {
+            Id = Guid.Parse("55555555-5555-5555-5555-000000000001"),
+            Role = "admin",
+            Email = email,
+            Phone = "+64214000001",
+            Nickname = "System Admin",
+            Gender = "unspecified",
+            Language = "en",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("Password123!"),
+            Status = "active",
+            CreatedAt = now,
+            UpdatedAt = now,
+        });
+        await db.SaveChangesAsync(ct);
+        logger.LogInformation("Ensured admin user {Email}", email);
+    }
 
     private record HotelRefundPolicySeed(Guid Id, Guid HotelId, string Content, string? StructuredRulesJson, bool IsActive);
 

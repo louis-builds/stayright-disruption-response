@@ -146,7 +146,7 @@ export function SettingsScreen() {
       <View style={styles.card}>
         <Text style={styles.cardLabel}>Calling</Text>
         <Text style={styles.aboutText}>
-          App-to-app voice calls · Not recorded
+          App-to-app voice calls · Recorded on this device after connect
         </Text>
         <Text style={styles.aboutText}>API: {BASE_URL}</Text>
         <Text style={styles.aboutText}>

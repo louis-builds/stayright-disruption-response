@@ -6,6 +6,7 @@ public interface IKnowledgeBaseRepository
 {
     Task<List<RagDocument>> ListDocumentsAsync(CancellationToken ct = default);
     Task<RagDocument?> FindDocumentByNameAndVersionAsync(string name, int version, CancellationToken ct = default);
+    Task<RagDocument?> FindLatestDocumentByNameAsync(string name, CancellationToken ct = default);
     Task<int> GetNextVersionAsync(string name, CancellationToken ct = default);
     Task AddDocumentAsync(RagDocument doc, CancellationToken ct = default);
     Task AddChunksAsync(IEnumerable<RagDocumentChunk> chunks, CancellationToken ct = default);

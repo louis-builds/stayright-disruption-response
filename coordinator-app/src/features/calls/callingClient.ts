@@ -1,6 +1,6 @@
 import { HubConnectionBuilder, HubConnectionState, HttpTransportType, LogLevel } from "@microsoft/signalr";
 import { CallController } from "../../../../shared/calling/CallController";
-import type { CallSession, IceServer } from "../../../../shared/calling/contracts";
+import type { CallRecordingFile, CallSession, IceServer } from "../../../../shared/calling/contracts";
 import { BASE_URL } from "../../shared/api/client";
 import { createAudioPeer } from "./audioPeer";
 
@@ -32,6 +32,7 @@ export function makeCallController(role: "guest" | "coordinator") {
     reject: id => request<CallSession>("/api/calls/" + id + "/reject", "POST", {}),
     end: id => request<CallSession>("/api/calls/" + id + "/end", "POST", {}),
     iceServers: () => request<IceServer[]>("/api/calls/ice-servers"),
+    uploadRecording: async (id, file) => { await uploadRecording(BASE_URL, id, file); },
   }, {
     start: () => {
       if (starting) return starting;
@@ -44,5 +45,22 @@ export function makeCallController(role: "guest" | "coordinator") {
     on: (event, callback) => hub.on(event, callback),
     reconnected: callback => hub.onreconnected(callback),
     disconnected: callback => { hub.onreconnecting(callback); hub.onclose(callback); },
-  }, createAudioPeer);
+  },   createAudioPeer);
+}
+
+async function uploadRecording(baseUrl: string, id: string, file: CallRecordingFile) {
+  const form = new FormData();
+  if (file.blob) form.append("file", file.blob, file.fileName);
+  else if (file.uri) form.append("file", { uri: file.uri, name: file.fileName, type: file.mimeType } as unknown as Blob);
+  else throw new Error("Recording file is empty.");
+  form.append("durationSeconds", String(file.durationSeconds));
+  const abort = new AbortController();
+  const timeout = setTimeout(() => abort.abort(), 60000);
+  try {
+    const response = await fetch(baseUrl + "/api/calls/" + id + "/recording", {
+      method: "POST", credentials: "include", signal: abort.signal, body: form,
+    });
+    const body = await response.json();
+    if (!response.ok || body.code !== 0) throw new Error(body.message || "Could not upload the recording.");
+  } finally { clearTimeout(timeout); }
 }

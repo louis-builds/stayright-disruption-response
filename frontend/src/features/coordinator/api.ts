@@ -1,6 +1,6 @@
 import { apiGet, apiPost, apiPut } from "../../shared/api/client";
 import type {
-  AdminOption, AdminUser, BadCaseListItem, BadCaseReplay, CandidateBooking, CaseNote, CaseNotification, CaseQueueItem,
+  AdminOption, AdminUser, BadCaseLearning, BadCaseListItem, BadCaseThread, CandidateBooking, CaseNote, CaseNotification, CaseQueueItem,
   CoordinatorOption, DisruptionDetail, DisruptionListItem, GoldenTest, GoldenTestRun, KnowledgeDashboard, KpiMetrics,
   OpsOverview, OverviewDto, RagDocument, RefundStatus, SevenDayTrendPoint, SystemSettings,
 } from "./types";
@@ -137,12 +137,28 @@ export function fetchBadCases() {
   return apiGet<BadCaseListItem[]>("/api/coordinator/bad-cases");
 }
 
-export function fetchBadCaseReplay(messageId: string) {
-  return apiGet<BadCaseReplay>(`/api/coordinator/bad-cases/${messageId}/replay`);
+export function fetchBadCaseThread(messageId: string) {
+  return apiGet<BadCaseThread>(`/api/coordinator/bad-cases/${messageId}/thread`);
 }
 
 export function confirmMissedEscalation(messageId: string, confirmed: boolean) {
   return apiPost<null>(`/api/coordinator/bad-cases/${messageId}/missed-escalation-review`, { confirmed });
+}
+
+export function evaluateBadCase(messageId: string, evaluationNote: string) {
+  return apiPost<BadCaseLearning>(`/api/coordinator/bad-cases/${messageId}/learning`, { evaluationNote });
+}
+
+export function saveBadCaseDraft(messageId: string, draftMarkdown: string) {
+  return apiPut<BadCaseLearning>(`/api/coordinator/bad-cases/${messageId}/learning/draft`, { draftMarkdown });
+}
+
+export function approveBadCaseLearning(messageId: string, draftMarkdown: string) {
+  return apiPost<BadCaseLearning>(`/api/coordinator/bad-cases/${messageId}/learning/approve`, { draftMarkdown });
+}
+
+export function rejectBadCaseLearning(messageId: string) {
+  return apiPost<BadCaseLearning>(`/api/coordinator/bad-cases/${messageId}/learning/reject`, {});
 }
 
 export function fetchOpsOverview() {

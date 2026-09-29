@@ -1,6 +1,6 @@
 namespace TravelDisruptionAgent.Api.Infrastructure.Data.Entities;
 
-/// <summary>role: guest|coordinator|hotel; language: en|zh|mi; status: active|disabled.</summary>
+/// <summary>role: guest|coordinator|hotel|admin; language: en|zh|mi; status: active|disabled.</summary>
 public class User
 {
     public Guid Id { get; set; }
@@ -11,6 +11,9 @@ public class User
     public string? AvatarUrl { get; set; }
     public string Gender { get; set; } = "unspecified";
     public string Language { get; set; } = "en";
+    public bool KeepMessagesSimple { get; set; }
+    public bool SpeakSlowly { get; set; }
+    public string? StayPreference { get; set; }
     public string PasswordHash { get; set; } = "";
     public Guid? HotelId { get; set; }
     public string Status { get; set; } = "active";

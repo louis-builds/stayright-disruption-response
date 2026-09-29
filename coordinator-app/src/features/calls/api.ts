@@ -1,7 +1,7 @@
 import { Platform } from "react-native";
 import { apiGet, apiPost, apiUpload, BASE_URL } from "../../shared/api/client";
 import type { ApiResponse, PagedResult } from "../../shared/api/types";
-import type { Call, CalleeType, CallRecording, CallsConfig } from "./types";
+import type { Call, CallRecording, CallsConfig } from "./types";
 
 export function initiateCall(caseId: string, calleeType: CalleeType, simulateOutcome?: string) {
   return apiPost<Call>(`/api/cases/${caseId}/calls`, { calleeType, simulateOutcome });
@@ -70,4 +70,11 @@ export function getRecording(callId: string) {
 
 export function reviewRecording(callId: string, reviewed: boolean, note?: string) {
   return apiPost<null>(`/api/calls/${callId}/recording/review`, { reviewed, note });
+}
+
+export function confirmInsights(
+  callId: string,
+  body: { keepMessagesSimple: boolean; speakSlowly: boolean; stayPreference: string | null },
+) {
+  return apiPost<CallRecording>(`/api/calls/${callId}/recording/insights`, body);
 }

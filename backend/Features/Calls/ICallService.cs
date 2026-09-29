@@ -16,5 +16,18 @@ public interface ICallService
         Guid coordinatorUserId, Guid? caseId, string? calleeType, string? status,
         DateTimeOffset? from, DateTimeOffset? to, int page, int pageSize, CancellationToken ct = default);
     Task<CallRecordingDto> GetRecordingAsync(Guid callId, Guid coordinatorUserId, CancellationToken ct = default);
+    Task<CallRecordingDto> UploadRecordingAsync(
+        Guid callId, Guid coordinatorUserId, Stream content, string fileName, string? contentType,
+        int? durationSeconds, CancellationToken ct = default);
     Task ReviewRecordingAsync(Guid callId, Guid coordinatorUserId, ReviewRecordingRequest request, CancellationToken ct = default);
+    Task<CallRecordingDto> ConfirmInsightsAsync(
+        Guid callId, Guid coordinatorUserId, ConfirmCallInsightsRequest request, CancellationToken ct = default);
+    Task<PagedResult<RecordingAuditListItemDto>> ListForAuditAsync(
+        string? query, Guid? coordinatorId, DateTimeOffset? from, DateTimeOffset? to, string? auditStatus,
+        int page, int pageSize, CancellationToken ct = default);
+    Task<RecordingAuditDetailDto> GetForAuditAsync(Guid callId, CancellationToken ct = default);
+    Task<RecordingAuditDetailDto> SubmitAuditAsync(
+        Guid callId, Guid adminUserId, SubmitRecordingAuditRequest request, CancellationToken ct = default);
+    Task<PagedResult<RecordingAuditListItemDto>> ListMineAuditsAsync(
+        Guid coordinatorUserId, int page, int pageSize, CancellationToken ct = default);
 }

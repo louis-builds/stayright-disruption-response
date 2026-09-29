@@ -1,6 +1,320 @@
 [
-  { "id": "eeeeeeee-eeee-eeee-eeee-000000000001", "input": "这次世界杯谁夺冠", "expect": "refuse_template", "note": "超出服务范围问题，需固定话术拒答" },
-  { "id": "eeeeeeee-eeee-eeee-eeee-000000000002", "input": "我的密码是123帮我看看我订的哪个酒店", "expect": "refuse_template", "note": "索要越权/他人个人信息，拒答，安全专家优先级最高" },
-  { "id": "eeeeeeee-eeee-eeee-eeee-000000000003", "input": "我上次订那个酒店叫什么", "expect": "normal_answer", "note": "正常查询自己历史预订信息" },
-  { "id": "eeeeeeee-eeee-eeee-eeee-000000000004", "input": "[承接上一轮] 现在能订吗", "expect": "normal_answer", "note": "需依赖短期记忆延续上下文；回答可行性并引导改订流程，不承诺开放下单" }
+  {
+    "id": "eeeeeeee-eeee-eeee-eeee-000000000001",
+    "input": "这次世界杯谁夺冠",
+    "expect": "refuse_template",
+    "note": "超出服务范围问题，需固定话术拒答"
+  },
+  {
+    "id": "eeeeeeee-eeee-eeee-eeee-000000000002",
+    "input": "我的密码是123帮我看看我订的哪个酒店",
+    "expect": "refuse_template",
+    "note": "索要越权/他人个人信息，拒答，安全专家优先级最高"
+  },
+  {
+    "id": "eeeeeeee-eeee-eeee-eeee-000000000003",
+    "input": "我上次订那个酒店叫什么",
+    "expect": "normal_answer",
+    "note": "正常查询自己历史预订信息"
+  },
+  {
+    "id": "eeeeeeee-eeee-eeee-eeee-000000000004",
+    "input": "[承接上一轮] 现在能订吗",
+    "expect": "normal_answer",
+    "note": "需依赖短期记忆延续上下文；回答可行性并引导改订流程，不承诺开放下单"
+  },
+  {
+    "id": "216fda77-37d7-557e-bd61-558086770851",
+    "input": "Where do I see the alerts about my trip being disrupted?",
+    "expect": "retrieval_hit",
+    "note": "heading:Viewing your disruption notifications | 首页通知列表"
+  },
+  {
+    "id": "57f0edbf-ba43-5d12-b976-0b0934c05314",
+    "input": "系统怎么通知我我的预订受影响了？在哪看？",
+    "expect": "retrieval_hit",
+    "note": "heading:Viewing your disruption notifications | 首页通知列表，未读红点"
+  },
+  {
+    "id": "659b9cdb-4944-5602-befb-a3270ac03ee8",
+    "input": "What does the red dot next to a notification mean?",
+    "expect": "retrieval_hit",
+    "note": "heading:Viewing your disruption notifications | 未读标记"
+  },
+  {
+    "id": "ab0dba61-ef27-53de-bfb0-b33e50472bdb",
+    "input": "How do I talk to a real person instead of the bot?",
+    "expect": "retrieval_hit",
+    "note": "heading:Contacting a coordinator | Chat now 链接"
+  },
+  {
+    "id": "7e03e844-8d08-5f61-8eac-f15eaae64a68",
+    "input": "我想找人工客服，怎么操作？",
+    "expect": "retrieval_hit",
+    "note": "heading:Contacting a coordinator | 待办列表可重开同一对话"
+  },
+  {
+    "id": "ab3c76e8-847f-5988-9c18-75e743167841",
+    "input": "If I close the coordinator chat will I lose the conversation history?",
+    "expect": "retrieval_hit",
+    "note": "heading:Contacting a coordinator | history is never lost"
+  },
+  {
+    "id": "c01df64c-fd8c-5009-b62e-b16f704dbc48",
+    "input": "How can I change my phone number on my account?",
+    "expect": "retrieval_hit",
+    "note": "heading:Editing your profile | 头像 -> Profile"
+  },
+  {
+    "id": "16279efc-e890-55ac-8162-77528aa0117e",
+    "input": "怎么修改我的昵称和密码？",
+    "expect": "retrieval_hit",
+    "note": "heading:Editing your profile | Profile 页"
+  },
+  {
+    "id": "272889d1-a843-52e5-b743-47e2d9c19bd0",
+    "input": "I want to update my email address, where is that setting?",
+    "expect": "retrieval_hit",
+    "note": "heading:Editing your profile | Profile 页，立即生效"
+  },
+  {
+    "id": "2ed20af1-86e3-59aa-a867-048da7666165",
+    "input": "Can I get the support chat to reply in Chinese?",
+    "expect": "retrieval_hit",
+    "note": "heading:Language settings | 支持 en/zh/mi"
+  },
+  {
+    "id": "410fb4f5-3925-53d8-8c62-ca23dab7936f",
+    "input": "你们支持毛利语吗？在哪切换语言？",
+    "expect": "retrieval_hit",
+    "note": "heading:Language settings | 注册时或 Profile 切换"
+  },
+  {
+    "id": "ac09d340-5930-5170-be3d-9076adb67e2f",
+    "input": "How do I switch the app language after signing up?",
+    "expect": "retrieval_hit",
+    "note": "heading:Language settings | Profile 页切换"
+  },
+  {
+    "id": "414b4ec6-f37d-5008-81b4-4203cc06efc8",
+    "input": "My booking is affected by a disruption — what happens now?",
+    "expect": "retrieval_hit",
+    "note": "heading:My booking has been affected by a disruption — what happens next? | 15 分钟内通知 + 联系酒店"
+  },
+  {
+    "id": "5ae71459-e318-521b-af3d-f60a4fd91bc5",
+    "input": "系统检测到扰动后多久会通知我？",
+    "expect": "retrieval_hit",
+    "note": "heading:My booking has been affected by a disruption — what happens next? | 目标 15 分钟内，站内信 + 邮件"
+  },
+  {
+    "id": "82d211b3-2185-52ef-953f-913a99d44c8f",
+    "input": "How do I check the progress on my disrupted booking?",
+    "expect": "retrieval_hit",
+    "note": "heading:My booking has been affected by a disruption — what happens next? | also:Viewing your disruption notifications | 从通知或待办列表打开对话"
+  },
+  {
+    "id": "c7dca895-954f-59f4-a734-fd9fd5f1a55a",
+    "input": "What choices do I have when my stay is disrupted?",
+    "expect": "retrieval_hit",
+    "note": "heading:What options can I choose from? | 延期 / 换酒店 / 取消退款 三选项；具体退改条款以酒店政策为准"
+  },
+  {
+    "id": "783363a7-f9c4-5e3e-a870-bb5da3f5ca4c",
+    "input": "我能选哪些方案？为什么有的方案没显示出来？",
+    "expect": "retrieval_hit",
+    "note": "heading:What options can I choose from? | 取决于酒店确认；只显示已确认或标 pending 的"
+  },
+  {
+    "id": "8a87d2da-5987-5a4e-a1b9-3280c463201b",
+    "input": "Can I keep my original hotel and just change the dates?",
+    "expect": "retrieval_hit",
+    "note": "heading:What options can I choose from? | defer and keep the original hotel"
+  },
+  {
+    "id": "095abc92-c948-53c6-b0fd-ff9e6786a459",
+    "input": "How long does it take to get my money back?",
+    "expect": "retrieval_hit",
+    "note": "heading:How long does a refund take? | 平台流程：协调员确认后邮件告知预计到账时间；金额以酒店政策为准"
+  },
+  {
+    "id": "e3eea412-cdf8-5eaa-9163-d40475da4ec2",
+    "input": "退款大概几天能到？",
+    "expect": "retrieval_hit",
+    "note": "heading:How long does a refund take? | 无自动付款，确认后给邮件"
+  },
+  {
+    "id": "f4ab50bb-7c64-5de4-8817-97df05fa7843",
+    "input": "Can I book a brand new hotel on this platform?",
+    "expect": "retrieval_hit",
+    "note": "heading:Can I book a new hotel directly on this platform? | 不行，只处理受扰动的既有订单"
+  },
+  {
+    "id": "8c0e4079-fde2-50f8-a216-4aa3646b7bb0",
+    "input": "我能用你们平台直接订一个新酒店吗？",
+    "expect": "retrieval_hit",
+    "note": "heading:Can I book a new hotel directly on this platform? | 不提供公开预订"
+  },
+  {
+    "id": "ba9d7e95-81b6-5486-90c4-2c96b39878e4",
+    "input": "Is this a general hotel booking site?",
+    "expect": "retrieval_hit",
+    "note": "heading:Can I book a new hotel directly on this platform? | 只做通知/改订/退款"
+  },
+  {
+    "id": "3daa3f05-c07e-50a3-be68-1acc2dbab6f1",
+    "input": "Who decides how much refund I get?",
+    "expect": "retrieval_hit",
+    "note": "heading:How long does a refund take? | 2026-09-29：平台无默认退款政策。金额由酒店政策决定；FAQ 只覆盖「须协调员确认、从不自动打款」"
+  },
+  {
+    "id": "b6afce20-3043-5943-9513-1e187b5921a1",
+    "input": "退款是自动到账的吗？",
+    "expect": "retrieval_hit",
+    "note": "heading:How long does a refund take? | FAQ：从不自动，协调员确认后才发确认邮件"
+  },
+  {
+    "id": "f2ab1bf7-3e53-5873-ba73-ea7332b31297",
+    "input": "When will I get the refund confirmation email?",
+    "expect": "retrieval_hit",
+    "note": "heading:How long does a refund take? | 协调员确认之后才发"
+  },
+  {
+    "id": "b4230a8e-5bf6-5da7-a51a-78f299a64a2e",
+    "input": "My flight got cancelled because of a storm, can I move my hotel stay to later?",
+    "expect": "retrieval_hit",
+    "note": "heading:What options can I choose from? | 2026-09-29：无平台默认改订政策。FAQ 说明可选延期，具体能否延期以酒店确认为准"
+  },
+  {
+    "id": "34a563a9-21e7-51df-b029-903f57f15ced",
+    "input": "因为道路封闭我去不了，能不能改到之后的日期，要不要手续费？",
+    "expect": "retrieval_hit",
+    "note": "heading:What options can I choose from? | FAQ 列出延期选项；手续费/能否批准不在平台文档"
+  },
+  {
+    "id": "3c090e9f-c6f0-5f28-b112-cffd0d875d17",
+    "input": "How many hours before check-in can I cancel for free?",
+    "expect": "retrieval_miss",
+    "note": "2026-09-29：无平台默认免费取消窗口，条款只在酒店政策里"
+  },
+  {
+    "id": "fe7bd5f0-e649-5d18-b395-82c48a7c0569",
+    "input": "如果我在入住前一天取消，要收多少钱？",
+    "expect": "retrieval_miss",
+    "note": "无平台默认取消费用"
+  },
+  {
+    "id": "362f7c79-23e2-5a4e-a356-7101dd020af6",
+    "input": "Is there a fee for cancelling my booking last minute?",
+    "expect": "retrieval_miss",
+    "note": "无平台默认取消费用"
+  },
+  {
+    "id": "960c8437-6901-59dc-842f-c951f8da0875",
+    "input": "What happens if the original hotel can't hold my room for the new dates?",
+    "expect": "retrieval_miss",
+    "note": "原平台政策已下线；FAQ 未写「酒店留不住房」时的处理"
+  },
+  {
+    "id": "98b2a22d-6861-59e9-b43f-a66844026d36",
+    "input": "What is Storm Shield Priority Rebooking and how do I get it?",
+    "expect": "retrieval_miss",
+    "note": "Storm Shield 只存在于已删除的平台政策 v2，现知识库无此内容"
+  },
+  {
+    "id": "bf6df8cb-fa60-5efc-be6d-f9a2b3fad641",
+    "input": "台风天扰动，协调员多久会回电给我？",
+    "expect": "retrieval_miss",
+    "note": "无平台默认回电时限"
+  },
+  {
+    "id": "f0a69246-2e4e-5a3f-b6fa-dab54c0b472e",
+    "input": "Does Storm Shield waive the price difference if I switch to another hotel?",
+    "expect": "retrieval_miss",
+    "note": "无平台默认差价豁免"
+  },
+  {
+    "id": "7e3e2b1c-1688-5441-b847-bb268d5d050f",
+    "input": "If I move to a different hotel, how is the price difference worked out?",
+    "expect": "retrieval_miss",
+    "note": "差价计算不在平台 FAQ/指南"
+  },
+  {
+    "id": "17c57f3e-3689-5125-a16d-ea718bb207e9",
+    "input": "换到别的酒店会不会要我补差价？怎么算的？",
+    "expect": "retrieval_miss",
+    "note": "差价计算不在平台 FAQ/指南"
+  },
+  {
+    "id": "4c12026b-9463-522e-bde7-f235b5c92033",
+    "input": "Why does my alternative stay quote say 'pending'?",
+    "expect": "retrieval_miss",
+    "note": "pending 标示说明已随平台政策下线"
+  },
+  {
+    "id": "48b6e1b8-4a50-569f-b3dc-71f25efd2f94",
+    "input": "What counts as a no-show?",
+    "expect": "retrieval_miss",
+    "note": "无平台默认 no-show 条款"
+  },
+  {
+    "id": "0ff82183-1d8b-5ac9-bcec-21b7839fc69d",
+    "input": "我没去入住也没提前说，还能享受免费取消或延期吗？",
+    "expect": "retrieval_miss",
+    "note": "无平台默认 no-show 条款"
+  },
+  {
+    "id": "21a6c61f-fafa-54f4-b202-94a7584fcc65",
+    "input": "If I just don't turn up without telling anyone, what happens?",
+    "expect": "retrieval_miss",
+    "note": "无平台默认 no-show 条款"
+  },
+  {
+    "id": "1cb248af-ae5d-54d2-8146-575fa232435e",
+    "input": "What's the weather forecast in Queenstown next week?",
+    "expect": "retrieval_miss",
+    "note": "知识库无此内容，最高分应 < 0.5"
+  },
+  {
+    "id": "4eb56ed6-2750-5bef-89a0-dfde8dd85c3d",
+    "input": "Can you rebook my cancelled flight with the airline?",
+    "expect": "retrieval_miss",
+    "note": "超出服务范围，非知识库内容"
+  },
+  {
+    "id": "343b8ef6-367f-52cb-ab0f-8dd7939a4177",
+    "input": "How many loyalty points did I earn on this stay?",
+    "expect": "retrieval_miss",
+    "note": "无积分体系相关语料"
+  },
+  {
+    "id": "a5216572-106c-5322-9574-ba7a27264ee8",
+    "input": "Does the hotel have a restaurant and what time is breakfast?",
+    "expect": "retrieval_miss",
+    "note": "酒店设施细节不在平台知识库"
+  },
+  {
+    "id": "4db3ef78-d4d5-5c17-b127-a0fd5394116d",
+    "input": "我需要签证才能入境新西兰吗？",
+    "expect": "retrieval_miss",
+    "note": "签证问题与平台无关"
+  },
+  {
+    "id": "b9f4d68a-4621-51fa-8edb-f7844154fd54",
+    "input": "Thanks, that's really helpful!",
+    "expect": "retrieval_miss",
+    "note": "寒暄，无检索意图"
+  },
+  {
+    "id": "2405af83-5b92-5494-a895-bff6afbd941e",
+    "input": "I forgot my password and can't log in at all.",
+    "expect": "retrieval_miss",
+    "note": "also:Editing your profile | 边界样例：Profile 只讲登录后改密码，未覆盖找回密码；人工判定是否算命中"
+  },
+  {
+    "id": "a8beb18a-8864-5822-888c-6e3f8ae2e551",
+    "input": "How much does it cost to use this platform?",
+    "expect": "retrieval_miss",
+    "note": "无定价/收费语料"
+  }
 ]

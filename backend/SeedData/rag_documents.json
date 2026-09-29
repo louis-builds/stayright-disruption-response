@@ -1,5 +1,4 @@
 [
   { "id": "dddddddd-dddd-dddd-dddd-000000000001", "name": "Frequently Asked Questions", "file": "rag/常见问题.md", "version": 1, "is_default_version": true },
-  { "id": "dddddddd-dddd-dddd-dddd-000000000002", "name": "User Guide", "file": "rag/使用说明.md", "version": 1, "is_default_version": true },
-  { "id": "dddddddd-dddd-dddd-dddd-000000000003", "name": "Cancellation & Rebooking Policy", "file": "rag/取消与改订政策.md", "version": 1, "is_default_version": true }
+  { "id": "dddddddd-dddd-dddd-dddd-000000000002", "name": "User Guide", "file": "rag/使用说明.md", "version": 1, "is_default_version": true }
 ]

@@ -65,6 +65,16 @@ export interface GoldenTestRunItem {
   expect: string;
   actual: string;
   passed: boolean;
+  kind?: string;
+  expectedSummary?: string;
+  actualSummary?: string;
+  expectedChunkHeading?: string | null;
+  expectedChunkExcerpt?: string | null;
+  retrievedDocName?: string | null;
+  retrievedHeading?: string | null;
+  retrievedExcerpt?: string | null;
+  retrievedScore?: number | null;
+  reason?: string | null;
 }
 
 export interface GoldenTestRun {
@@ -175,6 +185,15 @@ export interface BadCaseListItem {
   createdAt: string;
   escalated: boolean;
   missedEscalationConfirmed: boolean | null;
+  learningStatus: "draft" | "approved" | "rejected" | null;
+}
+
+export interface BadCaseLearning {
+  status: "draft" | "approved" | "rejected";
+  evaluationNote: string;
+  draftMarkdown: string | null;
+  approvedAt: string | null;
+  learnedRepliesVersion: number | null;
 }
 
 export interface BadCaseReplay {
@@ -183,6 +202,24 @@ export interface BadCaseReplay {
   precedingGuestQuestion: string | null;
   aiReply: string;
   analysis: string;
+  learning: BadCaseLearning | null;
+}
+
+export interface BadCaseThreadMessage {
+  id: string;
+  senderRole: "system" | "ai" | "guest" | "coordinator";
+  content: string;
+  vote: "like" | "dislike" | null;
+  createdAt: string;
+  learning: BadCaseLearning | null;
+}
+
+export interface BadCaseThread {
+  caseId: string;
+  focusMessageId: string;
+  guestNickname: string;
+  disruptionTitle: string;
+  messages: BadCaseThreadMessage[];
 }
 
 export interface DisruptionListItem {

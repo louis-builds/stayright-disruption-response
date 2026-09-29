@@ -110,7 +110,10 @@ public class RagRepository(AppDbContext db, GeminiClient gemini) : IRagRepositor
 
     private async Task<List<Guid>> GetSearchableChunkIdsAsync(Guid? guestUserId, CancellationToken ct)
     {
-        var docs = await db.RagDocuments.Select(d => new { d.Id, d.Name, d.Version, d.IsDefaultVersion }).ToListAsync(ct);
+        var docs = await db.RagDocuments
+            .Where(d => d.HotelId == null && d.SourceType != "hotel-policy")
+            .Select(d => new { d.Id, d.Name, d.Version, d.IsDefaultVersion })
+            .ToListAsync(ct);
         var overrides = guestUserId.HasValue
             ? await db.UserDocumentVersions.Where(o => o.UserId == guestUserId.Value).ToListAsync(ct)
             : [];

@@ -46,11 +46,10 @@ MISS_SCORE_THRESHOLD = float(os.environ.get("EVAL_MISS_THRESHOLD", "0.5"))
 
 GOLDEN_PATH = Path(__file__).parent / "rag_golden.jsonl"
 
-# eval/README.md「已知问题 1」：golden 集用中文文件名当 doc 标识，
-# 数据库 RagDocument.Name 是英文——这里手工对齐，不要改golden集本身。
+# golden 集用中文文件名当 doc 标识，数据库 RagDocument.Name 是英文。
+# 2026-09-29 起平台没有默认退款政策，不再映射「取消与改订政策」。
 DOC_NAME_MAP = {
     "使用说明": "User Guide",
-    "取消与改订政策": "Cancellation & Rebooking Policy",
     "常见问题": "Frequently Asked Questions",
 }
 
@@ -80,6 +79,8 @@ def build_heading_index(conn: psycopg.Connection) -> dict[tuple[str, str], str]:
             FROM rag_document_chunks c
             JOIN rag_documents rd ON rd.id = c.rag_document_id
             WHERE rd.is_default_version = true
+              AND rd.hotel_id IS NULL
+              AND COALESCE(rd.source_type, '') <> 'hotel-policy'
         """)
         for doc_name, chunk_id, content in cur.fetchall():
             heading = content.split("\n", 1)[0].strip()

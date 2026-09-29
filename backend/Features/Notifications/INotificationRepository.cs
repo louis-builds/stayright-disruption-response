@@ -9,5 +9,6 @@ public interface INotificationRepository
     Task<int> CountUnreadAsync(Guid userId, CancellationToken ct = default);
     Task MarkCaseReadAsync(Guid userId, Guid caseId, CancellationToken ct = default);
     Task<Notification?> FindAsync(Guid id, Guid userId, CancellationToken ct = default);
+    Task AddAsync(Notification notification, CancellationToken ct = default);
     Task SaveChangesAsync(CancellationToken ct = default);
 }

@@ -14,6 +14,13 @@ public class CallsController(ICallService callService) : ControllerBase
     private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private string CurrentUserRole => User.FindFirstValue(ClaimTypes.Role)!;
 
+    [HttpGet("audits/mine")]
+    [Authorize(Roles = "coordinator")]
+    public async Task<ActionResult<ApiResponse<PagedResult<RecordingAuditListItemDto>>>> MineAudits(
+        [FromQuery] PagedRequest query, CancellationToken ct) =>
+        Ok(ApiResponse<PagedResult<RecordingAuditListItemDto>>.Ok(
+            await callService.ListMineAuditsAsync(CurrentUserId, query.Page, query.PageSize, ct)));
+
     [HttpGet("mine")]
     [Authorize(Roles = "coordinator")]
     public async Task<ActionResult<ApiResponse<PagedResult<CallDto>>>> Mine(
@@ -60,6 +67,60 @@ public class CallsController(ICallService callService) : ControllerBase
     [HttpPost("{id:guid}/end")]
     public async Task<ActionResult<ApiResponse<CallDto>>> EndCall(Guid id, CancellationToken ct) =>
         await RunTransition(() => callService.EndCallAsync(id, CurrentUserId, CurrentUserRole, ct));
+
+    [HttpPost("{id:guid}/recording")]
+    [Authorize(Roles = "coordinator")]
+    [RequestSizeLimit(40_000_000)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 40_000_000)]
+    public async Task<ActionResult<ApiResponse<CallRecordingDto>>> UploadRecording(
+        Guid id, IFormFile file, [FromForm] int? durationSeconds, CancellationToken ct)
+    {
+        if (file is null || file.Length <= 0)
+            return BadRequest(ApiResponse<object?>.Fail(400, "Recording file is required"));
+        if (file.Length > 40_000_000)
+            return BadRequest(ApiResponse<object?>.Fail(400, "Recording file is too large"));
+        try
+        {
+            await using var stream = file.OpenReadStream();
+            return Ok(ApiResponse<CallRecordingDto>.Ok(await callService.UploadRecordingAsync(
+                id, CurrentUserId, stream, file.FileName, file.ContentType, durationSeconds, ct)));
+        }
+        catch (CallNotFoundException)
+        {
+            return NotFound(ApiResponse<object?>.Fail(404, "Call not found"));
+        }
+        catch (CallAccessDeniedException)
+        {
+            return StatusCode(403, ApiResponse.Forbidden());
+        }
+        catch (CallStateConflictException ex)
+        {
+            return Conflict(ApiResponse<object?>.Fail(409, ex.Message));
+        }
+        catch (CallValidationException ex)
+        {
+            return BadRequest(ApiResponse<object?>.Fail(400, ex.Message));
+        }
+    }
+
+    [HttpPost("{id:guid}/recording/insights")]
+    [Authorize(Roles = "coordinator")]
+    public async Task<ActionResult<ApiResponse<CallRecordingDto>>> ConfirmInsights(
+        Guid id, ConfirmCallInsightsRequest request, CancellationToken ct)
+    {
+        try
+        {
+            return Ok(ApiResponse<CallRecordingDto>.Ok(await callService.ConfirmInsightsAsync(id, CurrentUserId, request, ct)));
+        }
+        catch (CallNotFoundException)
+        {
+            return NotFound(ApiResponse<object?>.Fail(404, "Recording not found"));
+        }
+        catch (CallValidationException ex)
+        {
+            return BadRequest(ApiResponse<object?>.Fail(400, ex.Message));
+        }
+    }
 
     [HttpGet("{id:guid}/recording")]
     [Authorize(Roles = "coordinator")]

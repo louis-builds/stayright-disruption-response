@@ -48,7 +48,7 @@ function CallModal() {
         <Text style={styles.name}>{"Coordinator"}</Text>
         {call && <Text style={styles.detail}>Case {call.caseId.slice(0, 8)}{call.confirmationNo ? " · " + call.confirmationNo : ""}</Text>}
         {phase === "connected" && <Text style={styles.timer}>{duration}</Text>}
-        <Text style={styles.detail}>Voice only · Not recorded</Text>
+        <Text style={styles.detail}>Voice only · This call may be recorded</Text>
         {error && <Text style={styles.error} accessibilityRole="alert">{error}</Text>}
         {playbackBlocked && <Pressable style={styles.button} onPress={() => void controller.play()}><Text style={styles.buttonText}>Enable audio</Text></Pressable>}
         {phase === "incoming" && <View style={styles.row}>

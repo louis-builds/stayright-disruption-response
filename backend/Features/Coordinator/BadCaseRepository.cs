@@ -26,6 +26,12 @@ public class BadCaseRepository(AppDbContext db) : IBadCaseRepository
             .OrderByDescending(m => m.CreatedAt)
             .FirstOrDefaultAsync(ct);
 
+    public Task<List<Message>> ListAiThreadAsync(Guid caseId, CancellationToken ct = default) =>
+        db.Messages
+            .Where(m => m.CaseId == caseId && m.Thread == "ai")
+            .OrderBy(m => m.CreatedAt)
+            .ToListAsync(ct);
+
     public async Task<bool> SetMissedEscalationConfirmedAsync(Guid messageId, bool confirmed, CancellationToken ct = default)
     {
         var message = await db.Messages.FirstOrDefaultAsync(m => m.Id == messageId, ct);
@@ -35,4 +41,20 @@ public class BadCaseRepository(AppDbContext db) : IBadCaseRepository
         await db.SaveChangesAsync(ct);
         return true;
     }
+
+    public async Task<Dictionary<Guid, BadCaseLearning>> ListLearningsByMessageIdsAsync(
+        IEnumerable<Guid> messageIds, CancellationToken ct = default)
+    {
+        var ids = messageIds.Distinct().ToList();
+        if (ids.Count == 0) return [];
+        return await db.BadCaseLearnings.Where(l => ids.Contains(l.MessageId)).ToDictionaryAsync(l => l.MessageId, ct);
+    }
+
+    public Task<BadCaseLearning?> FindLearningByMessageIdAsync(Guid messageId, CancellationToken ct = default) =>
+        db.BadCaseLearnings.FirstOrDefaultAsync(l => l.MessageId == messageId, ct);
+
+    public async Task AddLearningAsync(BadCaseLearning learning, CancellationToken ct = default) =>
+        await db.BadCaseLearnings.AddAsync(learning, ct);
+
+    public Task SaveChangesAsync(CancellationToken ct = default) => db.SaveChangesAsync(ct);
 }

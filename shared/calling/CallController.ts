@@ -117,6 +117,7 @@ export class CallController {
           this.offerFailed = false;
           this.clearConnectWindow();
           this.set({ phase: "connected", connectedAt: this.view.connectedAt ?? Date.now() });
+          if (this.role === "coordinator") this.peer.startRecording();
         }
         if (state === "failed" || state === "disconnected" || state === "closed") {
           const wasConnected = this.view.phase === "connected";
@@ -272,18 +273,32 @@ export class CallController {
 
   private finish() {
     const id = this.view.call?.id;
+    const peer = this.peer;
+    const shouldUpload = this.role === "coordinator" && !!id && !!this.view.connectedAt;
     if (id) {
       this.seen.add(id);
       void this.transport.invoke("LeaveCall", id).catch(() => {});
     }
     this.generation++;
-    this.peer?.close(); this.peer = null;
+    this.peer = null;
     this.clearConnectWindow();
     this.offered = false;
     this.recovering = false;
     this.offerFailed = false;
     this.lastIce = null;
     this.set({ phase: "ended", playbackBlocked: false });
+    if (!shouldUpload) { peer?.close(); return; }
+    void this.finalizeRecording(peer, id, true);
+  }
+
+  private async finalizeRecording(peer: AudioPeer | null, callId: string | undefined, shouldUpload: boolean) {
+    let file = null;
+    try { if (shouldUpload && peer) file = await peer.stopRecording(); }
+    catch { /* Hangup still closes the microphone even if the recorder fails. */ }
+    peer?.close();
+    if (!file || !callId || !this.api.uploadRecording) return;
+    try { await this.api.uploadRecording(callId, file); }
+    catch { /* Call summary can retry upload; do not keep the call open. */ }
   }
 
   private reset() {

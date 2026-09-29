@@ -50,7 +50,6 @@ function CallRow({ item, onPress }: { item: Call; onPress: () => void }) {
         {item.confirmationNo ? ` · ${item.confirmationNo}` : ""}
       </Text>
       <Text style={styles.rowMeta}>
-        Not recorded ·{" "}
         {new Date(item.startedAt).toLocaleString()}
         {item.durationSeconds !== null ? ` · ${item.durationSeconds}s` : ""}
       </Text>

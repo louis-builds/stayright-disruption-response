@@ -8,7 +8,7 @@ namespace TravelDisruptionAgent.Api.Features.Coordinator;
 
 [ApiController]
 [Route("api/coordinator/users")]
-[Authorize(Roles = "coordinator")]
+[Authorize(Roles = "coordinator,admin")]
 public class SystemAdminController(ISystemAdminService adminService) : ControllerBase
 {
     private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);

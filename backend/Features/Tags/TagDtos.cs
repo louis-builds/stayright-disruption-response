@@ -9,7 +9,12 @@ public record GuestTagsDto(
     bool AiDifficult,
     bool HighRejectionRate,
     bool SlowResponder,
+    bool KeepMessagesSimple,
+    bool SpeakSlowly,
+    string? StayPreference,
     List<CustomTagDto> CustomTags);
+
+public record GuestCommunicationPrefs(bool KeepMessagesSimple, bool SpeakSlowly, string? StayPreference);
 
 public record CustomTagDto(Guid Id, string Label, string OwnerRole);
 
