@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import { AuthProvider, LoginPage, ProtectedRoute, RegisterPage, useAuth } from "./features/auth";
+import { AuthProvider, ProtectedRoute, useAuth } from "./features/auth";
+import { LoginRoute, RegisterRoute } from "./features/auth/AuthLayoutRoutes";
 import { GuestHomePage } from "./features/home/GuestHomePage";
 import { ProfilePage } from "./features/profile";
 import { CaseActionConfirmPage, CaseConversationPage, OptionsFlowPage } from "./features/cases";
@@ -7,22 +8,33 @@ import { MyBookingsPage } from "./features/bookings";
 import { CoordinatorHomePage, EscalationDeskPage, OptionsAdminPage } from "./features/coordinator";
 import { HotelHomePage } from "./features/hotel";
 import { LandingPage } from "./features/landing/LandingPage";
+import { MobileLayoutProvider, useMobileLayout } from "./shared/layout/MobileLayoutProvider";
 
 function RootRedirect() {
   const { user, loading } = useAuth();
+  const isMobile = useMobileLayout();
   if (loading) return null;
-  return <Navigate to={user ? user.homeRoute : "/login"} replace />;
+  return <Navigate to={user ? user.homeRoute : isMobile ? "/m/login" : "/login"} replace />;
+}
+
+function HomeRoute() {
+  const isMobile = useMobileLayout();
+  if (isMobile) return <RootRedirect />;
+  return <LandingPage />;
 }
 
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <MobileLayoutProvider>
         <Routes>
-          <Route path="/" element={<LandingPage />} />
+          <Route path="/" element={<HomeRoute />} />
           <Route path="/app" element={<RootRedirect />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/login" element={<LoginRoute />} />
+          <Route path="/m/login" element={<LoginRoute />} />
+          <Route path="/register" element={<RegisterRoute />} />
+          <Route path="/m/register" element={<RegisterRoute />} />
           <Route path="/case-actions/confirm" element={<CaseActionConfirmPage />} />
           <Route
             path="/guest/home"
@@ -97,6 +109,7 @@ function App() {
             }
           />
         </Routes>
+        </MobileLayoutProvider>
       </AuthProvider>
     </BrowserRouter>
   );

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth";
+import { useMobileLayout } from "../../shared/layout/MobileLayoutProvider";
+import { loginPath } from "../../shared/layout/mobileLayout";
 import "./LandingPage.css";
 
 type IconName = "signal" | "spark" | "route" | "traveller" | "hotel" | "coordinator" | "check";
@@ -131,10 +133,11 @@ function WorkspaceDemo({ active }: { active: WorkspaceId }) {
 
 export function LandingPage() {
   const { user, loading } = useAuth();
+  const isMobile = useMobileLayout();
   const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceId>("traveller");
   const [activeWorkflow, setActiveWorkflow] = useState(0);
   const [workflowPaused, setWorkflowPaused] = useState(false);
-  const primaryHref = !loading && user ? user.homeRoute : "/login";
+  const primaryHref = !loading && user ? user.homeRoute : loginPath();
   const primaryLabel = !loading && user ? "Open workspace" : "Sign in";
 
   useEffect(() => {
@@ -144,7 +147,7 @@ export function LandingPage() {
   }, [workflowPaused]);
 
   return (
-    <div className="landing-page">
+    <div className={`landing-page${isMobile ? " landing-page-m" : ""}`}>
       <div className="landing-topline">
         <span><i /> Built for New Zealand travel recovery</span>
         <span>Weather · Flights · Road closures</span>

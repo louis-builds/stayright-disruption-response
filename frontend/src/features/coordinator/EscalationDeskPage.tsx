@@ -198,8 +198,7 @@ export function EscalationDeskPage() {
   const notificationStart = (currentNotificationPage - 1) * notificationsPerPage;
   const visibleNotifications = orderedNotifications.slice(notificationStart, notificationStart + notificationsPerPage);
 
-  return (
-    <CoordinatorDashboardShell user={user} active="reports" onNavigate={() => navigate("/coordinator/home")} onSearch={() => navigate("/coordinator/home")}>
+  const workspace = (
       <div className="escalation-workspace">
       <div className="escalation-desk">
         <div className="escalation-topline"><button type="button" className="coord-btn-link" onClick={() => navigate(`/cases/${caseId}`)}>← Coordinator Options&nbsp; / &nbsp;<strong>Case Decision</strong></button>{syncedAt && <p className="coord-sync-indicator escalation-sync"><span className="coord-sync-dot" aria-hidden="true" />Last sync {syncedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · auto-refreshes every 30s</p>}</div>
@@ -344,6 +343,11 @@ export function EscalationDeskPage() {
         )}
       </div>
       </div>
+  );
+
+  return (
+    <CoordinatorDashboardShell user={user} active="reports" onNavigate={() => navigate("/coordinator/home")} onSearch={() => navigate("/coordinator/home")}>
+      {workspace}
     </CoordinatorDashboardShell>
   );
 }

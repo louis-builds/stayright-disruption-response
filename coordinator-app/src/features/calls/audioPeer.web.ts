@@ -9,6 +9,7 @@ export function createAudioPeer(callbacks: PeerCallbacks): AudioPeer {
   let local: MediaStream | null = null;
   let audio: HTMLAudioElement | null = null;
   async function remote(sdp: string, type: "offer" | "answer") {
+    if (type === "offer") queued.length = 0;
     await pc!.setRemoteDescription({ type, sdp });
     remoteReady = true;
     for (const candidate of queued.splice(0)) await pc!.addIceCandidate(candidate);
@@ -38,8 +39,8 @@ export function createAudioPeer(callbacks: PeerCallbacks): AudioPeer {
       });
       for (const track of stream.getTracks()) pc.addTrack(track, stream);
     },
-    async offer() {
-      const description = await pc!.createOffer();
+    async offer(iceRestart = false) {
+      const description = await pc!.createOffer(iceRestart ? { iceRestart: true } : {});
       await pc!.setLocalDescription(description);
       return description.sdp!;
     },

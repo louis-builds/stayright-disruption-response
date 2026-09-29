@@ -9,6 +9,7 @@ import * as bookingsApi from "../bookings/api";
 import type { BookingSummary } from "../bookings/types";
 import { useAuth } from "../auth";
 import { GuestDashboardShell } from "./GuestDashboardShell";
+import { useMobileLayout } from "../../shared/layout/MobileLayoutProvider";
 import "./GuestHomePage.css";
 
 const NOTICE_POLL_MS = 20_000;
@@ -93,6 +94,7 @@ const HOW_IT_WORKS = [
 
 export function GuestHomePage() {
   const { user } = useAuth();
+  const isMobile = useMobileLayout();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [bookings, setBookings] = useState<BookingSummary[]>([]);
   const [bookingsLoading, setBookingsLoading] = useState(true);
@@ -104,6 +106,7 @@ export function GuestHomePage() {
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const { cases, loading: casesLoading } = useMyCases();
   const navigate = useNavigate();
+  const [homePanel, setHomePanel] = useState<"priority" | "stays" | "alerts" | "progress">("priority");
 
   const loadNotifications = useCallback(async () => {
     const res = await notificationsApi.fetchNotifications(1, NOTICE_FETCH_SIZE);
@@ -201,18 +204,32 @@ export function GuestHomePage() {
     return (
       <GuestDashboardShell onSearch={(query) => { setNoticeQuery(query); setNoticeShown(NOTICE_PAGE_SIZE); }}>
         <div className="guest-dashboard">
+          {!isMobile && (
           <header className="guest-dashboard-welcome">
             <div><small>TRAVEL OVERVIEW</small><h1>Kia ora, {user?.nickname ?? "traveller"}</h1><p>We are monitoring your upcoming stays and will alert you when something needs your attention.</p></div>
             <span><i aria-hidden="true" />Live monitoring</span>
           </header>
+          )}
 
+          {!isMobile && (
           <section className="guest-dashboard-stats" aria-label="Travel summary">
             <article className="stays"><i><DashboardStatIcon type="hotel" /></i><small>Upcoming stays</small><strong>{bookingsLoading ? "—" : `${upcomingBookings.length} ${upcomingBookings.length === 1 ? "Booking" : "Bookings"}`}</strong><span>active stays</span></article>
             <article className={activeCases.length ? "attention" : ""}><i><DashboardStatIcon type="alert" /></i><small>Action required</small><strong>{casesLoading ? "—" : `${activeCases.length} Open ${activeCases.length === 1 ? "Case" : "Cases"}`}</strong><span>{priorityCase ? `${priorityCase.priority} priority` : "no action required"}</span></article>
             <article className="notices"><i><DashboardStatIcon type="bell" /></i><small>Unread notices</small><strong>{noticesLoading ? "—" : `${unreadNotices} New ${unreadNotices === 1 ? "Update" : "Updates"}`}</strong><span>recent notices</span></article>
             <article className="checkin"><i><DashboardStatIcon type="calendar" /></i><small>Next check-in</small><strong>{nearestCheckIn ? new Date(`${nearestCheckIn}T00:00:00`).toLocaleDateString("en-NZ", { day: "numeric", month: "short" }) : "—"}</strong><span>{nearestCheckIn ? `${Math.max(daysUntil(nearestCheckIn), 0)} days away` : "no upcoming stay"}</span></article>
           </section>
+          )}
 
+          {isMobile && (
+            <nav className="guest-home-m-tabs" aria-label="Dashboard sections">
+              <button type="button" className={homePanel === "priority" ? "active" : ""} onClick={() => setHomePanel("priority")}>Action</button>
+              <button type="button" className={homePanel === "stays" ? "active" : ""} onClick={() => setHomePanel("stays")}>Stays</button>
+              <button type="button" className={homePanel === "alerts" ? "active" : ""} onClick={() => setHomePanel("alerts")}>Alerts</button>
+              <button type="button" className={homePanel === "progress" ? "active" : ""} onClick={() => setHomePanel("progress")}>Progress</button>
+            </nav>
+          )}
+
+          {(!isMobile || homePanel === "priority") && (
           <section className={`guest-priority ${priorityCase ? "has-action" : "all-clear"}`}>
             {priorityCase ? <>
               <header>
@@ -242,7 +259,9 @@ export function GuestHomePage() {
               </div>
             </> : <div className="guest-priority-clear"><i aria-hidden="true">✓</i><div><small>ALL CLEAR</small><h2>No action is required right now</h2><p>We will keep monitoring your upcoming stays and notify you if anything changes.</p></div></div>}
           </section>
+          )}
 
+          {!isMobile ? (
           <div className="guest-dashboard-grid">
             <div className="guest-dashboard-main">
               <section className="guest-dashboard-card guest-upcoming">
@@ -261,6 +280,19 @@ export function GuestHomePage() {
               <section className="guest-dashboard-card guest-help-steps"><header><div><h2>How StayRight helps</h2><p>Support when travel plans change</p></div></header><figure><img src="/images/guest-help-illustration.png" alt="A traveller receiving disruption assistance from StayRight NZ" /></figure>{HOW_IT_WORKS.map((step) => <div key={step.step}><i>{step.step}</i><span><strong>{step.title}</strong><small>{step.body}</small></span></div>)}</section>
             </aside>
           </div>
+          ) : homePanel === "stays" ? (
+              <section className="guest-dashboard-card guest-upcoming">
+                <header><div><h2>Upcoming stays</h2><p>Your nearest active reservations</p></div><button type="button" onClick={() => navigate("/bookings")}>View all bookings →</button></header>
+                {bookingsLoading ? <EmptyState icon="◌" title="Loading…" body="Fetching your bookings." /> : upcomingBookings.length === 0 ? <EmptyState icon="✓" title="No upcoming stays" body="Future bookings linked to your account will appear here." /> : <div className="guest-upcoming-list">{upcomingBookings.slice(0, 3).map((booking) => <article key={booking.id}><i aria-hidden="true">▦</i><div><strong>{booking.hotelName}</strong><span>{booking.roomTypeName} · {booking.checkIn} → {booking.checkOut}</span></div><small>{booking.confirmationNo}</small><em>{booking.status}</em><button type="button" onClick={() => booking.caseId ? navigate(`/cases/${booking.caseId}`) : navigate("/bookings")}>{booking.caseId ? "View case" : "View stay"} →</button></article>)}</div>}
+              </section>
+          ) : homePanel === "alerts" ? (
+              <section className="guest-dashboard-card guest-notices">
+                <header><div><h2>Travel alerts &amp; updates</h2><p>Recent notices connected to your stays</p></div>{filteredNotifications.length > 4 && <button type="button" onClick={() => setNoticeShown((current) => current > NOTICE_PAGE_SIZE ? NOTICE_PAGE_SIZE : NOTICE_FETCH_SIZE)}>{noticeShown > NOTICE_PAGE_SIZE ? "Show recent" : "View all notices"} →</button>}</header>
+                {noticesLoading ? <EmptyState icon="◌" title="Loading…" body="Fetching your notices." /> : dashboardNotices.length === 0 ? <EmptyState icon="✓" title={noticeQuery ? "No matches" : "All quiet for now"} body={noticeQuery ? "Try a different search term." : "New disruption notices will appear here automatically."} /> : <div className="guest-notices-content"><div className="guest-notice-list">{dashboardNotices.map((notice) => <button type="button" key={notice.id} className={!notice.readAt ? "unread" : ""} onClick={() => void openNotification(notice.id, notice.caseId)}><i aria-hidden="true"><DashboardStatIcon type="bell" /></i><span><strong>{notice.disruptionTitle ?? notice.title}</strong><small>{notice.body}</small></span><em><time>{formatDate(notice.sentAt)}</time><b>View notice →</b></em></button>)}</div></div>}
+              </section>
+          ) : homePanel === "progress" ? (
+              <section className="guest-dashboard-card guest-recovery-progress"><header><div><h2>Recovery progress</h2><p>Current recovery journey for your active case</p></div></header>{priorityCase ? <ol>{RECOVERY_STAGES.map((stage, index) => { const records = workflowProgress.filter((item) => item.state === stage.state); const isCurrent = records.some((item) => item.current) || (workflowProgress.length === 0 && priorityCase.status === stage.state); const isComplete = stage.state === "new" ? !isCurrent : records.length > 0 && !isCurrent; const stageClass = isCurrent ? "current" : isComplete ? "complete" : "upcoming"; return <li className={stageClass} key={stage.state}><i aria-hidden="true">{isComplete ? "✓" : index + 1}</i><span><strong>{stage.label}</strong>{isCurrent && <small>Current stage</small>}</span></li>; })}</ol> : <div className="guest-side-clear"><i>✓</i><p>You have no unresolved disruption cases.</p></div>}</section>
+          ) : null}
         </div>
       </GuestDashboardShell>
     );
@@ -392,6 +424,7 @@ export function GuestHomePage() {
           )}
         </section>
 
+        {!isMobile && (
         <section className="guest-home-how">
           <h2>How it works</h2>
           <div className="how-grid">
@@ -404,6 +437,7 @@ export function GuestHomePage() {
             ))}
           </div>
         </section>
+        )}
       </div>
     </GuestDashboardShell>
   );

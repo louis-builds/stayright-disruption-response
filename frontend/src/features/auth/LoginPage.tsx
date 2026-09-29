@@ -5,6 +5,12 @@ import * as authApi from "./api";
 import { RETURN_URL_KEY } from "../../shared/api/client";
 import { PasswordField } from "../../shared/components/PasswordField";
 import { TypingIllustration } from "./TypingIllustration";
+import {
+  clearRememberedLogin,
+  readRememberedLogin,
+  resolveLoginDestination,
+  writeRememberedLogin,
+} from "./loginSession";
 import "./LoginPage.css";
 
 const TYPED_LINES = [
@@ -43,27 +49,6 @@ function useSystemHealth() {
   }, []);
 
   return status;
-}
-
-const REMEMBER_COOKIE = "remembered_login";
-
-function readRememberedLogin(): { identifier: string; password: string } | null {
-  const match = document.cookie.match(new RegExp(`(?:^|; )${REMEMBER_COOKIE}=([^;]*)`));
-  if (!match) return null;
-  try {
-    return JSON.parse(decodeURIComponent(match[1])) as { identifier: string; password: string };
-  } catch {
-    return null;
-  }
-}
-
-function writeRememberedLogin(identifier: string, password: string) {
-  const value = encodeURIComponent(JSON.stringify({ identifier, password }));
-  document.cookie = `${REMEMBER_COOKIE}=${value}; path=/; max-age=${60 * 60 * 24 * 30}`;
-}
-
-function clearRememberedLogin() {
-  document.cookie = `${REMEMBER_COOKIE}=; path=/; max-age=0`;
 }
 
 export function LoginPage() {
@@ -124,19 +109,11 @@ export function LoginPage() {
       setSubmitting(false);
       setSucceeded(true);
       // 成功后短暂停留展示"完成"态,再跳转——不是提交完立刻无声无息地换页。
-      window.setTimeout(() => navigate(resolveDestination(user)), 420);
+      window.setTimeout(() => navigate(resolveLoginDestination(user, from)), 420);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
       setSubmitting(false);
     }
-  }
-
-  // 断线/切标签页回来时被弹回登录页,再登回去还接着看刚才那页——这个"接着看"只对 guest 有意义
-  // (比如从邮件通知点进某个 case,session 过期要求重新登录,登完当然该回到那个 case)。
-  // hotel/coordinator 是员工操作台,登录就是"打开今天的任务队列",不该被某个残留的
-  // 旧 case 链接劫持,固定回自己角色的首页。
-  function resolveDestination(user: { role: string; homeRoute: string }): string {
-    return user.role === "guest" ? from || user.homeRoute : user.homeRoute;
   }
 
   async function handleForgotSubmit(e: FormEvent) {
@@ -163,7 +140,7 @@ export function LoginPage() {
   // 没有这个条件时，user 一变真就立刻命中这条 early return 跳走，succeeded 为 true 那一支的
   // 对勾动画根本没机会画出来——代码注释里说的"短暂停留展示完成态"从来没真正发生过，截图会
   // 一直看到从表单直接跳目标页，抓不到中间那帧。
-  if (!loading && user && !succeeded) return <Navigate to={resolveDestination(user)} replace />;
+  if (!loading && user && !succeeded) return <Navigate to={resolveLoginDestination(user, from)} replace />;
 
   return (
     <div className="login-page">

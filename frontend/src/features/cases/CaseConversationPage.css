@@ -1055,3 +1055,38 @@
     height: 420px;
   }
 }
+
+.guest-case-m-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin-top: 12px;
+  padding: 4px;
+  border: 1px solid #e5e8f0;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.guest-case-m-tabs button {
+  min-height: 40px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #777c8e;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.guest-case-m-tabs button.active {
+  background: #7628e8;
+  color: #fff;
+}
+
+html.m-site .guest-case-grid {
+  grid-template-columns: 1fr;
+}
+
+html.m-site .guest-case-communication .case-thread {
+  height: min(52svh, 420px);
+}

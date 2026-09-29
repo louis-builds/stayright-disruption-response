@@ -1,4 +1,6 @@
 // 服务层基座：所有模块的 api.ts 都通过这个 client 发请求，视图层不得直接调用它。
+import { isAuthPath, loginPath } from "../layout/mobileLayout";
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5080";
 export const RETURN_URL_KEY = "td_return_url";
 
@@ -19,12 +21,12 @@ interface ApiOptions extends RequestInit {
 // 只对 guest 开放的接口，明明登录着，会被强制跳去 /login；AuthContext 的 user 其实还在，
 // LoginPage 见到 user 非空就 <Navigate to={from} replace /> 把人弹回刚才那个页面，页面一加载又
 // 触发同一个 403，再跳 /login，再弹回来——死循环。真正该在 401 时跳（会话确实失效了，跳登录页
-// 才有意义），403 直接让调用方自己的 try/catch/error 状态处理就行，不该碰导航。
+//   才有意义），403 直接让调用方自己的 try/catch/error 状态处理就行，不该碰导航。
 function handle401(res: Response, skipAuthRedirect?: boolean) {
   if (res.status !== 401 || skipAuthRedirect) return;
-  if (window.location.pathname === "/login") return;
+  if (isAuthPath(window.location.pathname)) return;
   sessionStorage.setItem(RETURN_URL_KEY, window.location.pathname);
-  window.location.href = "/login";
+  window.location.href = loginPath();
 }
 
 export async function apiGet<T>(path: string, options?: ApiOptions): Promise<ApiResponse<T>> {

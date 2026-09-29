@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useMobileLayout } from "../../shared/layout/MobileLayoutProvider";
 import * as api from "./api";
 import type { CaseQueueItem, CoordinatorOption } from "./types";
 import "./CoordinatorCasesPage.css";
@@ -14,6 +15,7 @@ function interventionLabel(value: string) {
 }
 
 export function CoordinatorCasesPage({ initialQuery, initialView, initialDisruptionFilter, currentUserId, onOpenCase, onEscalate }: { initialQuery: string; initialView: "active" | "mine"; initialDisruptionFilter: { id: string; title: string } | null; currentUserId: string; onOpenCase: (id: string) => void; onEscalate: (id: string) => void }) {
+  const isMobile = useMobileLayout();
   const [items, setItems] = useState<CaseQueueItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState(initialQuery);
@@ -119,6 +121,15 @@ export function CoordinatorCasesPage({ initialQuery, initialView, initialDisrupt
   };
 
   return <div className="cases-page">
+    {isMobile ? (
+      <nav className="m-section-tabs" aria-label="Case views">
+        <button type="button" className={view === "active" ? "active" : ""} onClick={() => selectView("active")}>Active</button>
+        <button type="button" className={view === "attention" ? "active" : ""} onClick={() => selectView("attention")}>Alert</button>
+        <button type="button" className={view === "mine" ? "active" : ""} onClick={() => selectView("mine")}>Mine</button>
+        <button type="button" className={view === "resolved" ? "active" : ""} onClick={() => selectView("resolved")}>Closed</button>
+      </nav>
+    ) : (
+      <>
     <header className="cases-heading"><div><span>Case workspace</span><h1>{view === "resolved" ? "Resolved History" : view === "attention" ? "Cases Needing Attention" : view === "mine" ? "My Active Cases" : "Active Cases"}</h1><p>{view === "resolved" ? "Review completed cases and their recorded outcomes." : view === "mine" ? "Open cases currently assigned to you." : "Manage cases that still require coordinator action."}</p></div><b>{filtered.length} records</b></header>
     <section className="cases-summary">
       <button className={view === "active" ? "active" : ""} onClick={() => selectView("active")}><span>Active cases</span><strong>{counts.active}</strong><small>{counts.pending} pending · {counts.progress} in progress</small></button>
@@ -126,9 +137,11 @@ export function CoordinatorCasesPage({ initialQuery, initialView, initialDisrupt
       <button className={view === "mine" ? "active" : ""} onClick={() => selectView("mine")}><span>My active cases</span><strong>{counts.mine}</strong><small>Assigned to the current coordinator</small></button>
       <button className={view === "resolved" ? "active" : ""} onClick={() => selectView("resolved")}><span>Resolved history</span><strong>{counts.closed}</strong><small>Completed and archived cases</small></button>
     </section>
+      </>
+    )}
     <section className="cases-card">
       {disruptionFilter && <div className="cases-applied-filter"><span>Filtered by disruption</span><strong>{disruptionFilter.title}</strong><button onClick={() => { setDisruptionFilter(null); setDisruptionCaseIds(null); }}>×</button></div>}
-      <div className="cases-toolbar"><div><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search booking, guest, disruption or owner"/><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="all">All statuses</option><option value="pending">Pending</option><option value="in_progress">In progress</option><option value="awaiting_hotel">Awaiting hotel</option><option value="closed">Closed</option></select><select value={priority} onChange={(event) => setPriority(event.target.value)}><option value="all">All priorities</option><option value="high">High priority</option><option value="normal">Normal priority</option></select><select value={intervention} onChange={(event) => setIntervention(event.target.value)}><option value="all">All intervention reasons</option>{interventionReasons.map((reason) => <option key={reason} value={reason}>{interventionLabel(reason)}</option>)}</select></div><span><b>{counts.overdue}</b> overdue · <b>{counts.highValue}</b> high-value{syncedAt && <> · Synced {syncedAt.toLocaleTimeString("en-NZ", { hour: "2-digit", minute: "2-digit" })}</>}</span></div>
+      {!isMobile && <div className="cases-toolbar"><div><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search booking, guest, disruption or owner"/><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="all">All statuses</option><option value="pending">Pending</option><option value="in_progress">In progress</option><option value="awaiting_hotel">Awaiting hotel</option><option value="closed">Closed</option></select><select value={priority} onChange={(event) => setPriority(event.target.value)}><option value="all">All priorities</option><option value="high">High priority</option><option value="normal">Normal priority</option></select><select value={intervention} onChange={(event) => setIntervention(event.target.value)}><option value="all">All intervention reasons</option>{interventionReasons.map((reason) => <option key={reason} value={reason}>{interventionLabel(reason)}</option>)}</select></div><span><b>{counts.overdue}</b> overdue · <b>{counts.highValue}</b> high-value{syncedAt && <> · Synced {syncedAt.toLocaleTimeString("en-NZ", { hour: "2-digit", minute: "2-digit" })}</>}</span></div>}
       <div className="cases-table-head"><span>Case / booking</span><span>Guest</span><span>Disruption</span><span>Status</span><span>Priority</span><span>Owner</span><span>Age / resolution</span><span>Actions</span></div>
       {loading ? <p className="cases-empty">Loading cases…</p> : visible.length === 0 ? <p className="cases-empty">No cases match these filters.</p> : <div className="cases-table-body">{visible.map((item) => <div className="cases-row" key={item.caseId}><span><b>{item.confirmationNo || `CASE-${item.caseId.slice(0, 6).toUpperCase()}`}</b><small>{item.caseId.slice(0, 8)}</small></span><strong>{item.guestNickname}</strong><span>{item.disruptionTitle}</span><em className={`status ${item.awaitingHotelConfirmation ? "awaiting_hotel" : item.status}`}>{item.awaitingHotelConfirmation ? "awaiting hotel" : item.status.replaceAll("_", " ")}</em><em className={`priority ${item.priority}`}>{item.priority}</em><span>{item.assigneeNickname ?? "Unassigned"}</span><time>{formatAge(item.waitTime)}</time><div className="cases-actions"><button onClick={() => onOpenCase(item.caseId)}>{item.status === "closed" ? "View history" : "Open"}</button>{item.status !== "closed" && <><button className="transfer" onClick={() => beginTransfer(item)}>Transfer</button>{item.awaitingHotelConfirmation ? <button className="escalate" disabled>Awaiting hotel</button> : <button className="escalate" onClick={() => onEscalate(item.caseId)}>Resolve</button>}</>}</div></div>)}</div>}
       <footer className="cases-pagination"><span>Page {safePage} of {totalPages}</span><div><button disabled={safePage === 1} onClick={() => setPage(safePage - 1)}>Previous</button><button disabled={safePage === totalPages} onClick={() => setPage(safePage + 1)}>Next</button></div></footer>

@@ -1,10 +1,12 @@
 import { StatusBar } from "expo-status-bar";
-import { Platform, View } from "react-native";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, Platform, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { enableScreens } from "react-native-screens";
 import { AuthProvider } from "./src/features/auth";
 import { CallProvider } from "./src/features/calls/CallProvider";
 import { RootNavigator } from "./src/navigation/RootNavigator";
+import { loadServerUrlOverride } from "./src/shared/api/client";
 
 if (Platform.OS === "web") {
   enableScreens(false);
@@ -37,7 +39,7 @@ if (Platform.OS === "web") {
           left: 0 !important;
           right: 0 !important;
           bottom: 0 !important;
-          z-index: 100 !important;
+          z-index: 2147483647 !important;
           background: #fff !important;
         }
       `;
@@ -47,6 +49,21 @@ if (Platform.OS === "web") {
 }
 
 export default function App() {
+  const [configReady, setConfigReady] = useState(false);
+  useEffect(() => {
+    void loadServerUrlOverride().finally(() => setConfigReady(true));
+  }, []);
+
+  if (!configReady) {
+    return (
+      <SafeAreaProvider style={{ flex: 1 }}>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator size="large" />
+        </View>
+      </SafeAreaProvider>
+    );
+  }
+
   return (
     <SafeAreaProvider style={{ flex: 1 }}>
       <View style={{ flex: 1 }}>

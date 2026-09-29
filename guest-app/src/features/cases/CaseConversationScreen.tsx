@@ -269,20 +269,22 @@ export function CaseConversationScreen({ route, navigation }: Props) {
           </View>
         )}
       </Pressable>
-      <Pressable
-        style={({ pressed }) => [styles.tab, !showDetails && thread === "coordinator" && styles.tabActive, pressed && (showDetails || thread !== "coordinator") && styles.tabPressed]}
-        onPress={() => {
-          setShowDetails(false);
-          setThread("coordinator");
-        }}
-      >
-        <Text style={[styles.tabText, !showDetails && thread === "coordinator" && styles.tabTextActive]}>Coordinator</Text>
-        {!!caseInfo?.unreadCoordinatorCount && (
-          <View style={styles.tabBadge}>
-            <Text style={styles.tabBadgeText}>{caseInfo.unreadCoordinatorCount}</Text>
-          </View>
-        )}
-      </Pressable>
+      {caseInfo?.escalated && (
+        <Pressable
+          style={({ pressed }) => [styles.tab, !showDetails && thread === "coordinator" && styles.tabActive, pressed && (showDetails || thread !== "coordinator") && styles.tabPressed]}
+          onPress={() => {
+            setShowDetails(false);
+            setThread("coordinator");
+          }}
+        >
+          <Text style={[styles.tabText, !showDetails && thread === "coordinator" && styles.tabTextActive]}>Coordinator</Text>
+          {!!caseInfo?.unreadCoordinatorCount && (
+            <View style={styles.tabBadge}>
+              <Text style={styles.tabBadgeText}>{caseInfo.unreadCoordinatorCount}</Text>
+            </View>
+          )}
+        </Pressable>
+      )}
       <Pressable
         style={({ pressed }) => [styles.tab, showDetails && styles.tabActive, pressed && !showDetails && styles.tabPressed]}
         onPress={() => setShowDetails(true)}

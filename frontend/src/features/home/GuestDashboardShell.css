@@ -14,3 +14,12 @@
 .guest-shell-stage>main{min-width:0;flex:1}.guest-shell-stage>footer{display:flex;align-items:center;gap:54px;min-height:36px;padding:0 24px;border-top:1px solid #e5e8ef;background:#fff;color:#85899b;font-size:10px}.guest-shell-stage>footer span:last-child{margin-left:auto}
 @media(max-width:900px){.guest-shell{grid-template-columns:70px minmax(0,1fr)}.guest-shell-sidebar{padding-inline:8px}.guest-shell-brand{justify-content:center}.guest-shell-brand div,.guest-shell-sidebar button em,.guest-shell-sidebar button b{display:none}.guest-shell-sidebar nav button,.guest-shell-bottom button{grid-template-columns:1fr;place-items:center}.guest-shell-topbar{grid-template-columns:1fr minmax(190px,1fr) auto}.guest-shell-actions>span{display:none}}
 @media(max-width:640px){.guest-shell{grid-template-columns:1fr}.guest-shell-sidebar{position:static;height:auto;padding:8px}.guest-shell-brand,.guest-shell-bottom{display:none}.guest-shell-sidebar nav{display:grid;grid-template-columns:repeat(2,1fr)}.guest-shell-sidebar nav button em{display:block;font-size:10px}.guest-shell-topbar{grid-template-columns:1fr auto;padding-inline:14px}.guest-shell-context{display:none}.guest-shell-actions{gap:4px;padding-left:8px}.guest-shell-stage>footer{gap:18px}}
+
+.guest-shell.guest-shell-m{display:flex;flex-direction:column;grid-template-columns:unset;height:100svh;min-height:100svh;background:#f5f7fb}
+.guest-shell-m-top{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:calc(10px + env(safe-area-inset-top,0px)) 14px 10px;border-bottom:1px solid #e8eaf0;background:#fff}
+.guest-shell-m-top>div:first-child{display:flex;flex-direction:column;min-width:0}
+.guest-shell-m-top small{color:#969aaa;font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.guest-shell-m-top strong{color:#202438;font-size:16px}
+.guest-shell-m-actions{display:flex;align-items:center;justify-content:flex-end;gap:4px}
+.guest-shell-m>main{flex:1;min-height:0;overflow:auto}
+.guest-shell-m .avatar-nickname{display:none}

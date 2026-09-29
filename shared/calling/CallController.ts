@@ -1,6 +1,10 @@
 import { terminal } from "./contracts.ts";
 import type { AudioPeer, CallApi, CallSession, CallTransport, CallView, PeerCallbacks } from "./contracts.ts";
 
+const CONNECT_WINDOW_MS = 30_000;
+const RETRY_EVERY_MS = 3_000;
+const RING_TIMEOUT_MS = 45_000;
+
 // No React/native imports: the same lifecycle runs in both apps and in unit tests.
 export class CallController {
   view: CallView = { call: null, phase: "idle", online: false, busy: false, muted: false,
@@ -10,8 +14,12 @@ export class CallController {
   private stopped = true;
   private generation = 0;
   private offered = false;
+  private recovering = false;
+  private offerFailed = false;
+  private lastIce: string | null = null;
   private messages: Promise<void> = Promise.resolve();
   private poll: ReturnType<typeof setInterval> | null = null;
+  private retryTimer: ReturnType<typeof setInterval> | null = null;
   private deadline: ReturnType<typeof setTimeout> | null = null;
   private refreshing = false;
   private pendingEnd: string | null = null;
@@ -20,10 +28,15 @@ export class CallController {
   private transport: CallTransport;
   private makePeer: (callbacks: PeerCallbacks) => AudioPeer;
   private role: "coordinator" | "guest";
+  private connectWindowMs: number;
+  private retryEveryMs: number;
 
   constructor(role: "coordinator" | "guest", api: CallApi, transport: CallTransport,
-    makePeer: (callbacks: PeerCallbacks) => AudioPeer) {
+    makePeer: (callbacks: PeerCallbacks) => AudioPeer,
+    options?: { connectWindowMs?: number; retryEveryMs?: number }) {
     this.role = role; this.api = api; this.transport = transport; this.makePeer = makePeer;
+    this.connectWindowMs = options?.connectWindowMs ?? CONNECT_WINDOW_MS;
+    this.retryEveryMs = options?.retryEveryMs ?? RETRY_EVERY_MS;
     transport.on("IncomingCall", (call: CallSession) => this.receive(call));
     for (const event of ["CallAccepted", "CallRejected", "CallEnded", "CallUpdated"])
       transport.on(event, (call: CallSession) => this.update(call));
@@ -41,14 +54,17 @@ export class CallController {
         if (this.view.call?.id !== m.callId || !this.peer) return;
         this.messages = this.messages.then(async () => {
           if (this.view.call?.id === m.callId && this.peer) await handler(m);
-        }).catch(e => this.fail(e));
+        }).catch(() => { /* Transient SDP/ICE errors are retried until the connect window ends. */ });
       });
     }
     transport.disconnected(() => {
       this.set({ online: false });
-      if (this.peer) void this.fail(new Error("Connection lost. Please call again."));
     });
-    transport.reconnected(() => { this.set({ online: true }); void this.refresh(); });
+    transport.reconnected(() => {
+      this.set({ online: true });
+      void this.refresh();
+      if (this.view.phase === "connecting") void this.recoverAudio();
+    });
   }
 
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
@@ -92,19 +108,24 @@ export class CallController {
       candidate: candidate => {
         const call = this.view.call;
         if (generation === this.generation && call && this.peer)
-          void this.transport.invoke("SendIceCandidate", call.id, candidate).catch(e => this.fail(e));
+          void this.transport.invoke("SendIceCandidate", call.id, candidate).catch(() => {});
       },
       state: state => {
         if (generation !== this.generation || !this.peer) return;
+        this.lastIce = state;
         if (state === "connected") {
-          if (this.deadline) clearTimeout(this.deadline);
-          this.deadline = null;
+          this.offerFailed = false;
+          this.clearConnectWindow();
           this.set({ phase: "connected", connectedAt: this.view.connectedAt ?? Date.now() });
         }
-        if (state === "failed") void this.fail(new Error("Audio connection failed. Check your network and TURN configuration."));
-        if (state === "disconnected") {
+        if (state === "failed" || state === "disconnected" || state === "closed") {
+          const wasConnected = this.view.phase === "connected";
           this.set({ phase: "connecting" });
-          this.armTimeout(15000, "Audio connection was lost.");
+          if (wasConnected) {
+            this.clearConnectWindow();
+            this.beginConnectWindow("Audio connection was lost.");
+          }
+          void this.recoverAudio();
         }
       },
       playbackBlocked: () => this.set({ playbackBlocked: true }),
@@ -129,7 +150,7 @@ export class CallController {
       if (generation !== this.generation) { await this.api.end(call.id); return; }
       this.set({ call, phase: "ringing" });
       await this.transport.invoke("JoinCall", call.id);
-      this.armTimeout(45000, "No answer.");
+      this.armTimeout(RING_TIMEOUT_MS, "No answer.");
       this.update(await this.api.get(call.id));
     } catch (e) { await this.fail(e); }
     finally { this.set({ busy: false }); }
@@ -165,7 +186,7 @@ export class CallController {
           this.deadline = null;
         }
         this.set({ phase: "connecting" });
-        this.armTimeout(25000, "Could not connect audio. Check your network and TURN configuration.");
+        this.beginConnectWindow("Could not connect audio. Check your network and try again.");
       }
       if (this.role === "coordinator" && !this.offered) {
         this.offered = true;
@@ -174,7 +195,10 @@ export class CallController {
           await this.transport.invoke("JoinCall", call.id);
           const sdp = await peer.offer();
           if (this.peer === peer) await this.transport.invoke("SendOffer", call.id, sdp);
-        })().catch(e => this.fail(e));
+        })().catch(() => {
+          this.offerFailed = true;
+          void this.recoverAudio();
+        });
       }
     }
   }
@@ -208,6 +232,44 @@ export class CallController {
     this.deadline = setTimeout(() => { this.deadline = null; void this.fail(new Error(message)); }, ms);
   }
 
+  private beginConnectWindow(message: string) {
+    this.startConnectRetries();
+    this.armTimeout(this.connectWindowMs, message);
+  }
+
+  private startConnectRetries() {
+    if (this.retryTimer) return;
+    this.retryTimer = setInterval(() => {
+      if (this.view.phase !== "connecting") return;
+      if (this.offerFailed || this.lastIce === "failed" || this.lastIce === "disconnected" || this.lastIce === "closed")
+        void this.recoverAudio();
+    }, this.retryEveryMs);
+  }
+
+  private clearConnectWindow() {
+    if (this.retryTimer) clearInterval(this.retryTimer);
+    this.retryTimer = null;
+    if (this.deadline) clearTimeout(this.deadline);
+    this.deadline = null;
+  }
+
+  private async recoverAudio() {
+    if (this.recovering || this.role !== "coordinator" || !this.peer || !this.view.call) return;
+    if (this.view.phase !== "connecting" || !this.view.online) return;
+    this.recovering = true;
+    const peer = this.peer;
+    const call = this.view.call;
+    try {
+      this.offered = true;
+      await this.transport.invoke("JoinCall", call.id);
+      const sdp = await peer.offer(true);
+      if (this.peer === peer && this.view.call?.id === call.id)
+        await this.transport.invoke("SendOffer", call.id, sdp);
+      this.offerFailed = false;
+    } catch { this.offerFailed = true; }
+    finally { this.recovering = false; }
+  }
+
   private finish() {
     const id = this.view.call?.id;
     if (id) {
@@ -216,14 +278,21 @@ export class CallController {
     }
     this.generation++;
     this.peer?.close(); this.peer = null;
-    if (this.deadline) clearTimeout(this.deadline);
-    this.deadline = null;
+    this.clearConnectWindow();
+    this.offered = false;
+    this.recovering = false;
+    this.offerFailed = false;
+    this.lastIce = null;
     this.set({ phase: "ended", playbackBlocked: false });
   }
 
   private reset() {
     this.generation++;
     this.offered = false;
+    this.recovering = false;
+    this.offerFailed = false;
+    this.lastIce = null;
+    this.clearConnectWindow();
     this.set({ call: null, phase: "idle", error: null, connectedAt: null, muted: false, playbackBlocked: false });
   }
   dismiss() { if (this.view.phase === "ended") this.reset(); }

@@ -10,6 +10,7 @@ import "./CaseConversationPage.css";
 import { CoordinatorCaseWorkspacePage } from "../coordinator/CoordinatorCaseWorkspacePage";
 import { GuestDashboardShell } from "../home/GuestDashboardShell";
 import { HotelDashboardShell } from "../hotel/HotelDashboardShell";
+import { useMobileLayout } from "../../shared/layout/MobileLayoutProvider";
 
 const ROLE_META: Record<SenderRole, { label: string; avatar: string }> = {
   guest: { label: "You", avatar: "🧳" },
@@ -156,17 +157,19 @@ export function LegacyCaseConversationPage() {
   const [draft, setDraft] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const isMobile = useMobileLayout();
+  const [mobilePanel, setMobilePanel] = useState<"chat" | "details">("chat");
   // 非 guest 角色不能往 ai 线程发消息(AI 从不接协调员的话),这个 tab 对他们是只读的。
   const canPostHere = user?.role === "guest" || thread === "coordinator";
 
   // 全平台高频问题——后端每天0点批量聚类，这里挂载时拉一次就够，不用跟着 8 秒轮询。
   const [faqQuestions, setFaqQuestions] = useState<{ text: string; askCount: number }[]>([]);
   useEffect(() => {
-    if (viewerRole !== "guest") return;
+    if (viewerRole !== "guest" || isMobile) return;
     fetchTopFaqQuestions().then((res) => {
       if (res.code === 0) setFaqQuestions(res.data);
     });
-  }, [viewerRole]);
+  }, [viewerRole, isMobile]);
 
   // loading/sending 都要进依赖，且用 useLayoutEffect 不用 useEffect：
   // 1) 初次进页面时 messages 从 refreshMessages() 落地和 loading 变 false 是两次独立的
@@ -305,6 +308,7 @@ export function LegacyCaseConversationPage() {
             <h1>{caseInfo.disruptionTitle ?? "Disruption case"}</h1>
             <p>{caseInfo.disruptionDescription || "Travel disruption affecting this booking."}</p>
           </div>
+          {!isMobile && (
           <dl>
             <div>
               <dt>Hotel</dt>
@@ -319,10 +323,23 @@ export function LegacyCaseConversationPage() {
               <dd>{caseInfo.checkIn && caseInfo.checkOut ? `${caseInfo.checkIn} → ${caseInfo.checkOut}` : "Not recorded"}</dd>
             </div>
           </dl>
+          )}
         </header>
       )}
 
+      {isMobile && (
+        <nav className="guest-case-m-tabs" aria-label="Case sections">
+          <button type="button" className={mobilePanel === "chat" ? "active" : ""} onClick={() => setMobilePanel("chat")}>
+            Chat
+          </button>
+          <button type="button" className={mobilePanel === "details" ? "active" : ""} onClick={() => setMobilePanel("details")}>
+            Case Details
+          </button>
+        </nav>
+      )}
+
       <div className="guest-case-grid">
+        {(!isMobile || mobilePanel === "chat") && (
         <section className="guest-case-communication">
           <header>
             <div className="guest-case-section-heading">
@@ -383,8 +400,9 @@ export function LegacyCaseConversationPage() {
             <p className="case-readonly-note">Read-only — this is the guest's conversation with the AI assistant.</p>
           )}
         </section>
+        )}
 
-        {caseInfo && (
+        {caseInfo && (!isMobile || mobilePanel === "details") && (
           <aside className="case-side guest-case-side">
             <section className="case-side-card guest-case-details">
               <header>
@@ -419,6 +437,7 @@ export function LegacyCaseConversationPage() {
               )}
             </section>
 
+            {!(isMobile && viewerRole === "guest") && (
             <section className="case-side-card case-side-tip">
               {viewerRole === "guest" && faqQuestions.length > 0 ? (
                 <>
@@ -435,6 +454,7 @@ export function LegacyCaseConversationPage() {
                 <><h3>How replies work</h3><p>This is a private conversation with your assigned coordinator. The AI assistant does not reply here.</p></>
               )}
             </section>
+            )}
           </aside>
         )}
       </div>

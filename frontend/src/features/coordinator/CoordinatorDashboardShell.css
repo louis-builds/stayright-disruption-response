@@ -42,3 +42,20 @@
 .tg-settings-content .coord-btn-primary:disabled{opacity:.55;cursor:default}
 @keyframes tg-settings-in{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
 @media(max-width:640px){.tg-settings-backdrop{align-items:flex-end;padding:12px}.tg-settings-dialog{border-radius:18px}.tg-settings-dialog>header,.tg-settings-content{padding-left:20px;padding-right:20px}}
+
+.tg-shell.tg-shell-m{display:flex;flex-direction:column;grid-template-columns:unset;height:100svh;min-height:100svh;background:#f5f7fb}
+.tg-shell-m-top{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:calc(10px + env(safe-area-inset-top,0px)) 14px 10px;border-bottom:1px solid #e8eaf0;background:#fff}
+.tg-shell-m-top>div:first-child{display:flex;flex-direction:column;min-width:0}
+.tg-shell-m-top small{color:#969aaa;font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.tg-shell-m-top strong{color:#202438;font-size:16px}
+.tg-shell-m-actions{display:flex;align-items:center;justify-content:flex-end;gap:4px}
+.m-section-tabs{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:4px;padding:4px;margin:0 0 12px;border:1px solid #e5e8f0;border-radius:12px;background:#fff}
+.m-section-tabs button{min-height:40px;padding:0 6px;border:0;border-radius:9px;background:transparent;color:#777c8e;font-size:12px;font-weight:700;cursor:pointer}
+.m-section-tabs button.active{background:#7628e8;color:#fff}
+html.m-site .analytics-dashboard,html.m-site .entry-dashboard,html.m-site .cases-page{padding:12px;min-height:0}
+html.m-site .analytics-kpis{grid-template-columns:1fr 1fr!important;gap:8px}
+html.m-site .analytics-kpis>button{min-height:0;padding:12px}
+html.m-site .analytics-kpis strong{margin:4px 0 10px;font-size:22px}
+html.m-site .analytics-primary-grid,html.m-site .analytics-secondary-grid,html.m-site .entry-top-grid,html.m-site .entry-work-grid{grid-template-columns:1fr!important}
+.tg-shell-m>main{flex:1;min-height:0;overflow:auto}
+.tg-shell-m .avatar-nickname{display:none}
