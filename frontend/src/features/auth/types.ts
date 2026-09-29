@@ -1,4 +1,4 @@
-export type Role = "guest" | "coordinator" | "hotel";
+export type Role = "guest" | "coordinator" | "hotel" | "admin";
 export type Language = "en" | "zh" | "mi";
 
 export interface AuthUser {

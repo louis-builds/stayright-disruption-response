@@ -44,5 +44,5 @@ export function makeCallController(role: "guest" | "coordinator") {
     on: (event, callback) => hub.on(event, callback),
     reconnected: callback => hub.onreconnected(callback),
     disconnected: callback => { hub.onreconnecting(callback); hub.onclose(callback); },
-  }, createAudioPeer);
+  },   createAudioPeer);
 }

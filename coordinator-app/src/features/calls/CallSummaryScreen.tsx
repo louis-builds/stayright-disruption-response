@@ -74,17 +74,24 @@ export function CallSummaryScreen({ route, navigation }: Props) {
   }, [caseId, callId]);
 
   useEffect(() => {
-    if (call?.status !== "completed" || pollingRecording.current) return;
+    if (call?.status !== "completed") return;
     pollingRecording.current = true;
     let cancelled = false;
+    let misses = 0;
     const poll = async () => {
       const res = await api.getRecording(callId);
       if (cancelled) return;
       if (res.code === 0) {
         setProcessingStatus(res.data.processingStatus);
-        if (res.data.processingStatus === "done") {
-          clearInterval(timer);
-        }
+        if (res.data.processingStatus === "done") clearInterval(timer);
+        return;
+      }
+      misses += 1;
+      // WebRTC uploads from the in-call mixer first. Only fall back to the
+      // Xiaomi system-recorder scan if nothing arrived after a few polls.
+      if (misses >= 8 && !autoScanned.current) {
+        autoScanned.current = true;
+        void uploadLatestRecording();
       }
     };
     void poll();
@@ -130,12 +137,6 @@ export function CallSummaryScreen({ route, navigation }: Props) {
       setUploading(false);
     }
   }
-
-  useEffect(() => {
-    if (call?.status !== "completed" || processingStatus || autoScanned.current) return;
-    autoScanned.current = true;
-    void uploadLatestRecording();
-  }, [call?.status, call?.id]);
 
   useEffect(() => {
     const sub = AppState.addEventListener("change", (next) => {

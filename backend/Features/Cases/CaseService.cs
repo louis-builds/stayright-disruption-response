@@ -266,7 +266,7 @@ public class CaseService(
                 : BuildCancellationSummary(hotelPolicy, full.Booking);
         }
 
-        var reply = await chat.GenerateReplyAsync(full, recentPage.List, content, language, currentAlternateSummary, cancellationSummary, ct);
+        var reply = await chat.GenerateReplyAsync(full, recentPage.List, content, language, currentAlternateSummary, cancellationSummary, guest?.KeepMessagesSimple == true, ct);
 
         // 不管这个案件有没有分配协调员都要落这个字段——协调员的 Escalation queue 页签靠它过滤
         // (CoordinatorService.EscalationFilterMap)，之前这里只发了个 Notification，从没真正设置过
@@ -1203,21 +1203,6 @@ public class CaseService(
                     ?? hotelPolicy.Content.Trim();
                 docName = $"Hotel policy: {c.Booking?.Hotel?.Name}";
                 docVersion = null;
-            }
-        }
-
-        if (excerpt is null)
-        {
-            var docs = await ragRepository.GetDefaultDocumentsAsync(ct);
-            var policyDoc = docs.FirstOrDefault(d => d.Name.Contains("policy", StringComparison.OrdinalIgnoreCase)
-                || d.Name.Contains("政策", StringComparison.OrdinalIgnoreCase));
-            if (policyDoc is not null)
-            {
-                excerpt = policyDoc.Content.Split("\n## ")
-                    .FirstOrDefault(s => s.Contains(keyword, StringComparison.OrdinalIgnoreCase))
-                    ?.Trim();
-                docName = policyDoc.Name;
-                docVersion = policyDoc.Version;
             }
         }
 

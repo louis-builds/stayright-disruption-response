@@ -4,13 +4,9 @@ import { AppShell } from "../../shared/components/AppShell";
 import { coordinatorGroupForTab, CoordinatorTopNav, type CoordinatorTab } from "../../shared/components/CoordinatorTopNav";
 import { useAuth } from "../auth";
 import * as api from "./api";
-import { BadCasesPanel } from "./BadCasesPanel";
 import { DisruptionsPanel } from "./DisruptionsPanel";
 import { escalationReasonLabel } from "./escalationLabels";
-import { KnowledgeBasePanel } from "./KnowledgeBasePanel";
 import { Pagination, usePagination } from "../../shared/components/Pagination";
-import { SystemAdminPanel } from "./SystemAdminPanel";
-import { SettingsPanel } from "./SettingsPanel";
 import { CoordinatorDashboard, DisruptionOperationsDashboard } from "./CoordinatorDashboard";
 import { CoordinatorDashboardShell } from "./CoordinatorDashboardShell";
 import { CoordinatorCasesPage } from "./CoordinatorCasesPage";
@@ -722,14 +718,6 @@ export function CoordinatorHomePage() {
 
           {/* Legacy Disruptions presentation retained for rollback, but unused. */}
           {false && <DisruptionsPanel coordinators={coordinators} />}
-
-          {tab === "admin" && <SystemAdminPanel />}
-
-          {tab === "kb" && <KnowledgeBasePanel />}
-
-          {tab === "bad_cases" && <BadCasesPanel />}
-
-          {tab === "settings" && <SettingsPanel />}
 
           {tab === "queue" && (
             <>

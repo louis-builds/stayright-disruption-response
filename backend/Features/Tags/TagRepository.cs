@@ -65,6 +65,17 @@ public class TagRepository(AppDbContext db) : ITagRepository
         return [.. gapsByGuest.Where(kv => kv.Value.Count >= MinSamples && kv.Value.Average() >= SlowResponseThresholdHours).Select(kv => kv.Key)];
     }
 
+    public async Task<Dictionary<Guid, GuestCommunicationPrefs>> GetGuestCommunicationAsync(IEnumerable<Guid> guestUserIds, CancellationToken ct = default)
+    {
+        var ids = guestUserIds.Distinct().ToList();
+        if (ids.Count == 0) return [];
+        var rows = await db.Users
+            .Where(u => ids.Contains(u.Id))
+            .Select(u => new { u.Id, u.KeepMessagesSimple, u.SpeakSlowly, u.StayPreference })
+            .ToListAsync(ct);
+        return rows.ToDictionary(u => u.Id, u => new GuestCommunicationPrefs(u.KeepMessagesSimple, u.SpeakSlowly, u.StayPreference));
+    }
+
     public Task<bool> IsGuestOfHotelAsync(Guid guestUserId, Guid hotelId, CancellationToken ct = default) =>
         db.Bookings.AnyAsync(b => b.GuestUserId == guestUserId && b.HotelId == hotelId, ct);
 

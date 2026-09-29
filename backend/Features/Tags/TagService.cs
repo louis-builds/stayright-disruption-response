@@ -10,7 +10,7 @@ public class TagService(ITagRepository tags, IHotelRepository hotels) : ITagServ
     public async Task<GuestTagsDto> GetGuestTagsAsync(Guid guestUserId, Guid currentUserId, string currentUserRole, CancellationToken ct = default) =>
         (await GetGuestTagsBulkAsync([guestUserId], currentUserId, currentUserRole, ct)).TryGetValue(guestUserId, out var dto)
             ? dto
-            : new GuestTagsDto(false, false, false, false, false, false, []);
+            : new GuestTagsDto(false, false, false, false, false, false, false, false, null, []);
 
     // 酒店任务队列一次几十张卡片，前端批量拉一次而不是每张卡片一个请求。
     // key 固定覆盖入参里的每一个 id(没标签就是全 false 的空 CustomTags)，前端不用处理"缺 key"。
@@ -23,6 +23,7 @@ public class TagService(ITagRepository tags, IHotelRepository hotels) : ITagServ
         var highRejection = await tags.GetHighRejectionGuestIdsAsync(ids, ct);
         var slowResponder = await tags.GetSlowResponderGuestIdsAsync(ids, ct);
         var appliedRows = await tags.ListGuestCustomTagsForManyAsync(ids, ct);
+        var communication = await tags.GetGuestCommunicationAsync(ids, ct);
 
         HashSet<Guid> returning = [];
         if (currentUserRole == "hotel")
@@ -41,6 +42,9 @@ public class TagService(ITagRepository tags, IHotelRepository hotels) : ITagServ
             AiDifficult: aiDifficult.Contains(id),
             HighRejectionRate: highRejection.Contains(id),
             SlowResponder: slowResponder.Contains(id),
+            KeepMessagesSimple: communication.TryGetValue(id, out var prefs) && prefs.KeepMessagesSimple,
+            SpeakSlowly: communication.TryGetValue(id, out prefs) && prefs.SpeakSlowly,
+            StayPreference: communication.TryGetValue(id, out prefs) ? prefs.StayPreference : null,
             CustomTags: customByGuest.TryGetValue(id, out var list) ? list : []));
     }
 

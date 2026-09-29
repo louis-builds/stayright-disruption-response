@@ -62,6 +62,7 @@ function fixture() {
         for (const endpoint of endpoints) endpoint.emit("CallEnded", call);
         return structuredClone(call);
       },
+      uploadRecording: async (_id, file) => { log.push("uploadRecording"); log.push(file.fileName); },
     };
     const controller = new CallController(role, api, transport, callbacks => {
       const peer = {
@@ -84,6 +85,10 @@ function fixture() {
         },
         addCandidate: async () => {},
         mute: value => { peer.muted = value; }, play: async () => {},
+        startRecording: () => { peer.recording = true; },
+        stopRecording: async () => peer.recording
+          ? { blob: new Blob(["audio"]), mimeType: "audio/webm", fileName: "call.webm", durationSeconds: 3 }
+          : null,
         close: () => { peer.closed = true; },
       };
       peers.push(peer);
@@ -199,6 +204,7 @@ for (const platform of ["android", "ios"]) {
       await guest.controller.handleAppStateChange("inactive", platform);
       assert.equal(guest.controller.view.phase, "connected");
       await guest.controller.handleAppStateChange("background", platform);
+      await flush();
       assert.equal(guest.controller.view.phase, "ended");
       assert.equal(caller.controller.view.phase, "ended");
       assert.ok(f.peers.every(p => p.closed));
@@ -219,10 +225,12 @@ test("two apps: guest joins before accepting; one offer; audio connects; mute an
     assert.equal(guest.controller.view.phase, "connected");
     assert.equal(caller.log.filter(m => m === "SendOffer").length, 1);
     caller.controller.mute(); assert.equal(f.peers[0].muted, true);
-    await guest.controller.end();
+    await guest.controller.end(); await flush();
     assert.equal(caller.controller.view.phase, "ended");
     assert.equal(guest.controller.view.phase, "ended");
     assert.ok(f.peers.every(p => p.closed));
+    assert.ok(caller.log.includes("uploadRecording"));
+    assert.equal(guest.log.includes("uploadRecording"), false);
   } finally { await f.close(); }
 });
 
@@ -275,6 +283,7 @@ test("signaling disconnect keeps audio until the caller hangs up", async () => {
     await caller.controller.start(); await guest.controller.start(); await caller.controller.call("case");
     await guest.controller.accept(); await flush();
     caller.disconnect(); await flush();
+    assert.equal(caller.log.includes("uploadRecording"), false);
     assert.equal(caller.controller.view.phase, "connected");
     assert.equal(caller.controller.view.online, false);
     assert.equal(guest.controller.view.phase, "connected");

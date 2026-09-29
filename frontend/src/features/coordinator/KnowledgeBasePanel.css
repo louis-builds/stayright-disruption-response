@@ -1,12 +1,11 @@
 /* .escalation-option-snapshot 的基础样式定义在 EscalationDeskPage.css(那是另一个独立页面任务)——
    这里用 .kb-panel 限定作用域，只加悬浮反馈，不碰共享基础规则也不影响 Escalation Desk 自己的样式。 */
 .kb-panel .escalation-option-snapshot {
-  transition: box-shadow 0.15s ease, transform 0.15s ease;
+  transition: box-shadow 0.15s ease;
 }
 
 .kb-panel .escalation-option-snapshot:hover {
   box-shadow: 0 4px 12px rgba(16, 36, 60, 0.06);
-  transform: translateY(-2px);
 }
 
 .kb-sync-indicator {
@@ -45,18 +44,176 @@
 }
 
 .kb-quality-bar-fill {
+  width: 100%;
   height: 100%;
   border-radius: 999px;
-  transition: width 0.4s ease;
+  transform-origin: left center;
+  transition: transform 0.4s ease;
 }
 
 .kb-quality-bar-fill-like { background: linear-gradient(90deg, #2e6f96, #4fd18b); }
 .kb-quality-bar-fill-dislike { background: linear-gradient(90deg, #d8a94b, #e0685a); }
 .kb-quality-bar-fill-escalation { background: linear-gradient(90deg, #6f9fc4, #8a6fd4); }
 
-.kb-quality-bar-value {
+.kb-tab-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding-top: 0.4rem;
+  min-width: 0;
+}
+
+.kb-result-filters {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.kb-result-filters button {
+  border: 1px solid #dfe2eb;
+  background: #fff;
+  color: #5c7690;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
   font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.kb-result-filters .kb-filter-active {
+  border-color: #2e6f96;
+  background: #2e6f96;
+  color: #fff;
   font-weight: 600;
+}
+
+.kb-result {
+  border: 1px solid #e6edf3;
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.kb-result-fail {
+  border-color: #f0c9c9;
+}
+
+.kb-result-head {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  gap: 0.55rem;
+  align-items: center;
+  width: 100%;
+  padding: 0.75rem 0.9rem;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.kb-result-head p {
+  margin: 0;
   color: #10243c;
-  text-align: right;
+  font-size: 0.88rem;
+  overflow-wrap: anywhere;
+}
+
+.kb-result-kind {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #8a94a8;
+}
+
+.kb-result-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0 0.9rem 0.95rem;
+  min-width: 0;
+}
+
+.kb-result-reason {
+  margin: 0;
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  background: #f7f4ee;
+  color: #5c5346;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.kb-result-fail .kb-result-reason {
+  background: #fff4f4;
+  color: #8a3b3b;
+}
+
+.kb-compare {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.kb-compare-col {
+  min-width: 0;
+  padding: 0.7rem 0.8rem;
+  border-radius: 10px;
+  background: #f7f9fc;
+  overflow: hidden;
+}
+
+.kb-compare-col h5 {
+  margin: 0 0 0.45rem;
+  color: #6b7c90;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.kb-compare-heading {
+  margin: 0 0 0.4rem;
+  color: #10243c;
+  font-size: 0.84rem;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.kb-compare-excerpt {
+  margin: 0;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: #3a4d63;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  font-family: inherit;
+}
+
+.kb-compare-empty {
+  margin: 0;
+  color: #93a3b4;
+  font-size: 0.8rem;
+}
+
+.kb-panel {
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (max-width: 1100px) {
+  .kb-compare {
+    grid-template-columns: 1fr;
+  }
+
+  .kb-result-head {
+    grid-template-columns: auto 1fr;
+  }
+
+  .kb-result-kind {
+    display: none;
+  }
 }

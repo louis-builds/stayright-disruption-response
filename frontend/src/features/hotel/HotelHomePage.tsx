@@ -150,6 +150,8 @@ const SYSTEM_TAG_LABELS: Array<{ key: keyof GuestTags; label: string }> = [
   { key: "aiDifficult", label: "AI difficult" },
   { key: "highRejectionRate", label: "high rejection" },
   { key: "slowResponder", label: "slow responder" },
+  { key: "keepMessagesSimple", label: "keep messages simple" },
+  { key: "speakSlowly", label: "speak slowly" },
 ];
 
 /** 卡片上的客人标签区：酒店自建的标签 chip(紫) + 系统行为标签(灰) + "+ Tag" 入口。
@@ -169,6 +171,9 @@ function GuestTagChips({ guestUserId, nickname, tags, onManage }: {
       {tags && SYSTEM_TAG_LABELS.filter((s) => Boolean(tags[s.key])).map((s) => (
         <span key={s.key} className="tag hotel-guest-tag-muted">{s.label}</span>
       ))}
+      {tags?.stayPreference && (
+        <span className="tag hotel-guest-tag-muted">prefers {tags.stayPreference}</span>
+      )}
       <button type="button" className="hotel-tag-add" title={`Manage tags for ${nickname}`} onClick={() => onManage({ guestUserId, nickname })}>
         + Tag
       </button>

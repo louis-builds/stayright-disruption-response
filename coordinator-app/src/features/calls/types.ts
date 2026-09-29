@@ -40,4 +40,23 @@ export interface CallRecording {
   processingStatus: RecordingStatus;
   reviewed: boolean;
   coordinatorNote: string | null;
+  insights?: CallInsights | null;
+}
+
+export interface CallInsightFlag {
+  suggested: boolean;
+  quote: string | null;
+  applied: boolean;
+}
+
+export interface CallStayInsight {
+  suggested: string | null;
+  quote: string | null;
+  applied: string | null;
+}
+
+export interface CallInsights {
+  keepMessagesSimple: CallInsightFlag;
+  speakSlowly: CallInsightFlag;
+  stayPreference: CallStayInsight;
 }

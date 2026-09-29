@@ -4,9 +4,17 @@ export interface CallSession {
   status: CallStatus; startedAt: string; answeredAt: string | null; endedAt: string | null;
   endedReason: string | null; durationSeconds: number | null;
   guestNickname?: string | null; hotelName?: string | null; confirmationNo?: string | null;
+  speakSlowly?: boolean;
 }
 export interface IceCandidate { candidate: string; sdpMid?: string | null; sdpMLineIndex?: number | null; }
 export interface IceServer { urls: string | string[]; username?: string; credential?: string; }
+export interface CallRecordingFile {
+  blob?: Blob;
+  uri?: string;
+  mimeType: string;
+  fileName: string;
+  durationSeconds: number;
+}
 export interface AudioPeer {
   prepare(servers: IceServer[]): Promise<void>;
   offer(iceRestart?: boolean): Promise<string>;
@@ -15,6 +23,8 @@ export interface AudioPeer {
   addCandidate(candidate: IceCandidate): Promise<void>;
   mute(value: boolean): void;
   play(): Promise<void>;
+  startRecording(): void;
+  stopRecording(): Promise<CallRecordingFile | null>;
   close(): void;
 }
 export interface PeerCallbacks {
@@ -38,6 +48,7 @@ export interface CallApi {
   reject(id: string): Promise<CallSession>;
   end(id: string): Promise<CallSession>;
   iceServers(): Promise<IceServer[]>;
+  uploadRecording?(id: string, file: CallRecordingFile): Promise<void>;
 }
 export const terminal = (status: string) => ["completed", "rejected", "no_answer", "failed"].includes(status);
 export interface CallView {

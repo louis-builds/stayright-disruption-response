@@ -10,12 +10,17 @@ const GUEST_NAV_LINKS: TopNavLink[] = [
 /** 协调员/酒店端首页在后续任务里实现，这里先给个最小导航（首页+个人），保持框架统一。 */
 const COORDINATOR_NAV_LINKS: TopNavLink[] = [
   { label: "Home", to: "/coordinator/home" },
-  { label: "Bad cases", to: "/coordinator/bad-cases" },
+  { label: "Call reviews", to: "/coordinator/call-reviews" },
   { label: "Profile", to: "/profile" },
 ];
 
 const HOTEL_NAV_LINKS: TopNavLink[] = [
   { label: "Home", to: "/hotel/home" },
+  { label: "Profile", to: "/profile" },
+];
+
+const ADMIN_NAV_LINKS: TopNavLink[] = [
+  { label: "Home", to: "/admin/home" },
   { label: "Profile", to: "/profile" },
 ];
 
@@ -27,6 +32,8 @@ export function getNavLinksForRole(role: string | undefined): TopNavLink[] {
       return COORDINATOR_NAV_LINKS;
     case "hotel":
       return HOTEL_NAV_LINKS;
+    case "admin":
+      return ADMIN_NAV_LINKS;
     default:
       return [];
   }

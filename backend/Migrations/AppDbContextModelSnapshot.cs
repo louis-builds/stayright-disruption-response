@@ -87,6 +87,71 @@ namespace TravelDisruptionAgent.Api.Migrations
                     b.ToTable("alternate_offer_audits", (string)null);
                 });
 
+            modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.BadCaseLearning", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("approved_at");
+
+                    b.Property<Guid?>("ApprovedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("approved_by_user_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("DraftMarkdown")
+                        .HasColumnType("text")
+                        .HasColumnName("draft_markdown");
+
+                    b.Property<string>("EvaluationNote")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("evaluation_note");
+
+                    b.Property<Guid>("EvaluatorUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("evaluator_user_id");
+
+                    b.Property<Guid>("MessageId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("message_id");
+
+                    b.Property<Guid?>("RagDocumentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("rag_document_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("status");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_bad_case_learnings");
+
+                    b.HasIndex("EvaluatorUserId")
+                        .HasDatabaseName("ix_bad_case_learnings_evaluator_user_id");
+
+                    b.HasIndex("MessageId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_bad_case_learnings_message_id");
+
+                    b.HasIndex("RagDocumentId")
+                        .HasDatabaseName("ix_bad_case_learnings_rag_document_id");
+
+                    b.ToTable("bad_case_learnings", (string)null);
+                });
+
             modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.Booking", b =>
                 {
                     b.Property<Guid>("Id")
@@ -263,6 +328,26 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("file_url");
+
+                    b.Property<string>("InsightsJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("insights_json");
+
+                    b.Property<int?>("AuditRating")
+                        .HasColumnType("integer")
+                        .HasColumnName("audit_rating");
+
+                    b.Property<string>("AuditComment")
+                        .HasColumnType("text")
+                        .HasColumnName("audit_comment");
+
+                    b.Property<DateTimeOffset?>("AuditedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("audited_at");
+
+                    b.Property<Guid?>("AuditedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("audited_by_user_id");
 
                     b.Property<string>("ProcessingStatus")
                         .IsRequired()
@@ -1645,6 +1730,10 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("hotel_id");
 
+                    b.Property<bool>("KeepMessagesSimple")
+                        .HasColumnType("boolean")
+                        .HasColumnName("keep_messages_simple");
+
                     b.Property<string>("Language")
                         .IsRequired()
                         .HasColumnType("text")
@@ -1674,10 +1763,19 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .HasColumnType("text")
                         .HasColumnName("role");
 
+                    b.Property<bool>("SpeakSlowly")
+                        .HasColumnType("boolean")
+                        .HasColumnName("speak_slowly");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("status");
+
+                    b.Property<string>("StayPreference")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("stay_preference");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -1761,6 +1859,35 @@ namespace TravelDisruptionAgent.Api.Migrations
                         .HasDatabaseName("ix_user_status_audits_user_id");
 
                     b.ToTable("user_status_audits", (string)null);
+                });
+
+            modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.BadCaseLearning", b =>
+                {
+                    b.HasOne("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.User", "Evaluator")
+                        .WithMany()
+                        .HasForeignKey("EvaluatorUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_bad_case_learnings_users_evaluator_user_id");
+
+                    b.HasOne("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.Message", "Message")
+                        .WithMany()
+                        .HasForeignKey("MessageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_bad_case_learnings_messages_message_id");
+
+                    b.HasOne("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.RagDocument", "RagDocument")
+                        .WithMany()
+                        .HasForeignKey("RagDocumentId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_bad_case_learnings_rag_documents_rag_document_id");
+
+                    b.Navigation("Evaluator");
+
+                    b.Navigation("Message");
+
+                    b.Navigation("RagDocument");
                 });
 
             modelBuilder.Entity("TravelDisruptionAgent.Api.Infrastructure.Data.Entities.Booking", b =>

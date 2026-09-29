@@ -7,7 +7,7 @@ namespace TravelDisruptionAgent.Api.Features.Coordinator;
 
 [ApiController]
 [Route("api/coordinator/knowledge-base")]
-[Authorize(Roles = "coordinator")]
+[Authorize(Roles = "coordinator,admin")]
 public class KnowledgeBaseController(IKnowledgeBaseService kb) : ControllerBase
 {
     [HttpGet("documents")]

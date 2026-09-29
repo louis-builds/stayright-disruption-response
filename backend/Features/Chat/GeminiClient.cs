@@ -286,4 +286,92 @@ public class GeminiClient(IHttpClientFactory httpClientFactory, ILogger<GeminiCl
             return null;
         }
     }
+
+    public record CallInsightExtraction(
+        bool KeepMessagesSimple, string? KeepMessagesSimpleQuote,
+        bool SpeakSlowly, string? SpeakSlowlyQuote,
+        string? StayPreference, string? StayPreferenceQuote);
+
+    /// <summary>从通话转写里抽出协调员可确认的沟通方式和住宿偏好。只用原文证据，
+    /// 不给客人打语言能力标签。抽失败返回 null，不阻断摘要。</summary>
+    public async Task<CallInsightExtraction?> ExtractCallInsightsAsync(string transcript, CancellationToken ct = default)
+    {
+        var apiKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
+        var model = Environment.GetEnvironmentVariable("GEMINI_MODEL") ?? "gemini-2.5-flash";
+        if (string.IsNullOrEmpty(apiKey) || string.IsNullOrWhiteSpace(transcript)) return null;
+
+        var url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}";
+        var prompt =
+            "You are extracting coordinator-facing notes from a hotel-disruption phone call transcript.\n" +
+            "Set a flag true only with clear evidence in the transcript. Quotes must be short verbatim spans from the transcript, or empty.\n" +
+            "keep_messages_simple: the guest asked for simpler wording, shorter written follow-ups, or struggled with complex written/spoken explanations.\n" +
+            "speak_slowly: the guest asked the other person to slow down, repeat spoken words, or said they could not catch the speech.\n" +
+            "stay_preference: cheaper, closer, larger, or none — only if the guest clearly wants a cheaper hotel, a closer hotel, or a larger room.\n" +
+            "Never infer poor English, nationality, accent, or language ability. Never set flags from garbled ASR alone.\n\n" +
+            $"Transcript:\n{transcript}";
+        var requestBody = new
+        {
+            contents = new[] { new { role = "user", parts = new[] { new { text = prompt } } } },
+            generationConfig = new
+            {
+                temperature = 0.0,
+                maxOutputTokens = 250,
+                thinkingConfig = new { thinkingBudget = 0 },
+                responseMimeType = "application/json",
+                responseSchema = new
+                {
+                    type = "OBJECT",
+                    properties = new
+                    {
+                        keep_messages_simple = new { type = "BOOLEAN" },
+                        keep_messages_simple_quote = new { type = "STRING" },
+                        speak_slowly = new { type = "BOOLEAN" },
+                        speak_slowly_quote = new { type = "STRING" },
+                        stay_preference = new { type = "STRING", @enum = new[] { "cheaper", "closer", "larger", "none" } },
+                        stay_preference_quote = new { type = "STRING" },
+                    },
+                    required = new[] { "keep_messages_simple", "speak_slowly", "stay_preference" },
+                },
+            },
+        };
+
+        try
+        {
+            var client = httpClientFactory.CreateClient("gemini");
+            using var response = await client.PostAsync(url,
+                new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json"), ct);
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogWarning("Gemini call-insight extraction returned {Status}: {Body}",
+                    response.StatusCode, await response.Content.ReadAsStringAsync(ct));
+                return null;
+            }
+
+            using var stream = await response.Content.ReadAsStreamAsync(ct);
+            using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+            var text = doc.RootElement.GetProperty("candidates")[0].GetProperty("content")
+                .GetProperty("parts")[0].GetProperty("text").GetString();
+            if (text is null) return null;
+
+            using var parsed = JsonDocument.Parse(text);
+            var root = parsed.RootElement;
+            static string? Quote(JsonElement el, string name) =>
+                el.TryGetProperty(name, out var q) ? EmptyToNull(q.GetString()) : null;
+            var stay = root.TryGetProperty("stay_preference", out var sp) ? sp.GetString() : "none";
+            return new CallInsightExtraction(
+                root.GetProperty("keep_messages_simple").GetBoolean(),
+                Quote(root, "keep_messages_simple_quote"),
+                root.GetProperty("speak_slowly").GetBoolean(),
+                Quote(root, "speak_slowly_quote"),
+                stay is "cheaper" or "closer" or "larger" ? stay : null,
+                Quote(root, "stay_preference_quote"));
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Gemini call-insight extraction failed");
+            return null;
+        }
+    }
+
+    private static string? EmptyToNull(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

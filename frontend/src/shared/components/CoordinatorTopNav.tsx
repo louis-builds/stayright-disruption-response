@@ -16,6 +16,7 @@ export type CoordinatorTab =
 export interface CoordinatorNavGroup {
   navLabel: string;
   defaultTab: CoordinatorTab;
+  href?: string;
   tabs: { key: CoordinatorTab; label: string }[];
 }
 
@@ -31,6 +32,7 @@ export const COORDINATOR_NAV_GROUPS: CoordinatorNavGroup[] = [
     { key: "closed", label: "Closed" },
     { key: "search", label: "All" },
   ] },
+  { navLabel: "Call reviews", defaultTab: "overview", href: "/coordinator/call-reviews", tabs: [] },
 ];
 
 export function coordinatorGroupForTab(t: CoordinatorTab): CoordinatorNavGroup | undefined {
@@ -44,7 +46,9 @@ export function CoordinatorTopNav({ activeTab, onSelectTab }: { activeTab?: Coor
   const navigate = useNavigate();
   const location = useLocation();
   const onHome = location.pathname === "/coordinator/home";
-  const activeGroup = activeTab ? coordinatorGroupForTab(activeTab) : undefined;
+  const activeGroup = location.pathname === "/coordinator/call-reviews"
+    ? COORDINATOR_NAV_GROUPS.find((g) => g.href === "/coordinator/call-reviews")
+    : activeTab ? coordinatorGroupForTab(activeTab) : undefined;
 
   return (
     <>
@@ -54,6 +58,10 @@ export function CoordinatorTopNav({ activeTab, onSelectTab }: { activeTab?: Coor
           type="button"
           className={`topbar-nav-link${activeGroup === g ? " topbar-nav-link-active" : ""}`}
           onClick={() => {
+            if (g.href) {
+              navigate(g.href);
+              return;
+            }
             if (onHome && onSelectTab) {
               if (activeGroup !== g) onSelectTab(g.defaultTab);
             } else {

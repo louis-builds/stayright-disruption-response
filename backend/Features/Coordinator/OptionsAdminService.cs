@@ -89,7 +89,10 @@ public class OptionsAdminService(IOptionsAdminRepository repo, IBookingRepositor
         if (candidates.Count == 0) return null;
 
         var previousHotelIds = (await bookingRepo.ListForGuestAsync(booking.GuestUserId, ct)).Select(b => b.HotelId).ToHashSet();
-        var ordered = preference switch
+        var sortPreference = preference is "cheaper" or "closer" or "larger"
+            ? preference
+            : booking.GuestUser?.StayPreference is "cheaper" or "closer" or "larger" ? booking.GuestUser.StayPreference : null;
+        var ordered = sortPreference switch
         {
             "cheaper" => candidates.OrderBy(cand => cand.RoomType.PriceAmount),
             "closer" when booking.Hotel is not null => candidates.OrderBy(cand =>
@@ -106,7 +109,7 @@ public class OptionsAdminService(IOptionsAdminRepository repo, IBookingRepositor
         var distanceKm = booking.Hotel is not null
             ? Math.Round(HaversineKm(booking.Hotel.Lat, booking.Hotel.Lng, hotel.Lat, hotel.Lng), 0)
             : (double?)null;
-        var reason = BuildAlternateReason(hotel, roomType, booking.RoomType, previousHotelIds, distanceKm, preference);
+        var reason = BuildAlternateReason(hotel, roomType, booking.RoomType, previousHotelIds, distanceKm, sortPreference);
         return new AlternateCandidateSelection(hotel, roomType, feeDiff, distanceKm, reason, ranOutOfNewOptions);
     }
 

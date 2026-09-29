@@ -141,6 +141,8 @@ builder.Services.AddScoped<IFaqRepository, FaqRepository>();
 builder.Services.AddScoped<IFaqService, FaqService>();
 builder.Services.AddScoped<ICallRepository, CallRepository>();
 builder.Services.AddScoped<ICallService, CallService>();
+builder.Services.AddScoped<CallRecordingStorage>();
+builder.Services.AddScoped<CallRecordingProcessor>();
 builder.Services.AddScoped<ITelephonyProvider, MockTelephonyProvider>();
 builder.Services.AddScoped<IAsrProvider, MockAsrProvider>();
 builder.Services.AddScoped<ITagRepository, TagRepository>();
@@ -170,6 +172,17 @@ if (runDbMigrate)
 else
 {
     app.Logger.LogInformation("Skipping DB migrate/seed (not Production and RUN_DB_MIGRATE unset). Shared stayright DB is managed by the deploy pipeline.");
+}
+
+try
+{
+    using var adminScope = app.Services.CreateScope();
+    await SeedRunner.EnsureAdminUserAsync(
+        adminScope.ServiceProvider.GetRequiredService<AppDbContext>(), app.Logger);
+}
+catch (Exception ex)
+{
+    app.Logger.LogWarning(ex, "Could not ensure admin user on startup");
 }
 
 if (app.Environment.IsDevelopment())

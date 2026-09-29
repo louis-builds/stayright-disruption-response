@@ -8,6 +8,7 @@ import { RoleTopNav } from "../../shared/components/RoleTopNav";
 import { CoordinatorDashboardShell } from "../coordinator/CoordinatorDashboardShell";
 import { GuestDashboardShell } from "../home/GuestDashboardShell";
 import { HotelDashboardShell } from "../hotel/HotelDashboardShell";
+import { AdminDashboardShell } from "../admin/AdminDashboardShell";
 import "./ProfilePage.css";
 
 const PHONE_RE = /^\+?[0-9]{7,15}$/;
@@ -16,6 +17,7 @@ const ROLE_BLURB: Record<AuthUser["role"], string> = {
   guest: "You get matched to disruptions automatically and can pick a rebooking, hotel move, or refund in one click.",
   coordinator: "You triage escalations, review AI-drafted options, and close out cases the AI couldn't resolve alone.",
   hotel: "You respond to deferral requests and guest selections, and manage your room types and perks catalog.",
+  admin: "You review user accounts, knowledge, and recorded coordinator calls, and leave scores the coordinator can always find.",
 };
 
 function formatJoinDate(iso: string) {
@@ -81,6 +83,13 @@ export function ProfilePage() {
       <HotelDashboardShell active="profile" onNavigate={() => navigate("/hotel/home")} onSearch={() => navigate("/hotel/home")}>
         <div className="profile-coordinator-stage"><ProfilePageContent user={user} embedded /></div>
       </HotelDashboardShell>
+    );
+  }
+  if (user.role === "admin") {
+    return (
+      <AdminDashboardShell active="recordings" onNavigate={() => navigate("/admin/home")} onSearch={() => navigate("/admin/home")}>
+        <div className="profile-coordinator-stage"><ProfilePageContent user={user} embedded /></div>
+      </AdminDashboardShell>
     );
   }
   return <ProfilePageContent user={user} />;

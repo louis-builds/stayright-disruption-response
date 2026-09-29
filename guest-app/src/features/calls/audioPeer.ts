@@ -8,6 +8,10 @@ export function createAudioPeer(callbacks: PeerCallbacks): AudioPeer {
   const queued: IceCandidate[] = [];
   let pc: RTCPeerConnection | null = null;
   let local: MediaStream | null = null;
+  let remote: MediaStream | null = null;
+  let Stream: typeof MediaStream | null = null;
+  let recorder: { stop(): Promise<import("../../../../shared/calling/contracts").CallRecordingFile | null> } | null = null;
+  let recordingStartedAt = 0;
   async function remote(sdp: string, type: "offer" | "answer") {
     if (type === "offer") queued.length = 0;
     await pc!.setRemoteDescription({ type, sdp });
@@ -28,12 +32,17 @@ export function createAudioPeer(callbacks: PeerCallbacks): AudioPeer {
       const stream = await rtc.mediaDevices.getUserMedia({ audio: true, video: false });
       if (closed) { stream.getTracks().forEach(t => t.stop()); stream.release(); return; }
       local = stream;
+      Stream = rtc.MediaStream;
       pc = new PeerConnection({ iceServers });
       pc.onicecandidate = (event: unknown) => {
         const candidate = (event as unknown as { candidate: { toJSON(): IceCandidate } | null }).candidate;
         if (candidate && !closed) callbacks.candidate(candidate.toJSON());
       };
       pc.onconnectionstatechange = () => { if (!closed) callbacks.state(pc!.connectionState); };
+      pc.ontrack = (event: { streams: MediaStream[]; track: { kind?: string } }) => {
+        remote = event.streams[0] ?? new rtc.MediaStream([event.track as never]);
+        Stream = rtc.MediaStream;
+      };
       // Native WebRTC plays remote audio through its audio device module.
       for (const track of stream.getTracks()) pc.addTrack(track, stream);
     },
@@ -56,12 +65,51 @@ export function createAudioPeer(callbacks: PeerCallbacks): AudioPeer {
     },
     mute(value) { local?.getAudioTracks().forEach(t => { t.enabled = !value; }); },
     async play() {},
+    startRecording() {
+      if (recorder || typeof MediaRecorder === "undefined" || !local) return;
+      const mixed = new (Stream ?? MediaStream)([
+        ...local.getAudioTracks(),
+        ...(remote?.getAudioTracks() ?? []),
+      ]);
+      const mimeType = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"].find(type => {
+        try { return MediaRecorder.isTypeSupported(type); } catch { return false; }
+      }) ?? "";
+      const chunks: Blob[] = [];
+      const rec = new MediaRecorder(mixed, mimeType ? { mimeType } : undefined);
+      rec.ondataavailable = event => { if (event.data.size) chunks.push(event.data); };
+      rec.start(1000);
+      recordingStartedAt = Date.now();
+      recorder = {
+        stop: async () => {
+          if (rec.state === "inactive") return null;
+          const blob = await new Promise<Blob>(resolve => {
+            rec.onstop = () => resolve(new Blob(chunks, { type: rec.mimeType || "audio/webm" }));
+            rec.stop();
+          });
+          if (blob.size < 64) return null;
+          const type = blob.type || "audio/webm";
+          return {
+            blob,
+            mimeType: type,
+            fileName: type.includes("mp4") ? "call.m4a" : "call.webm",
+            durationSeconds: Math.max(1, Math.round((Date.now() - recordingStartedAt) / 1000)),
+          };
+        },
+      };
+    },
+    async stopRecording() {
+      const file = recorder ? await recorder.stop() : null;
+      recorder = null;
+      return file;
+    },
     close() {
       closed = true;
+      recorder = null;
       local?.getTracks().forEach(t => t.stop());
       pc?.close(); pc = null;
       local?.release();
       local = null;
+      remote = null;
       queued.length = 0;
     },
   };

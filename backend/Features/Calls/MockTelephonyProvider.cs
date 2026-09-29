@@ -1,4 +1,3 @@
-using TravelDisruptionAgent.Api.Features.Chat;
 using TravelDisruptionAgent.Api.Infrastructure.Data.Entities;
 
 namespace TravelDisruptionAgent.Api.Features.Calls;
@@ -36,7 +35,7 @@ public class MockTelephonyProvider(IServiceScopeFactory scopeFactory, ILogger<Mo
         if (ended is not null)
         {
             var recordingId = await CreateRecordingAsync(ended);
-            _ = Task.Run(() => ProcessRecordingAsync(recordingId));
+            _ = Task.Run(() => ProcessRecordingAsync(scopeFactory, recordingId));
         }
     }
 
@@ -67,7 +66,7 @@ public class MockTelephonyProvider(IServiceScopeFactory scopeFactory, ILogger<Mo
             if (outcome == "completed" && finished is not null)
             {
                 var recordingId = await CreateRecordingAsync(finished);
-                _ = Task.Run(() => ProcessRecordingAsync(recordingId));
+                _ = Task.Run(() => ProcessRecordingAsync(scopeFactory, recordingId));
             }
         }
         catch (Exception ex)
@@ -109,52 +108,9 @@ public class MockTelephonyProvider(IServiceScopeFactory scopeFactory, ILogger<Mo
         return recording.Id;
     }
 
-    private async Task ProcessRecordingAsync(Guid recordingId)
+    private static async Task ProcessRecordingAsync(IServiceScopeFactory scopeFactory, Guid recordingId)
     {
         using var scope = scopeFactory.CreateScope();
-        var repo = scope.ServiceProvider.GetRequiredService<ICallRepository>();
-        try
-        {
-            var recording = await repo.FindRecordingAsync(recordingId) ?? throw new InvalidOperationException("recording not found");
-            var call = await repo.FindAsync(recording.CallId) ?? throw new InvalidOperationException("call not found");
-
-            recording.ProcessingStatus = "transcribing";
-            recording.UpdatedAt = DateTimeOffset.UtcNow;
-            await repo.SaveChangesAsync();
-
-            var asr = scope.ServiceProvider.GetRequiredService<IAsrProvider>();
-            var transcript = await asr.TranscribeAsync(recording.FileUrl);
-
-            recording.TranscriptText = transcript;
-            recording.ProcessingStatus = "summarizing";
-            recording.UpdatedAt = DateTimeOffset.UtcNow;
-            await repo.SaveChangesAsync();
-
-            var gemini = scope.ServiceProvider.GetRequiredService<GeminiClient>();
-            var prompt =
-                "You are summarizing a phone call between a hotel-disruption coordinator and a " +
-                $"{(call.CalleeType == "hotel" ? "hotel" : "guest")}, for internal case notes.\n" +
-                $"Call duration: {recording.DurationSeconds} seconds.\n" +
-                $"Transcript:\n{transcript}\n\n" +
-                "In 2-4 short bullet points, summarize: the main request/issue, any commitment made, and any follow-up action needed. " +
-                "Be concise and factual, do not invent details not in the transcript.";
-            var summary = await gemini.GenerateAsync(prompt);
-
-            recording.AiSummary = summary ?? "AI 总结暂时不可用（Gemini 未配置或调用失败），请人工回听录音。";
-            recording.ProcessingStatus = "done";
-            recording.UpdatedAt = DateTimeOffset.UtcNow;
-            await repo.SaveChangesAsync();
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Recording processing failed for {RecordingId}", recordingId);
-            var recording = await repo.FindRecordingAsync(recordingId);
-            if (recording is not null)
-            {
-                recording.ProcessingStatus = "failed";
-                recording.UpdatedAt = DateTimeOffset.UtcNow;
-                await repo.SaveChangesAsync();
-            }
-        }
+        await scope.ServiceProvider.GetRequiredService<CallRecordingProcessor>().ProcessAsync(recordingId);
     }
 }

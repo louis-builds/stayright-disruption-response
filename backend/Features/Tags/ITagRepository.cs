@@ -8,6 +8,7 @@ public interface ITagRepository
     Task<HashSet<Guid>> GetAiDifficultGuestIdsAsync(IEnumerable<Guid> guestUserIds, CancellationToken ct = default);
     Task<HashSet<Guid>> GetHighRejectionGuestIdsAsync(IEnumerable<Guid> guestUserIds, CancellationToken ct = default);
     Task<HashSet<Guid>> GetSlowResponderGuestIdsAsync(IEnumerable<Guid> guestUserIds, CancellationToken ct = default);
+    Task<Dictionary<Guid, GuestCommunicationPrefs>> GetGuestCommunicationAsync(IEnumerable<Guid> guestUserIds, CancellationToken ct = default);
 
     Task<bool> IsGuestOfHotelAsync(Guid guestUserId, Guid hotelId, CancellationToken ct = default);
 

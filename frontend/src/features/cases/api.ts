@@ -99,6 +99,9 @@ export interface GuestTags {
   aiDifficult: boolean;
   highRejectionRate: boolean;
   slowResponder: boolean;
+  keepMessagesSimple: boolean;
+  speakSlowly: boolean;
+  stayPreference: string | null;
   customTags: { id: string; label: string; ownerRole: string }[];
 }
 

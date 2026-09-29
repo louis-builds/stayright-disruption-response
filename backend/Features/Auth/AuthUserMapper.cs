@@ -8,6 +8,7 @@ public static class AuthUserMapper
     {
         "coordinator" => "/coordinator/home",
         "hotel" => "/hotel/home",
+        "admin" => "/admin/home",
         _ => "/guest/home",
     };
 

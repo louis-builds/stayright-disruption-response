@@ -49,6 +49,55 @@ public class CallRepository(AppDbContext db) : ICallRepository
     public Task<CallRecording?> FindRecordingByCallIdAsync(Guid callId, CancellationToken ct = default) =>
         db.CallRecordings.FirstOrDefaultAsync(r => r.CallId == callId, ct);
 
+    public Task<CallRecording?> FindRecordingWithCallAsync(Guid callId, CancellationToken ct = default) =>
+        db.CallRecordings
+            .Include(r => r.Call!).ThenInclude(c => c.Case!).ThenInclude(cs => cs.Booking!).ThenInclude(b => b!.GuestUser)
+            .Include(r => r.Call!).ThenInclude(c => c.Case!).ThenInclude(cs => cs.Booking!).ThenInclude(b => b!.Hotel)
+            .FirstOrDefaultAsync(r => r.CallId == callId, ct);
+
+    public async Task<PagedResult<CallRecording>> ListRecordingsForAuditAsync(
+        string? query, Guid? coordinatorId, DateTimeOffset? from, DateTimeOffset? to, string? auditStatus,
+        Guid? mineCoordinatorId, bool auditedOnly, int page, int pageSize, CancellationToken ct = default)
+    {
+        var rows = db.CallRecordings
+            .Include(r => r.Call!).ThenInclude(c => c.Case!).ThenInclude(cs => cs.Booking!).ThenInclude(b => b!.GuestUser)
+            .Include(r => r.Call!).ThenInclude(c => c.Case!).ThenInclude(cs => cs.Booking!).ThenInclude(b => b!.Hotel)
+            .AsQueryable();
+        if (mineCoordinatorId is { } mine)
+            rows = rows.Where(r => r.Call!.InitiatedByCoordinatorId == mine);
+        if (coordinatorId is { } cid)
+            rows = rows.Where(r => r.Call!.InitiatedByCoordinatorId == cid);
+        if (from is { } start)
+            rows = rows.Where(r => r.Call!.StartedAt >= start);
+        if (to is { } end)
+            rows = rows.Where(r => r.Call!.StartedAt <= end);
+        if (auditedOnly || auditStatus == "done")
+            rows = rows.Where(r => r.AuditedAt != null);
+        else if (auditStatus == "pending")
+            rows = rows.Where(r => r.AuditedAt == null);
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            var term = query.Trim();
+            var coordIds = await db.Users
+                .Where(u => EF.Functions.ILike(u.Nickname, $"%{term}%") || EF.Functions.ILike(u.Email, $"%{term}%"))
+                .Select(u => u.Id)
+                .ToListAsync(ct);
+            rows = rows.Where(r =>
+                coordIds.Contains(r.Call!.InitiatedByCoordinatorId)
+                || (r.Call.Case!.Booking!.GuestUser != null && EF.Functions.ILike(r.Call.Case.Booking.GuestUser.Nickname, $"%{term}%"))
+                || (r.Call.Case.Booking.ConfirmationNo != null && EF.Functions.ILike(r.Call.Case.Booking.ConfirmationNo, $"%{term}%")));
+        }
+        return await rows.OrderByDescending(r => r.Call!.StartedAt).ToPagedResultAsync(page, pageSize, ct);
+    }
+
+    public async Task<Dictionary<Guid, string>> ListNicknamesAsync(IEnumerable<Guid> userIds, CancellationToken ct = default)
+    {
+        var ids = userIds.Distinct().ToList();
+        if (ids.Count == 0) return [];
+        var rows = await db.Users.Where(u => ids.Contains(u.Id)).Select(u => new { u.Id, u.Nickname }).ToListAsync(ct);
+        return rows.ToDictionary(u => u.Id, u => u.Nickname);
+    }
+
     public Task SaveChangesAsync(CancellationToken ct = default) => db.SaveChangesAsync(ct);
 
     public async Task TransitionAsync(Call call, string expectedStatus, CancellationToken ct = default)

@@ -10,7 +10,7 @@ public record ChatReply(string Content, bool Escalate, bool IsTemplate, bool Nee
 
 public interface IChatService
 {
-    Task<ChatReply> GenerateReplyAsync(Case caseEntity, List<Message> recentMessages, string userMessage, string language, string? currentAlternateSummary = null, string? cancellationSummary = null, CancellationToken ct = default);
+    Task<ChatReply> GenerateReplyAsync(Case caseEntity, List<Message> recentMessages, string userMessage, string language, string? currentAlternateSummary = null, string? cancellationSummary = null, bool keepMessagesSimple = false, CancellationToken ct = default);
     string BuildProactiveOpening(Case caseEntity, bool hotelConfirmed, string language, bool isReturningGuest = false);
 }
 
@@ -63,7 +63,7 @@ public class ChatService(GeminiClient gemini, IRagRepository ragRepository, ISys
         };
     }
 
-    public async Task<ChatReply> GenerateReplyAsync(Case caseEntity, List<Message> recentMessages, string userMessage, string language, string? currentAlternateSummary = null, string? cancellationSummary = null, CancellationToken ct = default)
+    public async Task<ChatReply> GenerateReplyAsync(Case caseEntity, List<Message> recentMessages, string userMessage, string language, string? currentAlternateSummary = null, string? cancellationSummary = null, bool keepMessagesSimple = false, CancellationToken ct = default)
     {
         var settings = await settingsRepo.GetAsync(ct);
 
@@ -84,7 +84,7 @@ public class ChatService(GeminiClient gemini, IRagRepository ragRepository, ISys
             return new ChatReply(Templates.Pick(Templates.EscalationTemplate, language), true, true, EscalationReason: ReasonAiStuck, EscalationTrigger: "unresolved_turns");
         }
 
-        var prompt = await BuildPromptAsync(caseEntity, recentMessages, userMessage, language, currentAlternateSummary, cancellationSummary, ct);
+        var prompt = await BuildPromptAsync(caseEntity, recentMessages, userMessage, language, currentAlternateSummary, cancellationSummary, keepMessagesSimple, ct);
         var aiText = await gemini.GenerateAsync(prompt, ct);
 
         if (string.IsNullOrWhiteSpace(aiText))
@@ -204,11 +204,13 @@ public class ChatService(GeminiClient gemini, IRagRepository ragRepository, ISys
         return (content.Length > 0 ? content : aiText, lowConfidence, hotelQuestion, frustrated, ambiguous, wantsHuman, outOfScope);
     }
 
-    private async Task<string> BuildPromptAsync(Case caseEntity, List<Message> recentMessages, string userMessage, string language, string? currentAlternateSummary, string? cancellationSummary, CancellationToken ct)
+    private async Task<string> BuildPromptAsync(Case caseEntity, List<Message> recentMessages, string userMessage, string language, string? currentAlternateSummary, string? cancellationSummary, bool keepMessagesSimple, CancellationToken ct)
     {
         var sb = new StringBuilder();
         var languageName = language switch { "zh" => "Chinese", "mi" => "Māori", _ => "English" };
         sb.AppendLine("You are the customer support assistant for a travel disruption platform. Only answer questions about this specific booking, the disruption affecting it, and cancellation/rebooking policy. Do not offer to book new, unrelated hotels. Be concise (2-4 sentences).");
+        if (keepMessagesSimple)
+            sb.AppendLine("This guest needs very simple language: short sentences, common words, one idea at a time, no jargon. Prefer 1-2 sentences.");
         sb.AppendLine("You have no access to live hotel room inventory or occupancy data, and no way to contact the hotel or trigger any check on the guest's behalf. Never say you are checking with the hotel, waiting on the hotel to confirm, or that someone will get back to them — you cannot make that happen.");
         sb.AppendLine($"Write your reply in {languageName}. Output only the reply text itself — no labels, prefixes, or language names.");
         sb.AppendLine("If you genuinely cannot tell what the guest is asking — the message is too vague, garbled, or could mean several different things — do not guess and do not answer. Instead, write a short question asking them to clarify what they mean, as your reply.");

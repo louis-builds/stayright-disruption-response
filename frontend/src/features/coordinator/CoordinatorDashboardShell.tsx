@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useNavigate } from "react-router-dom";
 import type { AuthUser } from "../auth/types";
 import type { CoordinatorTab } from "../../shared/components/CoordinatorTopNav";
 import { AvatarMenu } from "../../shared/components/AvatarMenu";
@@ -8,18 +9,31 @@ import { NotificationBell } from "../notifications";
 import { SettingsPanel } from "./SettingsPanel";
 import "./CoordinatorDashboardShell.css";
 
-type Section = "dashboard" | "cases" | "teams" | "reports";
-const ITEMS: Array<{ key: Section; label: string; icon: string; tab: CoordinatorTab; hidden?: boolean }> = [
+type Section = "dashboard" | "cases" | "teams" | "reports" | "reviews";
+const ITEMS: Array<{
+  key: Section;
+  label: string;
+  icon: string;
+  tab?: CoordinatorTab;
+  href?: string;
+  hidden?: boolean;
+}> = [
   { key: "dashboard", label: "Dashboard", icon: "▦", tab: "overview" },
   { key: "cases", label: "Disruptions", icon: "△", tab: "disruptions" },
   { key: "teams", label: "Affected Bookings", icon: "▣", tab: "queue", hidden: true },
   { key: "reports", label: "Cases", icon: "▥", tab: "search" },
+  { key: "reviews", label: "Call reviews", icon: "☎", href: "/coordinator/call-reviews" },
 ];
 
 export function CoordinatorDashboardShell({ active, children, onNavigate, onSearch }: {
   user: AuthUser; active: Section; children: ReactNode; onNavigate: (tab: CoordinatorTab) => void; onSearch: (query: string) => void;
 }) {
+  const navigate = useNavigate();
   const isMobile = useMobileLayout();
+  const go = (item: (typeof ITEMS)[number]) => {
+    if (item.href) navigate(item.href);
+    else if (item.tab) onNavigate(item.tab);
+  };
   const [query, setQuery] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const submit = (event: FormEvent) => { event.preventDefault(); onSearch(query.trim()); };
@@ -61,7 +75,7 @@ export function CoordinatorDashboardShell({ active, children, onNavigate, onSear
               label: item.label,
               icon: item.icon,
               active: active === item.key && !settingsOpen,
-              onClick: () => onNavigate(item.tab),
+              onClick: () => go(item),
             })),
             { key: "settings", label: "Settings", icon: "⚙", active: settingsOpen, onClick: () => setSettingsOpen(true) },
           ]}
@@ -74,7 +88,7 @@ export function CoordinatorDashboardShell({ active, children, onNavigate, onSear
   return <div className="tg-shell">
     <aside className="tg-shell-sidebar">
       <div className="tg-shell-brand"><span>◎</span><div><strong>StayRight NZ</strong><small>COORDINATOR</small></div></div>
-      <nav>{ITEMS.filter((item) => !item.hidden).map((item) => <button key={item.key} className={active === item.key ? "active" : ""} onClick={() => onNavigate(item.tab)}><i>{item.icon}</i><em>{item.label}</em><b>›</b></button>)}</nav>
+      <nav>{ITEMS.filter((item) => !item.hidden).map((item) => <button key={item.key} className={active === item.key ? "active" : ""} onClick={() => go(item)}><i>{item.icon}</i><em>{item.label}</em><b>›</b></button>)}</nav>
       <div className="tg-shell-bottom"><button onClick={() => setSettingsOpen(true)}><i>⚙</i><em>Settings</em></button><button><i>?</i><em>Help</em></button></div>
     </aside>
     <div className="tg-shell-stage">

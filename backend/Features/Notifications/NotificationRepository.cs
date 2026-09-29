@@ -29,5 +29,8 @@ public class NotificationRepository(AppDbContext db) : INotificationRepository
     public Task<Notification?> FindAsync(Guid id, Guid userId, CancellationToken ct = default) =>
         db.Notifications.FirstOrDefaultAsync(n => n.Id == id && n.UserId == userId, ct);
 
+    public async Task AddAsync(Notification notification, CancellationToken ct = default) =>
+        await db.Notifications.AddAsync(notification, ct);
+
     public Task SaveChangesAsync(CancellationToken ct = default) => db.SaveChangesAsync(ct);
 }

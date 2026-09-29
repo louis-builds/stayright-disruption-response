@@ -176,13 +176,16 @@ export function CoordinatorCaseWorkspacePage() {
             <div className="case-details-tags">
               <small>Guest tags · staff only, the guest can&apos;t see these</small>
               {guestTags ? (
-                guestTags.isHighValueGuest || guestTags.emotionallySensitive || guestTags.aiDifficult || guestTags.highRejectionRate || guestTags.slowResponder || guestTags.customTags.length > 0 ? (
+                guestTags.isHighValueGuest || guestTags.emotionallySensitive || guestTags.aiDifficult || guestTags.highRejectionRate || guestTags.slowResponder || guestTags.keepMessagesSimple || guestTags.speakSlowly || guestTags.stayPreference || guestTags.customTags.length > 0 ? (
                   <div className="case-details-tag-chips">
                     {guestTags.isHighValueGuest && <span className="tag tag-status-vip">high value</span>}
                     {guestTags.emotionallySensitive && <span className="case-tag-chip muted">emotionally sensitive</span>}
                     {guestTags.aiDifficult && <span className="case-tag-chip muted">AI difficult</span>}
                     {guestTags.highRejectionRate && <span className="case-tag-chip muted">high rejection</span>}
                     {guestTags.slowResponder && <span className="case-tag-chip muted">slow responder</span>}
+                    {guestTags.keepMessagesSimple && <span className="case-tag-chip muted">keep messages simple</span>}
+                    {guestTags.speakSlowly && <span className="case-tag-chip muted">speak slowly</span>}
+                    {guestTags.stayPreference && <span className="case-tag-chip muted">prefers {guestTags.stayPreference}</span>}
                     {guestTags.customTags.map((t) => <span key={t.id} className="case-tag-chip">{t.label}</span>)}
                   </div>
                 ) : <p className="case-workspace-empty">No tags recorded for this guest.</p>

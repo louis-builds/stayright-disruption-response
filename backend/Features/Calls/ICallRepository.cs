@@ -17,6 +17,11 @@ public interface ICallRepository
     Task AddRecordingAsync(CallRecording recording, CancellationToken ct = default);
     Task<CallRecording?> FindRecordingAsync(Guid id, CancellationToken ct = default);
     Task<CallRecording?> FindRecordingByCallIdAsync(Guid callId, CancellationToken ct = default);
+    Task<CallRecording?> FindRecordingWithCallAsync(Guid callId, CancellationToken ct = default);
+    Task<PagedResult<CallRecording>> ListRecordingsForAuditAsync(
+        string? query, Guid? coordinatorId, DateTimeOffset? from, DateTimeOffset? to, string? auditStatus,
+        Guid? mineCoordinatorId, bool auditedOnly, int page, int pageSize, CancellationToken ct = default);
+    Task<Dictionary<Guid, string>> ListNicknamesAsync(IEnumerable<Guid> userIds, CancellationToken ct = default);
 
     Task SaveChangesAsync(CancellationToken ct = default);
     Task TransitionAsync(Call call, string expectedStatus, CancellationToken ct = default);

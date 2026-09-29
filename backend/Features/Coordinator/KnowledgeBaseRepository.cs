@@ -7,10 +7,22 @@ namespace TravelDisruptionAgent.Api.Features.Coordinator;
 public class KnowledgeBaseRepository(AppDbContext db) : IKnowledgeBaseRepository
 {
     public Task<List<RagDocument>> ListDocumentsAsync(CancellationToken ct = default) =>
-        db.RagDocuments.Include(d => d.Chunks).OrderBy(d => d.Name).ThenByDescending(d => d.Version).ToListAsync(ct);
+        db.RagDocuments
+            .Where(d => d.HotelId == null && d.SourceType != "hotel-policy")
+            .Include(d => d.Chunks)
+            .OrderBy(d => d.Name)
+            .ThenByDescending(d => d.Version)
+            .ToListAsync(ct);
 
     public Task<RagDocument?> FindDocumentByNameAndVersionAsync(string name, int version, CancellationToken ct = default) =>
         db.RagDocuments.Include(d => d.Chunks).FirstOrDefaultAsync(d => d.Name == name && d.Version == version, ct);
+
+    public Task<RagDocument?> FindLatestDocumentByNameAsync(string name, CancellationToken ct = default) =>
+        db.RagDocuments
+            .Where(d => d.Name == name && d.HotelId == null)
+            .OrderByDescending(d => d.IsDefaultVersion)
+            .ThenByDescending(d => d.Version)
+            .FirstOrDefaultAsync(ct);
 
     public async Task<int> GetNextVersionAsync(string name, CancellationToken ct = default)
     {
@@ -31,7 +43,7 @@ public class KnowledgeBaseRepository(AppDbContext db) : IKnowledgeBaseRepository
     }
 
     public Task<List<GoldenTest>> ListGoldenTestsAsync(CancellationToken ct = default) =>
-        db.GoldenTests.ToListAsync(ct);
+        db.GoldenTests.OrderBy(t => t.CreatedAt).ToListAsync(ct);
 
     public async Task AddGoldenTestAsync(GoldenTest test, CancellationToken ct = default) =>
         await db.GoldenTests.AddAsync(test, ct);

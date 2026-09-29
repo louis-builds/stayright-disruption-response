@@ -5,8 +5,9 @@ import { GuestHomePage } from "./features/home/GuestHomePage";
 import { ProfilePage } from "./features/profile";
 import { CaseActionConfirmPage, CaseConversationPage, OptionsFlowPage } from "./features/cases";
 import { MyBookingsPage } from "./features/bookings";
-import { CoordinatorHomePage, EscalationDeskPage, OptionsAdminPage } from "./features/coordinator";
+import { CoordinatorHomePage, EscalationDeskPage, OptionsAdminPage, CallReviewsPage } from "./features/coordinator";
 import { HotelHomePage } from "./features/hotel";
+import { AdminHomePage } from "./features/admin";
 import { LandingPage } from "./features/landing/LandingPage";
 import { MobileLayoutProvider, useMobileLayout } from "./shared/layout/MobileLayoutProvider";
 
@@ -57,6 +58,22 @@ function App() {
             element={
               <ProtectedRoute roles={["hotel"]}>
                 <HotelHomePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/home"
+            element={
+              <ProtectedRoute roles={["admin"]}>
+                <AdminHomePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/coordinator/call-reviews"
+            element={
+              <ProtectedRoute roles={["coordinator"]}>
+                <CallReviewsPage />
               </ProtectedRoute>
             }
           />

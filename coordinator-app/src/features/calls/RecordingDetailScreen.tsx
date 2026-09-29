@@ -14,6 +14,7 @@ import {
   ScrollView,
   Share,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -130,6 +131,10 @@ export function RecordingDetailScreen({ route }: Props) {
   const [loading, setLoading] = useState(true);
   const [note, setNote] = useState("");
   const [savingNote, setSavingNote] = useState<"note" | "processed" | null>(null);
+  const [keepSimple, setKeepSimple] = useState(false);
+  const [speakSlowly, setSpeakSlowly] = useState(false);
+  const [stayPref, setStayPref] = useState<string | null>(null);
+  const [savingInsights, setSavingInsights] = useState(false);
   const [positionMillis, setPositionMillis] = useState(0);
   const [durationMillis, setDurationMillis] = useState(0);
   const seekRef = useRef<(fraction: number) => void>(() => {});
@@ -148,6 +153,7 @@ export function RecordingDetailScreen({ route }: Props) {
       if (res.code === 0) {
         setRecording(res.data);
         setNote(res.data.coordinatorNote ?? "");
+        applyInsightDraft(res.data);
       }
       setLoading(false);
     });
@@ -166,6 +172,7 @@ export function RecordingDetailScreen({ route }: Props) {
       void api.getRecording(callId).then((res) => {
         if (cancelled || res.code !== 0) return;
         setRecording((r) => (r ? { ...res.data, coordinatorNote: r.coordinatorNote } : res.data));
+        if (res.data.processingStatus === "done") applyInsightDraft(res.data);
       });
     }, 2000);
     return () => {
@@ -173,6 +180,31 @@ export function RecordingDetailScreen({ route }: Props) {
       clearInterval(timer);
     };
   }, [processingStatus, callId]);
+
+  function applyInsightDraft(data: CallRecording) {
+    const insights = data.insights;
+    if (!insights) return;
+    setKeepSimple(insights.keepMessagesSimple.applied || insights.keepMessagesSimple.suggested);
+    setSpeakSlowly(insights.speakSlowly.applied || insights.speakSlowly.suggested);
+    setStayPref(insights.stayPreference.applied ?? insights.stayPreference.suggested);
+  }
+
+  async function handleSaveInsights() {
+    setSavingInsights(true);
+    try {
+      const res = await api.confirmInsights(callId, {
+        keepMessagesSimple: keepSimple,
+        speakSlowly,
+        stayPreference: stayPref,
+      });
+      if (res.code === 0) {
+        setRecording((r) => (r ? { ...r, ...res.data, coordinatorNote: r.coordinatorNote } : res.data));
+        applyInsightDraft(res.data);
+      }
+    } finally {
+      setSavingInsights(false);
+    }
+  }
 
   async function handleShare() {
     if (!recording?.transcriptText) return;
@@ -247,6 +279,56 @@ export function RecordingDetailScreen({ route }: Props) {
         )}
       </View>
 
+      <View style={styles.card}>
+        <Text style={styles.cardLabel}>Guest communication</Text>
+        <Text style={styles.empty}>Confirm before these apply to chat, the next call, and recommendations.</Text>
+        <View style={styles.switchRow}>
+          <View style={styles.switchCopy}>
+            <Text style={styles.switchLabel}>Keep messages simple</Text>
+            {recording.insights?.keepMessagesSimple.suggested ? (
+              <Text style={styles.quote}>Suggested{recording.insights.keepMessagesSimple.quote ? `: “${recording.insights.keepMessagesSimple.quote}”` : ""}</Text>
+            ) : null}
+          </View>
+          <Switch value={keepSimple} onValueChange={setKeepSimple} />
+        </View>
+        <View style={styles.switchRow}>
+          <View style={styles.switchCopy}>
+            <Text style={styles.switchLabel}>Speak slowly</Text>
+            {recording.insights?.speakSlowly.suggested ? (
+              <Text style={styles.quote}>Suggested{recording.insights.speakSlowly.quote ? `: “${recording.insights.speakSlowly.quote}”` : ""}</Text>
+            ) : null}
+          </View>
+          <Switch value={speakSlowly} onValueChange={setSpeakSlowly} />
+        </View>
+        <Text style={styles.switchLabel}>Stay preference</Text>
+        {recording.insights?.stayPreference.suggested ? (
+          <Text style={styles.quote}>Suggested: {recording.insights.stayPreference.suggested}{recording.insights.stayPreference.quote ? ` — “${recording.insights.stayPreference.quote}”` : ""}</Text>
+        ) : null}
+        <View style={styles.prefRow}>
+          {([
+            [null, "None"],
+            ["cheaper", "Cheaper"],
+            ["closer", "Closer"],
+            ["larger", "Larger"],
+          ] as const).map(([value, label]) => (
+            <Pressable
+              key={label}
+              style={({ pressed }) => [styles.prefChip, stayPref === value && styles.prefChipOn, pressed && styles.prefChipPressed]}
+              onPress={() => setStayPref(value)}
+            >
+              <Text style={[styles.prefChipText, stayPref === value && styles.prefChipTextOn]}>{label}</Text>
+            </Pressable>
+          ))}
+        </View>
+        <Pressable
+          style={({ pressed }) => [styles.primaryButton, savingInsights && styles.buttonDisabled, pressed && !savingInsights && styles.primaryButtonPressed]}
+          disabled={savingInsights}
+          onPress={() => void handleSaveInsights()}
+        >
+          {savingInsights ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.primaryButtonText}>Save to guest</Text>}
+        </Pressable>
+      </View>
+
       <View style={styles.actionRow}>
         <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.secondaryButtonPressed]} onPress={handleDownload}>
           <Text style={styles.secondaryButtonText}>Download Recording</Text>
@@ -319,4 +401,14 @@ const styles = StyleSheet.create({
   primaryButtonText: { color: "#fff", fontWeight: "700", fontSize: 11 },
   buttonDisabled: { opacity: 0.5 },
   textArea: { borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, padding: 10, minHeight: 60, fontSize: 12, textAlignVertical: "top" },
+  switchRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  switchCopy: { flex: 1, gap: 4 },
+  switchLabel: { fontSize: 12, fontWeight: "700", color: "#0f172a" },
+  quote: { fontSize: 11, color: "#64748b", lineHeight: 16 },
+  prefRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  prefChip: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: "#e2e8f0" },
+  prefChipOn: { backgroundColor: "#4f46e5" },
+  prefChipPressed: { opacity: 0.8 },
+  prefChipText: { fontSize: 11, fontWeight: "700", color: "#334155" },
+  prefChipTextOn: { color: "#fff" },
 });
